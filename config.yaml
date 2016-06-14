@@ -1,0 +1,33 @@
+project: generic-amd64
+snaps:
+  kernel: 
+    - canonical-pc-linux
+  os: 
+    - ubuntu-core
+  gadget: 
+    - canonical-pc
+configs:
+  baseimagename: 
+    - base.img
+  recoverytype: 
+    - full
+  recoverysize: 
+    - 768
+  release: 
+    - 16
+  channel: 
+    - stable
+  size: 
+    - 4
+udf:
+  binary: 
+    - ./ubuntu-device-flash
+  option: 
+    - core
+debug:
+  devmode: 
+    - enable
+  ssh: 
+    - enable
+  xz: 
+    - enable
