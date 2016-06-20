@@ -4,5 +4,5 @@
 ``` bash
 git clone https://github.com/Lyoncore/generic-amd64-config.git
 cd generic-amd64-config/
-git run build.go build
+go run build.go build
 ```
