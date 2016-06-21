@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/satori/go.uuid"
-	"github.com/ubuntu-core/snappy/asserts"
+	"github.com/snapcore/snapd/asserts"
 	"golang.org/x/crypto/openpgp"
 )
 
