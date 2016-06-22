@@ -183,8 +183,8 @@ menuentry "%s" {
 	f.Close()
 }
 
-func DeviceSerial(authority, key, brand, model, revision, serial string, t time.Time) string {
-	content := fmt.Sprintf("type: device-serial\nauthority-id: %s\ndevice-key: %s\nbrand-id: %s\nmodel: %s\nrevision: %s\nserial: %s\ntimestamp: %s\n\n%s\n", authority, key, brand, model, revision, serial, t.UTC().Format("2006-01-02T15:04:05Z"), key)
+func Serial(authority, key, brand, model, revision, serial string, t time.Time) string {
+	content := fmt.Sprintf("type: serial\nauthority-id: %s\ndevice-key: %s\nbrand-id: %s\nmodel: %s\nrevision: %s\nserial: %s\ntimestamp: %s\n\n%s\n", authority, key, brand, model, revision, serial, t.UTC().Format("2006-01-02T15:04:05Z"), key)
 	return content
 }
 
@@ -200,7 +200,7 @@ func getKeyByName(keyring openpgp.EntityList, name string) *openpgp.Entity {
 	return nil
 }
 
-func SignDeviceSerial(targetFolder, vaultServer string) {
+func SignSerial(targetFolder, vaultServer string) {
 	var err error
 
 	log.Println("targetFolder:", targetFolder)
@@ -227,6 +227,7 @@ func SignDeviceSerial(targetFolder, vaultServer string) {
 	// TODO: verify the format of encodeKey
 	key = strings.Replace(key, "\n", "", -1)
 
+	// TODO: read from gadget snap
 	authority := "System"
 	brand := "System Inc."
 	model := "Router 3400"
@@ -236,7 +237,7 @@ func SignDeviceSerial(targetFolder, vaultServer string) {
 	rplib.Checkerr(err)
 	serial := strings.Split(string(product_serial), "\n")[0] + "-" + uuid.NewV4().String()
 
-	content := DeviceSerial(authority, key, brand, model, revision, serial, time.Now())
+	content := Serial(authority, key, brand, model, revision, serial, time.Now())
 	body := bytes.NewBuffer([]byte(content))
 
 	log.Println(content)
@@ -246,10 +247,10 @@ func SignDeviceSerial(targetFolder, vaultServer string) {
 	rplib.Checkerr(err)
 	response, err := ioutil.ReadAll(r.Body)
 	if nil != err {
-		log.Println("Device Sign error:", err)
+		log.Println("Serial Sign error:", err)
 	}
 
-	err = ioutil.WriteFile(targetFolder+"/deviceSerial.txt", response, 0600)
+	err = ioutil.WriteFile(targetFolder+"/serial.txt", response, 0600)
 	rplib.Checkerr(err)
 }
 
@@ -394,10 +395,10 @@ func main() {
 		log.Println("vaultServerIP:", vaultServerIP)
 
 		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
-		SignDeviceSerial("/tmp/writable/recovery/", fmt.Sprintf("http://%s:8080/1.0/", vaultServerIP))
+		SignSerial("/tmp/writable/recovery/", fmt.Sprintf("http://%s:8080/1.0/", vaultServerIP))
 	case "restore":
 		log.Println("[Use restores the system]")
-		log.Println("Restore gpg key and device serial")
+		log.Println("Restore gpg key and serial")
 	}
 
 	rplib.Sync()
