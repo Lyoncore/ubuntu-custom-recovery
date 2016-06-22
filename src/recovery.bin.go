@@ -2,23 +2,17 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/satori/go.uuid"
-	"github.com/snapcore/snapd/asserts"
-	"golang.org/x/crypto/openpgp"
 )
 
 import rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
@@ -183,77 +177,6 @@ menuentry "%s" {
 	f.Close()
 }
 
-func Serial(authority, key, brand, model, revision, serial string, t time.Time) string {
-	content := fmt.Sprintf("type: serial\nauthority-id: %s\ndevice-key: %s\nbrand-id: %s\nmodel: %s\nrevision: %s\nserial: %s\ntimestamp: %s\n\n%s\n", authority, key, brand, model, revision, serial, t.UTC().Format("2006-01-02T15:04:05Z"), key)
-	return content
-}
-
-func getKeyByName(keyring openpgp.EntityList, name string) *openpgp.Entity {
-	for _, entity := range keyring {
-		for _, ident := range entity.Identities {
-			if ident.UserId.Name == name {
-				return entity
-			}
-		}
-	}
-
-	return nil
-}
-
-func SignSerial(targetFolder, vaultServer string) {
-	var err error
-
-	log.Println("targetFolder:", targetFolder)
-	gnupgHomedir := targetFolder + "/.gnupg/"
-	err = os.MkdirAll(gnupgHomedir, 0700)
-	rplib.Checkerr(err)
-
-	genkey := []byte("Key-Type: 1\nKey-Length: 4096\nName-Real: SERIAL\n")
-	err = ioutil.WriteFile("/tmp/gen-key-script", genkey, 0600)
-	rplib.Checkerr(err)
-
-	rplib.Shellexec("gpg", "--homedir="+gnupgHomedir, "--batch", "--gen-key", "/tmp/gen-key-script")
-
-	f, err := os.Open(gnupgHomedir + "/pubring.gpg")
-	rplib.Checkerr(err)
-	el, err := openpgp.ReadKeyRing(f)
-	rplib.Checkerr(err)
-	entity := getKeyByName(el, "SERIAL")
-	openPGPPublicKey := asserts.OpenPGPPublicKey(entity.PrimaryKey)
-	encodeKey, err := asserts.EncodePublicKey(openPGPPublicKey)
-	rplib.Checkerr(err)
-	key := string(encodeKey)
-
-	// TODO: verify the format of encodeKey
-	key = strings.Replace(key, "\n", "", -1)
-
-	// TODO: read from gadget snap
-	authority := "System"
-	brand := "System Inc."
-	model := "Router 3400"
-	revision := "12"
-
-	product_serial, err := ioutil.ReadFile("/sys/class/dmi/id/product_serial")
-	rplib.Checkerr(err)
-	serial := strings.Split(string(product_serial), "\n")[0] + "-" + uuid.NewV4().String()
-
-	content := Serial(authority, key, brand, model, revision, serial, time.Now())
-	body := bytes.NewBuffer([]byte(content))
-
-	log.Println(content)
-	vaultServer = strings.TrimRight(vaultServer, "/")
-	log.Println("vaultServer:", vaultServer)
-	r, err := http.Post(vaultServer+"/sign", "application/x-www-form-urlencoded", body)
-	rplib.Checkerr(err)
-	response, err := ioutil.ReadAll(r.Body)
-	if nil != err {
-		log.Println("Serial Sign error:", err)
-	}
-
-	err = ioutil.WriteFile(targetFolder+"/serial.txt", response, 0600)
-	rplib.Checkerr(err)
-}
-
 func usbhid() {
 	log.Println("modprobe hid-generic and usbhid for usb keyboard")
 	rplib.Shellexec("modprobe", "usbhid")
@@ -395,7 +318,14 @@ func main() {
 		log.Println("vaultServerIP:", vaultServerIP)
 
 		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
-		SignSerial("/tmp/writable/recovery/", fmt.Sprintf("http://%s:8080/1.0/", vaultServerIP))
+
+		// TODO: read device information from gadget snap
+		authority := "System"
+		brand := "System Inc."
+		model := "Router 3400"
+		revision := "12"
+
+		rplib.SignSerial(authority, brand, model, revision, "/tmp/writable/recovery/", fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP))
 	case "restore":
 		log.Println("[Use restores the system]")
 		log.Println("Restore gpg key and serial")
