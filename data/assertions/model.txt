@@ -1,0 +1,18 @@
+type: model
+authority-id: System Inc.
+series: 16
+brand-id: System Inc.
+model: Router 3400
+revision: 12
+os: core
+architecture: amd64
+gadget: canonical-pc
+kernel: canonical-pc-linux
+store: brand-store
+allowed-modes: 
+required-snaps: 
+class: fixed
+timestamp: 2016-01-02T15:04:05Z
+body-length: 0
+
+openpgp c2ln

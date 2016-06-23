@@ -13,6 +13,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/snapcore/snapd/asserts"
 )
 
 import rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
@@ -319,13 +321,13 @@ func main() {
 
 		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
 
-		// TODO: read device information from gadget snap
-		authority := "System"
-		brand := "System Inc."
-		model := "Router 3400"
-		revision := "12"
+		// TODO: read assertion information from gadget snap
+		fileContent, err := ioutil.ReadFile("/recovery/assertions/model.txt")
+		rplib.Checkerr(err)
+		modelAssertion, err := asserts.Decode(fileContent)
+		rplib.Checkerr(err)
 
-		rplib.SignSerial(authority, brand, model, revision, "/tmp/writable/recovery/", fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP))
+		rplib.SignSerial(modelAssertion, "/tmp/writable/recovery/", fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP))
 	case "restore":
 		log.Println("[Use restores the system]")
 		log.Println("Restore gpg key and serial")
