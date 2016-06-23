@@ -93,7 +93,7 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 	// Read information of recovery partition
 	// Keep only recovery partition
 
-	partitions := [...]string{"grub", "system-boot", "writable"}
+	partitions := [...]string{"system-boot", "writable"}
 	for _, partition := range partitions {
 		log.Println("last_end:", last_end)
 		log.Println("nr:", nr)
@@ -109,12 +109,9 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 			size := 64 * 1024 * 1024 // 64 MB in Bytes
 			end_size = strconv.Itoa(last_end+size) + "B"
 			fstype = "fat32"
-		} else if "grub" == partition {
-			size := 4 * 1024 * 1024 // 4 MB in Bytes
-			end_size = strconv.Itoa(last_end+size) + "B"
-			fstype = ""
 		}
 		log.Println("end_size:", end_size)
+
 		rplib.Shellexec("parted", "-a", "optimal", "-ms", device, "--", "mkpart", "primary", fstype, fmt.Sprintf("%vB", last_end+1), end_size, "name", fmt.Sprintf("%v", nr), partition)
 		_, new_end := rplib.GetPartitionBeginEnd(device, nr)
 
@@ -144,8 +141,6 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 			defer syscall.Unmount("/tmp/system-boot", 0)
 			rplib.Shellexec("tar", "--xattrs", "-xJvpf", "/recovery/factory/system-boot.tar.xz", "-C", "/tmp/system-boot/")
 			rplib.Shellexec("parted", "-ms", device, "set", strconv.Itoa(nr), "boot", "on")
-		case "grub":
-			rplib.Shellexec("parted", "-ms", device, "set", strconv.Itoa(nr), "bios_grub", "on")
 		}
 		last_end = new_end
 		nr = nr + 1
