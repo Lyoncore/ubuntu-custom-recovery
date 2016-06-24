@@ -20,9 +20,9 @@ debug:
   xz: off
 recovery:
   filesystem-label: ESP
-  boot-partition: /dev/sda2
-  systemboot-partition: /dev/sda3
-  writable-partition: /dev/sda4
-  boot-image: boot.bin
-  systemboot-image: system-boot.tar.xz
-  writable-image: writable.tar.xz
+  boot-partition:
+  systemboot-partition:
+  writable-partition:
+  boot-image:
+  systemboot-image:
+  writable-image:
