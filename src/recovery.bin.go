@@ -180,6 +180,8 @@ func usbhid() {
 	rplib.Shellexec("modprobe", "hid-generic")
 }
 
+var configs rplib.ConfigRecovery
+
 func main() {
 	const LOG_PATH = "/writable/system-data/var/log/recovery/log.txt"
 	const ASSERTION_FOLDER = "/writable/recovery"
@@ -198,6 +200,14 @@ func main() {
 	}
 
 	usbhid()
+
+	// Load config.yaml
+	var errBool bool
+	configs, errBool = rplib.LoadYamlConfig("/recovery/config.yaml")
+	if errBool {
+		log.Println("Can not load config.yaml")
+		os.Exit(1)
+	}
 
 	// TODO: use enum to represent RECOVERY_TYPE
 	var RECOVERY_TYPE, RECOVERY_LABEL = flag.Arg(0), flag.Arg(1)
