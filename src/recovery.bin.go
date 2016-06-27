@@ -181,6 +181,10 @@ func usbhid() {
 }
 
 func main() {
+	const LOG_PATH = "/writable/system-data/var/log/recovery/log.txt"
+	const ASSERTION_FOLDER = "/writable/recovery"
+	const ASSERTION_BACKUP_FOLDER = "/tmp/assert_backup"
+
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
@@ -231,6 +235,16 @@ func main() {
 		}
 	}
 
+	switch RECOVERY_TYPE {
+	case "restore":
+		// back up serial assertion
+		writable_part := rplib.Findfs("LABEL=writable")
+		os.MkdirAll("/tmp/writable/", 0644)
+		err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
+		rplib.Checkerr(err)
+		rplib.Shellexec("cp", "-ar", "/tmp/"+ASSERTION_FOLDER, ASSERTION_BACKUP_FOLDER)
+		syscall.Unmount("/tmp/writable", 0)
+	}
 	log.Println("[recover the backup GPT entry at end of the disk.]")
 	rplib.Shellexec("sgdisk", device, "--randomize-guids", "--move-second-header")
 
@@ -247,11 +261,12 @@ func main() {
 	os.MkdirAll("/tmp/writable/", 0644)
 	err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
 	rplib.Checkerr(err)
-	defer syscall.Unmount(writable_part, 0)
+	defer syscall.Unmount("/tmp/writable", 0)
 
-	err = os.MkdirAll("/tmp/writable/system-data/var/log/recovery/", 0644)
+	logfile := "/tmp/" + LOG_PATH
+	err = os.MkdirAll(path.Dir(logfile), 0644)
 	rplib.Checkerr(err)
-	log_writable, err := os.OpenFile("/tmp/writable/system-data/var/log/recovery/log.txt", os.O_CREATE|os.O_WRONLY, 0600)
+	log_writable, err := os.OpenFile(logfile, os.O_CREATE|os.O_WRONLY, 0600)
 	rplib.Checkerr(err)
 	f := io.MultiWriter(log_writable, os.Stdout)
 	log.SetOutput(f)
@@ -322,10 +337,11 @@ func main() {
 		modelAssertion, err := asserts.Decode(fileContent)
 		rplib.Checkerr(err)
 
-		rplib.SignSerial(modelAssertion, "/tmp/writable/recovery/", fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP))
+		rplib.SignSerial(modelAssertion, "/tmp/"+ASSERTION_FOLDER, fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP))
 	case "restore":
 		log.Println("[Use restores the system]")
 		log.Println("Restore gpg key and serial")
+		rplib.Shellexec("cp", "-ar", ASSERTION_BACKUP_FOLDER, "/tmp/"+ASSERTION_FOLDER)
 	}
 
 	rplib.Sync()
