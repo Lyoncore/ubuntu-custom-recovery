@@ -252,7 +252,10 @@ func main() {
 		os.MkdirAll("/tmp/writable/", 0644)
 		err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
 		rplib.Checkerr(err)
-		rplib.Shellexec("cp", "-ar", "/tmp/"+ASSERTION_FOLDER, ASSERTION_BACKUP_FOLDER)
+		// back up assertion if ever signed
+		if !configs.Yaml.Recovery.SignSerial {
+			rplib.Shellexec("cp", "-ar", "/tmp/"+ASSERTION_FOLDER, ASSERTION_BACKUP_FOLDER)
+		}
 		syscall.Unmount("/tmp/writable", 0)
 	}
 	log.Println("[recover the backup GPT entry at end of the disk.]")
@@ -339,19 +342,26 @@ func main() {
 		vaultServerIP := rplib.Shellcmdoutput("ip route | awk '/default/ { print $3 }'") // assume identity-vault is hosted on the gateway
 		log.Println("vaultServerIP:", vaultServerIP)
 
-		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
-
 		// TODO: read assertion information from gadget snap
+		if !configs.Yaml.Recovery.SignSerial {
+			log.Println("Will not sign serial")
+			break
+		}
+		log.Println("Start signing serial")
 		fileContent, err := ioutil.ReadFile("/recovery/assertions/model.txt")
 		rplib.Checkerr(err)
 		modelAssertion, err := asserts.Decode(fileContent)
 		rplib.Checkerr(err)
 
+		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
 		rplib.SignSerial(modelAssertion, "/tmp/"+ASSERTION_FOLDER, fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP))
 	case "restore":
-		log.Println("[Use restores the system]")
-		log.Println("Restore gpg key and serial")
-		rplib.Shellexec("cp", "-ar", ASSERTION_BACKUP_FOLDER, "/tmp/"+ASSERTION_FOLDER)
+		log.Println("[User restores the system]")
+		// restore assertion if ever signed
+		if !configs.Yaml.Recovery.SignSerial {
+			log.Println("Restore gpg key and serial")
+			rplib.Shellexec("cp", "-ar", ASSERTION_BACKUP_FOLDER, "/tmp/"+ASSERTION_FOLDER)
+		}
 	}
 
 	rplib.Sync()

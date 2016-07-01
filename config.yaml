@@ -26,3 +26,4 @@ recovery:
   boot-image:
   systemboot-image:
   writable-image:
+  sign-serial: on
