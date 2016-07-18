@@ -80,8 +80,16 @@ kernelfs=$BASE/kerelsnap/
 mkdir -p $kernelfs
 mount $BASE/recovery/kernel.snap $kernelfs
 # mount lib/modules/, lib/firmware/
-mount --bind $kernelfs/lib/modules/ $newroot/lib/modules/
-mount --bind $kernelfs/lib/firmware/ $newroot/lib/firmware/
+for d in modules firmware; do
+    # old deprecated
+    if [ -d "$kernelfs/lib/$d" ]; then
+        mount --bind $kernelfs/lib/$d $newroot/lib/$d
+    fi
+    # new style
+    if [ -d "$kernelfs/$d" ]; then
+        mount --bind $kernelfs/$d $newroot/lib/$d
+    fi
+done
 
 mount --bind $BASE/recovery/recovery/ $newroot/recovery/
 mount -o defaults,ro $recovery_part $newroot/recovery_partition
