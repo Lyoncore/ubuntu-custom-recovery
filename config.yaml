@@ -27,3 +27,4 @@ recovery:
   systemboot-image:
   writable-image:
   sign-serial: on
+  sign-api-key: U2VyaWFsIFZhdWx0Cg

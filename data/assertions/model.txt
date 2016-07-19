@@ -4,7 +4,7 @@ series: 16
 brand-id: System Inc.
 model: Router 3400
 revision: 12
-os: core
+core: ubuntu-core
 architecture: amd64
 gadget: canonical-pc
 kernel: canonical-pc-linux

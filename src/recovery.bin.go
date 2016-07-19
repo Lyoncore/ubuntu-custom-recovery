@@ -354,7 +354,7 @@ func main() {
 		rplib.Checkerr(err)
 
 		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
-		rplib.SignSerial(modelAssertion, "/tmp/"+ASSERTION_FOLDER, fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP))
+		rplib.SignSerial(modelAssertion, "/tmp/"+ASSERTION_FOLDER, fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP), configs.Yaml.Recovery.SignApiKey)
 	case "restore":
 		log.Println("[User restores the system]")
 		// restore assertion if ever signed
