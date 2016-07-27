@@ -25,6 +25,8 @@ var commit string
 var commitstamp string
 var build_date string
 
+const FIRSTBOOT_SHARE = "/var/lib/devmode-firstboot"
+
 func getRecoveryPartition(device string, RECOVERY_LABEL string) (recovery_nr, recovery_end int) {
 	var err error
 	const OLD_PARTITION = "/tmp/old-partition.txt"
@@ -149,7 +151,8 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 	return
 }
 
-func hack_grub_cfg(grub_cfg string, recovery_type_cfg string, recovery_type_label string, recovery_part_label string) {
+func hack_grub_cfg(recovery_type_cfg string, recovery_type_label string, recovery_part_label string, grub_cfg string) {
+	rplib.Shellexec("sed", "-i", "s/^set cmdline=\"\\(.*\\)\"$/set cmdline=\"\\1 $cloud_init_disabled\"/g", grub_cfg)
 	f, err := os.OpenFile(grub_cfg, os.O_APPEND|os.O_WRONLY, 0600)
 	rplib.Checkerr(err)
 
@@ -182,6 +185,17 @@ func usbhid() {
 }
 
 var configs rplib.ConfigRecovery
+
+func addFirstbootService(stage, systemDataDir string) {
+	const SYSTEMD_SYSTEM = "/etc/systemd/system/"
+	const MULTI_USER_TARGET_WANTS_FOLDER = "/etc/systemd/system/multi-user.target.wants/"
+	os.MkdirAll(filepath.Dir(systemDataDir+FIRSTBOOT_SHARE), 0644)
+	rplib.Shellexec("cp", "-a", "/recovery_partition/recovery/factory/"+stage, systemDataDir+FIRSTBOOT_SHARE)
+	os.MkdirAll(systemDataDir+SYSTEMD_SYSTEM, 0644)
+	rplib.Shellexec("cp", "-a", "/recovery_partition/recovery/factory/"+stage+"/devmode-firstboot.service", systemDataDir+SYSTEMD_SYSTEM)
+	os.MkdirAll(systemDataDir+MULTI_USER_TARGET_WANTS_FOLDER, 0644)
+	rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", systemDataDir+MULTI_USER_TARGET_WANTS_FOLDER+"/devmode-firstboot.service")
+}
 
 func main() {
 	const LOG_PATH = "/writable/system-data/var/log/recovery/log.txt"
@@ -258,7 +272,7 @@ func main() {
 		err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
 		rplib.Checkerr(err)
 		// back up assertion if ever signed
-		if !configs.Yaml.Recovery.SignSerial {
+		if configs.Yaml.Recovery.SignSerial {
 			rplib.Shellexec("cp", "-ar", "/tmp/"+ASSERTION_FOLDER, ASSERTION_BACKUP_FOLDER)
 		}
 		syscall.Unmount("/tmp/writable", 0)
@@ -299,8 +313,7 @@ func main() {
 	defer syscall.Unmount("/tmp/system-boot", 0)
 
 	log.Println("add grub entry")
-	hack_grub_cfg("/tmp/system-boot/EFI/ubuntu/grub/grub.cfg", "factory_restore", "Factory Restore", RECOVERY_LABEL)
-	rplib.Shellexec("mount", "-o", "ro,remount", "/tmp/system-boot")
+	hack_grub_cfg("factory_restore", "Factory Restore", RECOVERY_LABEL, "/tmp/system-boot/EFI/ubuntu/grub/grub.cfg")
 
 	// remove past uefi entry
 	log.Println("[remove past uefi entry]")
@@ -325,9 +338,16 @@ func main() {
 	case "install":
 		log.Println("[EXECUTE FACTORY INSTALL]")
 
+		log.Println("[disable cloud-init at factory-diag stage]")
+		rplib.Shellexec(GRUB_EDITENV, "/tmp/system-boot/EFI/ubuntu/grub/grubenv", "set", "cloud_init_disabled=cloud-init=disabled")
+		log.Println("[Add FIRSTBOOT service]")
+		addFirstbootService("factory_install", "/tmp/writable/system-data/")
+		rplib.Shellexec("sed", "-i", fmt.Sprintf("s/RECOVERYFSLABEL=\"recovery\"/RECOVERYFSLABEL=\"%s\"/g", RECOVERY_LABEL), "/tmp/writable/system-data/var/lib/devmode-firstboot/devmode-firstboot.sh")
+
 		log.Println("[set next recoverytype to factory_restore]")
 		rplib.Shellexec("mount", "-o", "rw,remount", "/recovery_partition")
 		log.Println("set recoverytype")
+
 		rplib.Shellexec(GRUB_EDITENV, "/recovery_partition/efi/ubuntu/grub/grubenv", "set", "recoverytype=factory_restore")
 
 		log.Println("[Start serial vault]")
@@ -361,9 +381,10 @@ func main() {
 		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
 		rplib.SignSerial(modelAssertion, "/tmp/"+ASSERTION_FOLDER, fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP), configs.Yaml.Recovery.SignApiKey)
 	case "restore":
+		addFirstbootService("factory_restore", "/tmp/writable/system-data/")
 		log.Println("[User restores the system]")
 		// restore assertion if ever signed
-		if !configs.Yaml.Recovery.SignSerial {
+		if configs.Yaml.Recovery.SignSerial {
 			log.Println("Restore gpg key and serial")
 			rplib.Shellexec("cp", "-ar", ASSERTION_BACKUP_FOLDER, "/tmp/"+ASSERTION_FOLDER)
 		}
