@@ -18,6 +18,7 @@ import (
 )
 
 import rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+import utils "../utils"
 
 var version string
 var commit string
@@ -188,6 +189,10 @@ func main() {
 	const ASSERTION_BACKUP_FOLDER = "/tmp/assert_backup"
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	if "" == version {
+		version = utils.Version
+	}
 
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
 	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
