@@ -132,15 +132,17 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 		switch partition {
 		case "writable":
 			rplib.Shellexec("mkfs.ext4", "-F", "-L", "writable", block)
-			os.MkdirAll("/tmp/writable/", 0644)
-			err := syscall.Mount(block, "/tmp/writable", "ext4", 0, "")
+			err := os.MkdirAll("/tmp/writable/", 0644)
+			rplib.Checkerr(err)
+			err = syscall.Mount(block, "/tmp/writable", "ext4", 0, "")
 			rplib.Checkerr(err)
 			defer syscall.Unmount("/tmp/writable", 0)
 			rplib.Shellexec("tar", "--xattrs", "-xJvpf", "/recovery/factory/writable.tar.xz", "-C", "/tmp/writable/")
 		case "system-boot":
 			rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", "system-boot", block)
-			os.MkdirAll("/tmp/system-boot/", 0644)
-			err := syscall.Mount(block, "/tmp/system-boot", "vfat", 0, "")
+			err := os.MkdirAll("/tmp/system-boot/", 0644)
+			rplib.Checkerr(err)
+			err = syscall.Mount(block, "/tmp/system-boot", "vfat", 0, "")
 			rplib.Checkerr(err)
 			defer syscall.Unmount("/tmp/system-boot", 0)
 			rplib.Shellexec("tar", "--xattrs", "-xJvpf", "/recovery/factory/system-boot.tar.xz", "-C", "/tmp/system-boot/")
@@ -153,7 +155,10 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 }
 
 func hack_grub_cfg(recovery_type_cfg string, recovery_type_label string, recovery_part_label string, grub_cfg string) {
+	// add cloud-init disabled option
 	rplib.Shellexec("sed", "-i", "s/^set cmdline=\"\\(.*\\)\"$/set cmdline=\"\\1 $cloud_init_disabled\"/g", grub_cfg)
+
+	// add recovery grub menuentry
 	f, err := os.OpenFile(grub_cfg, os.O_APPEND|os.O_WRONLY, 0600)
 	rplib.Checkerr(err)
 
@@ -190,11 +195,14 @@ var configs rplib.ConfigRecovery
 func addFirstbootService(stage, systemDataDir string) {
 	const SYSTEMD_SYSTEM = "/etc/systemd/system/"
 	const MULTI_USER_TARGET_WANTS_FOLDER = "/etc/systemd/system/multi-user.target.wants/"
-	os.MkdirAll(filepath.Dir(systemDataDir+FIRSTBOOT_SHARE), 0644)
+	err := os.MkdirAll(filepath.Dir(systemDataDir+FIRSTBOOT_SHARE), 0644)
+	rplib.Checkerr(err)
 	rplib.Shellexec("cp", "-a", "/recovery_partition/recovery/factory/"+stage, systemDataDir+FIRSTBOOT_SHARE)
-	os.MkdirAll(systemDataDir+SYSTEMD_SYSTEM, 0644)
+	err = os.MkdirAll(systemDataDir+SYSTEMD_SYSTEM, 0644)
+	rplib.Checkerr(err)
 	rplib.Shellexec("cp", "-a", "/recovery_partition/recovery/factory/"+stage+"/devmode-firstboot.service", systemDataDir+SYSTEMD_SYSTEM)
-	os.MkdirAll(systemDataDir+MULTI_USER_TARGET_WANTS_FOLDER, 0644)
+	err = os.MkdirAll(systemDataDir+MULTI_USER_TARGET_WANTS_FOLDER, 0644)
+	rplib.Checkerr(err)
 	rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", systemDataDir+MULTI_USER_TARGET_WANTS_FOLDER+"/devmode-firstboot.service")
 }
 
@@ -269,11 +277,12 @@ func main() {
 	case "restore":
 		// back up serial assertion
 		writable_part := rplib.Findfs("LABEL=writable")
-		os.MkdirAll("/tmp/writable/", 0644)
+		err = os.MkdirAll("/tmp/writable/", 0644)
+		rplib.Checkerr(err)
 		err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
 		rplib.Checkerr(err)
 		// back up assertion if ever signed
-		if configs.Yaml.Recovery.SignSerial {
+		if _, err := os.Stat("/tmp/" + ASSERTION_FOLDER); err == nil {
 			rplib.Shellexec("cp", "-ar", "/tmp/"+ASSERTION_FOLDER, ASSERTION_BACKUP_FOLDER)
 		}
 		syscall.Unmount("/tmp/writable", 0)
@@ -291,7 +300,8 @@ func main() {
 
 	// stream log to stdout and writable partition
 	writable_part := rplib.Findfs("LABEL=writable")
-	os.MkdirAll("/tmp/writable/", 0644)
+	err = os.MkdirAll("/tmp/writable/", 0644)
+	rplib.Checkerr(err)
 	err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
 	rplib.Checkerr(err)
 	defer syscall.Unmount("/tmp/writable", 0)
@@ -308,7 +318,8 @@ func main() {
 	// add grub entry
 	system_boot_part := rplib.Findfs("LABEL=system-boot")
 	log.Println("system_boot_part:", system_boot_part)
-	os.MkdirAll("/tmp/system-boot", 0644)
+	err = os.MkdirAll("/tmp/system-boot", 0644)
+	rplib.Checkerr(err)
 	err = syscall.Mount(system_boot_part, "/tmp/system-boot", "vfat", 0, "")
 	rplib.Checkerr(err)
 	defer syscall.Unmount("/tmp/system-boot", 0)
@@ -340,6 +351,7 @@ func main() {
 		log.Println("[EXECUTE FACTORY INSTALL]")
 
 		log.Println("[disable cloud-init at factory-diag stage]")
+		// NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
 		rplib.Shellexec(GRUB_EDITENV, "/tmp/system-boot/EFI/ubuntu/grub/grubenv", "set", "cloud_init_disabled=cloud-init=disabled")
 		log.Println("[Add FIRSTBOOT service]")
 		addFirstbootService("factory_install", "/tmp/writable/system-data/")
@@ -385,7 +397,7 @@ func main() {
 		addFirstbootService("factory_restore", "/tmp/writable/system-data/")
 		log.Println("[User restores the system]")
 		// restore assertion if ever signed
-		if configs.Yaml.Recovery.SignSerial {
+		if _, err := os.Stat(ASSERTION_BACKUP_FOLDER); err == nil {
 			log.Println("Restore gpg key and serial")
 			rplib.Shellexec("cp", "-ar", ASSERTION_BACKUP_FOLDER, "/tmp/"+ASSERTION_FOLDER)
 		}

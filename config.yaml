@@ -1,8 +1,8 @@
 project: generic-amd64
 snaps:
-  kernel: canonical-pc-linux
+  kernel: pc-kernel
   os: ubuntu-core
-  gadget: canonical-pc
+  gadget: pc
 configs:
   arch: amd64
   baseimage: base.img
