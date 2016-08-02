@@ -9,7 +9,7 @@ configs:
   recoverytype: full
   recoverysize: 768
   release: 16
-  channel: stable
+  channel: edge
   size: 4
 udf:
   binary: ./ubuntu-device-flash
