@@ -28,6 +28,9 @@ var build_date string
 
 const FIRSTBOOT_SHARE = "/var/lib/devmode-firstboot"
 
+// NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
+const DISABLE_CLOUD_OPTION = ""
+
 func getRecoveryPartition(device string, RECOVERY_LABEL string) (recovery_nr, recovery_end int) {
 	var err error
 	const OLD_PARTITION = "/tmp/old-partition.txt"
@@ -132,7 +135,7 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 		switch partition {
 		case "writable":
 			rplib.Shellexec("mkfs.ext4", "-F", "-L", "writable", block)
-			err := os.MkdirAll("/tmp/writable/", 0644)
+			err := os.MkdirAll("/tmp/writable/", 0755)
 			rplib.Checkerr(err)
 			err = syscall.Mount(block, "/tmp/writable", "ext4", 0, "")
 			rplib.Checkerr(err)
@@ -140,7 +143,7 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 			rplib.Shellexec("tar", "--xattrs", "-xJvpf", "/recovery/factory/writable.tar.xz", "-C", "/tmp/writable/")
 		case "system-boot":
 			rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", "system-boot", block)
-			err := os.MkdirAll("/tmp/system-boot/", 0644)
+			err := os.MkdirAll("/tmp/system-boot/", 0755)
 			rplib.Checkerr(err)
 			err = syscall.Mount(block, "/tmp/system-boot", "vfat", 0, "")
 			rplib.Checkerr(err)
@@ -195,13 +198,13 @@ var configs rplib.ConfigRecovery
 func addFirstbootService(stage, systemDataDir string) {
 	const SYSTEMD_SYSTEM = "/etc/systemd/system/"
 	const MULTI_USER_TARGET_WANTS_FOLDER = "/etc/systemd/system/multi-user.target.wants/"
-	err := os.MkdirAll(filepath.Dir(systemDataDir+FIRSTBOOT_SHARE), 0644)
+	err := os.MkdirAll(filepath.Dir(systemDataDir+FIRSTBOOT_SHARE), 0755)
 	rplib.Checkerr(err)
 	rplib.Shellexec("cp", "-a", "/recovery_partition/recovery/factory/"+stage, systemDataDir+FIRSTBOOT_SHARE)
-	err = os.MkdirAll(systemDataDir+SYSTEMD_SYSTEM, 0644)
+	err = os.MkdirAll(systemDataDir+SYSTEMD_SYSTEM, 0755)
 	rplib.Checkerr(err)
 	rplib.Shellexec("cp", "-a", "/recovery_partition/recovery/factory/"+stage+"/devmode-firstboot.service", systemDataDir+SYSTEMD_SYSTEM)
-	err = os.MkdirAll(systemDataDir+MULTI_USER_TARGET_WANTS_FOLDER, 0644)
+	err = os.MkdirAll(systemDataDir+MULTI_USER_TARGET_WANTS_FOLDER, 0755)
 	rplib.Checkerr(err)
 	rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", systemDataDir+MULTI_USER_TARGET_WANTS_FOLDER+"/devmode-firstboot.service")
 }
@@ -277,7 +280,7 @@ func main() {
 	case "restore":
 		// back up serial assertion
 		writable_part := rplib.Findfs("LABEL=writable")
-		err = os.MkdirAll("/tmp/writable/", 0644)
+		err = os.MkdirAll("/tmp/writable/", 0755)
 		rplib.Checkerr(err)
 		err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
 		rplib.Checkerr(err)
@@ -300,14 +303,14 @@ func main() {
 
 	// stream log to stdout and writable partition
 	writable_part := rplib.Findfs("LABEL=writable")
-	err = os.MkdirAll("/tmp/writable/", 0644)
+	err = os.MkdirAll("/tmp/writable/", 0755)
 	rplib.Checkerr(err)
 	err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
 	rplib.Checkerr(err)
 	defer syscall.Unmount("/tmp/writable", 0)
 
 	logfile := "/tmp/" + LOG_PATH
-	err = os.MkdirAll(path.Dir(logfile), 0644)
+	err = os.MkdirAll(path.Dir(logfile), 0755)
 	rplib.Checkerr(err)
 	log_writable, err := os.OpenFile(logfile, os.O_CREATE|os.O_WRONLY, 0600)
 	rplib.Checkerr(err)
@@ -318,7 +321,7 @@ func main() {
 	// add grub entry
 	system_boot_part := rplib.Findfs("LABEL=system-boot")
 	log.Println("system_boot_part:", system_boot_part)
-	err = os.MkdirAll("/tmp/system-boot", 0644)
+	err = os.MkdirAll("/tmp/system-boot", 0755)
 	rplib.Checkerr(err)
 	err = syscall.Mount(system_boot_part, "/tmp/system-boot", "vfat", 0, "")
 	rplib.Checkerr(err)
