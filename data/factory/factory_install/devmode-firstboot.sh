@@ -13,17 +13,16 @@ done
 count=0
 while true; do
 	if [ -f "/writable/factory-diag-result" ]; then
+		clear
 		result=$(cat /writable/factory-diag-result)
 		printf "\nfactory-diag result: $result \n"
 		sleep 3
 		break
 	else
-		clear
-		printf "Running factory diag, please wait "
 		i=0
 		max=$(($count % 4))
 		while [ "$i" != "$max" ]; do
-			printf "."
+			printf "`date` Running factory diag, please wait\n"
 			i=$(($i + 1))
 		done
 		count=$(($count + 1))
