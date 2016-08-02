@@ -198,15 +198,15 @@ var configs rplib.ConfigRecovery
 func addFirstbootService(stage, systemDataDir string) {
 	const SYSTEMD_SYSTEM = "/etc/systemd/system/"
 	const MULTI_USER_TARGET_WANTS_FOLDER = "/etc/systemd/system/multi-user.target.wants/"
-	err := os.MkdirAll(filepath.Dir(systemDataDir+FIRSTBOOT_SHARE), 0755)
+	err := os.MkdirAll(filepath.Dir(filepath.Join(systemDataDir, FIRSTBOOT_SHARE)), 0755)
 	rplib.Checkerr(err)
-	rplib.Shellexec("cp", "-a", "/recovery_partition/recovery/factory/"+stage, systemDataDir+FIRSTBOOT_SHARE)
-	err = os.MkdirAll(systemDataDir+SYSTEMD_SYSTEM, 0755)
+	rplib.Shellexec("cp", "-a", filepath.Join("/recovery_partition/recovery/factory/", stage), filepath.Join(systemDataDir, FIRSTBOOT_SHARE))
+	err = os.MkdirAll(filepath.Join(systemDataDir, SYSTEMD_SYSTEM), 0755)
 	rplib.Checkerr(err)
-	rplib.Shellexec("cp", "-a", "/recovery_partition/recovery/factory/"+stage+"/devmode-firstboot.service", systemDataDir+SYSTEMD_SYSTEM)
-	err = os.MkdirAll(systemDataDir+MULTI_USER_TARGET_WANTS_FOLDER, 0755)
+	rplib.Shellexec("cp", "-a", filepath.Join("/recovery_partition/recovery/factory/", stage, "/devmode-firstboot.service"), filepath.Join(systemDataDir, SYSTEMD_SYSTEM))
+	err = os.MkdirAll(filepath.Join(systemDataDir, MULTI_USER_TARGET_WANTS_FOLDER), 0755)
 	rplib.Checkerr(err)
-	rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", systemDataDir+MULTI_USER_TARGET_WANTS_FOLDER+"/devmode-firstboot.service")
+	rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", filepath.Join(systemDataDir, MULTI_USER_TARGET_WANTS_FOLDER, "devmode-firstboot.service"))
 }
 
 func main() {
@@ -285,8 +285,8 @@ func main() {
 		err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
 		rplib.Checkerr(err)
 		// back up assertion if ever signed
-		if _, err := os.Stat("/tmp/" + ASSERTION_FOLDER); err == nil {
-			rplib.Shellexec("cp", "-ar", "/tmp/"+ASSERTION_FOLDER, ASSERTION_BACKUP_FOLDER)
+		if _, err := os.Stat(filepath.Join("/tmp/", ASSERTION_FOLDER)); err == nil {
+			rplib.Shellexec("cp", "-ar", filepath.Join("/tmp/", ASSERTION_FOLDER), ASSERTION_BACKUP_FOLDER)
 		}
 		syscall.Unmount("/tmp/writable", 0)
 	}
@@ -309,7 +309,7 @@ func main() {
 	rplib.Checkerr(err)
 	defer syscall.Unmount("/tmp/writable", 0)
 
-	logfile := "/tmp/" + LOG_PATH
+	logfile := filepath.Join("/tmp/", LOG_PATH)
 	err = os.MkdirAll(path.Dir(logfile), 0755)
 	rplib.Checkerr(err)
 	log_writable, err := os.OpenFile(logfile, os.O_CREATE|os.O_WRONLY, 0600)
@@ -395,14 +395,14 @@ func main() {
 		rplib.Checkerr(err)
 
 		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
-		rplib.SignSerial(modelAssertion, "/tmp/"+ASSERTION_FOLDER, fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP), configs.Yaml.Recovery.SignApiKey)
+		rplib.SignSerial(modelAssertion, filepath.Join("/tmp/", ASSERTION_FOLDER), fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP), configs.Yaml.Recovery.SignApiKey)
 	case "restore":
 		addFirstbootService("factory_restore", "/tmp/writable/system-data/")
 		log.Println("[User restores the system]")
 		// restore assertion if ever signed
 		if _, err := os.Stat(ASSERTION_BACKUP_FOLDER); err == nil {
 			log.Println("Restore gpg key and serial")
-			rplib.Shellexec("cp", "-ar", ASSERTION_BACKUP_FOLDER, "/tmp/"+ASSERTION_FOLDER)
+			rplib.Shellexec("cp", "-ar", ASSERTION_BACKUP_FOLDER, filepath.Join("/tmp/", ASSERTION_FOLDER))
 		}
 	}
 
