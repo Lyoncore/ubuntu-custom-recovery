@@ -26,10 +26,10 @@ set -x
 recoverytype=
 for t in $(cat /proc/cmdline); do
     if [ "$t" = "recoverytype=factory_restore" ]; then
-        recoverytype=restore
+        recoverytype=factory_restore
         break
     elif [ "$t" = "recoverytype=factory_install" ]; then
-        recoverytype=install
+        recoverytype=factory_install
         break
     elif [ "$t" = "recoverytype=custom" ]; then
         recoverytype=custom

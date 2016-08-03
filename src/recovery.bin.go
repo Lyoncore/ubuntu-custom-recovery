@@ -261,7 +261,7 @@ func main() {
 	// TODO: verify the image
 
 	// If this is user triggered factory restore (first time is in factory and should happen automatically), ask user for confirm.
-	if RECOVERY_TYPE == "restore" {
+	if rplib.FACTORY_RESTORE == RECOVERY_TYPE {
 		ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 		// io.WriteString(stdin, "Factory Restore will delete all user data, are you sure? [y/N] ")
 
@@ -277,7 +277,7 @@ func main() {
 	}
 
 	switch RECOVERY_TYPE {
-	case "restore":
+	case rplib.FACTORY_RESTORE:
 		// back up serial assertion
 		writable_part := rplib.Findfs("LABEL=writable")
 		err = os.MkdirAll("/tmp/writable/", 0755)
@@ -328,16 +328,16 @@ func main() {
 	defer syscall.Unmount("/tmp/system-boot", 0)
 
 	log.Println("add grub entry")
-	hack_grub_cfg("factory_restore", "Factory Restore", RECOVERY_LABEL, "/tmp/system-boot/EFI/ubuntu/grub/grub.cfg")
+	hack_grub_cfg(rplib.FACTORY_RESTORE, "Factory Restore", RECOVERY_LABEL, "/tmp/system-boot/EFI/ubuntu/grub/grub.cfg")
 
 	// remove past uefi entry
 	log.Println("[remove past uefi entry]")
 	const EFIBOOTMGR = "efibootmgr"
-	entries := rplib.GetBootEntries("factory_restore")
+	entries := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
 	for _, entry := range entries {
 		rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
 	}
-	entries = rplib.GetBootEntries("snappy_ubuntu_core")
+	entries = rplib.GetBootEntries(rplib.BOOT_ENTRY_SNAPPY)
 	for _, entry := range entries {
 		rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
 	}
@@ -345,26 +345,26 @@ func main() {
 	// add new uefi entry
 	log.Println("[add new uefi entry]")
 	const LOADER = "\\EFI\\BOOT\\BOOTX64.EFI"
-	rplib.CreateBootEntry(device, recovery_nr, LOADER, "factory_restore")
-	rplib.CreateBootEntry(device, normal_boot_nr, LOADER, "snappy_ubuntu_core")
+	rplib.CreateBootEntry(device, recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
+	rplib.CreateBootEntry(device, normal_boot_nr, LOADER, rplib.BOOT_ENTRY_SNAPPY)
 
 	const GRUB_EDITENV = "grub-editenv"
 	switch RECOVERY_TYPE {
-	case "install":
+	case rplib.FACTORY_INSTALL:
 		log.Println("[EXECUTE FACTORY INSTALL]")
 
 		log.Println("[disable cloud-init at factory-diag stage]")
 		// NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
 		rplib.Shellexec(GRUB_EDITENV, "/tmp/system-boot/EFI/ubuntu/grub/grubenv", "set", "cloud_init_disabled=cloud-init=disabled")
 		log.Println("[Add FIRSTBOOT service]")
-		addFirstbootService("factory_install", "/tmp/writable/system-data/")
+		addFirstbootService(rplib.FACTORY_INSTALL, "/tmp/writable/system-data/")
 		rplib.Shellexec("sed", "-i", fmt.Sprintf("s/RECOVERYFSLABEL=\"recovery\"/RECOVERYFSLABEL=\"%s\"/g", RECOVERY_LABEL), "/tmp/writable/system-data/var/lib/devmode-firstboot/devmode-firstboot.sh")
 
 		log.Println("[set next recoverytype to factory_restore]")
 		rplib.Shellexec("mount", "-o", "rw,remount", "/recovery_partition")
 		log.Println("set recoverytype")
 
-		rplib.Shellexec(GRUB_EDITENV, "/recovery_partition/efi/ubuntu/grub/grubenv", "set", "recoverytype=factory_restore")
+		rplib.Shellexec(GRUB_EDITENV, "/recovery_partition/efi/ubuntu/grub/grubenv", "set", "recoverytype="+rplib.FACTORY_RESTORE)
 
 		log.Println("[Start serial vault]")
 
@@ -396,8 +396,8 @@ func main() {
 
 		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
 		rplib.SignSerial(modelAssertion, filepath.Join("/tmp/", ASSERTION_FOLDER), fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP), configs.Yaml.Recovery.SignApiKey)
-	case "restore":
-		addFirstbootService("factory_restore", "/tmp/writable/system-data/")
+	case rplib.FACTORY_RESTORE:
+		addFirstbootService(rplib.FACTORY_RESTORE, "/tmp/writable/system-data/")
 		log.Println("[User restores the system]")
 		// restore assertion if ever signed
 		if _, err := os.Stat(ASSERTION_BACKUP_FOLDER); err == nil {
