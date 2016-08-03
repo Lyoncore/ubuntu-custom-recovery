@@ -6,12 +6,12 @@ PREREQ=""
 # Output pre-requisites
 prereqs()
 {
-        echo "$PREREQ"
+    echo "$PREREQ"
 }
 
 debugshell()
 {
-	PS1='debugshell> ' /bin/sh -i </dev/console >/dev/console 2>&1 # XXX: debug
+    PS1='debugshell> ' /bin/sh -i </dev/console >/dev/console 2>&1 # XXX: debug
 }
 
 case "$1" in
@@ -25,39 +25,36 @@ set -x
 
 recoverytype=
 for t in $(cat /proc/cmdline); do
-        if [ "$t" = "recoverytype=factory_restore" ]; then
-                recoverytype=restore
-                break
-        elif [ "$t" = "recoverytype=factory_install" ]; then
-                recoverytype=install
-		break
-        elif [ "$t" = "recoverytype=factory_first_restore" ]; then
-                recoverytype=first_restore
-		break
-	elif [ "$t" = "recoverytype=custom" ]; then
-	        recoverytype=custom
-	        break
-	fi
+    if [ "$t" = "recoverytype=factory_restore" ]; then
+        recoverytype=restore
+        break
+    elif [ "$t" = "recoverytype=factory_install" ]; then
+        recoverytype=install
+        break
+    elif [ "$t" = "recoverytype=custom" ]; then
+        recoverytype=custom
+        break
+    fi
 done
 
 [ -n "$recoverytype" ] || exit 0 # nothing to do in non-recovery mode
 
 #get recovery_label
-recoverylabel=$(cat /proc/cmdline | tr " " "\n" | grep "root=LABEL=" | sed -e 's/root=LABEL=\(.*\)/\1/')
+recoverylabel=$(tr " " "\n" </proc/cmdline | grep "root=LABEL=" | sed -e 's/root=LABEL=\(.*\)/\1/')
 
 BASE=/run/initramfs/recovery
 mkdir -p $BASE
 
 wait-for-root "LABEL=$recoverylabel" "${ROOTDELAY:-180}" >/dev/null || true
-recovery_part="$(findfs LABEL=$recoverylabel)"
+recovery_part="$(findfs LABEL="$recoverylabel")"
 [ -n "$recovery_part" ] || exit 1 # recovery partition not found
 
-syspath="$(dirname $(realpath /sys/class/block/$(basename $recovery_part)))"
-device="$(realpath /dev/block/$(cat $syspath/dev))"
+syspath="$(dirname "$(realpath /sys/class/block/"$(basename "$recovery_part")")")"
+device="$(realpath /dev/block/"$(cat "$syspath/dev")")"
 
 echo "[mount the recovery partition]"
 mkdir -p $BASE/recovery
-mount -o defaults,ro $recovery_part $BASE/recovery
+mount -o defaults,ro "$recovery_part" $BASE/recovery
 ls $BASE/recovery # XXX: debug
 
 # mount os snap on chroot
@@ -69,11 +66,11 @@ mount $BASE/recovery/os.snap $osrootfs
 newroot=$BASE/chroot/
 mkdir -p $newroot
 for dir in /bin /lib /lib64 /etc /var/ /usr /sbin; do
-	mkdir -p $BASE/chroot/$dir/
-	mount --bind  $osrootfs/$dir/ $newroot/$dir/
+    mkdir -p $BASE/chroot/$dir/
+    mount --bind  $osrootfs/$dir/ $newroot/$dir/
 done
 for dir in /run /dev /tmp /sys /srv /proc /mnt /root /recovery /recovery_partition; do
-	mkdir -p $newroot/$dir/
+    mkdir -p $newroot/$dir/
 done
 
 kernelfs=$BASE/kerelsnap/
@@ -92,7 +89,7 @@ for d in modules firmware; do
 done
 
 mount --bind $BASE/recovery/recovery/ $newroot/recovery/
-mount -o defaults,ro $recovery_part $newroot/recovery_partition
+mount -o defaults,ro "$recovery_part" $newroot/recovery_partition
 
 echo "[switch_root to newroot]"
 mount --bind /sys /$newroot/sys
@@ -102,7 +99,7 @@ mount --bind /run /$newroot/run
 
 echo "[chroot execute recovery.bin]"
 
-/bin/chroot /$newroot /recovery/bin/recovery.bin $recoverytype $recoverylabel || true
+/bin/chroot /$newroot /recovery/bin/recovery.bin $recoverytype "$recoverylabel" || true
 
 sync
 reboot
