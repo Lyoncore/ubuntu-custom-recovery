@@ -19,14 +19,11 @@ import (
 )
 
 import rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
-import utils "../utils"
 
 var version string
 var commit string
 var commitstamp string
 var build_date string
-
-const FIRSTBOOT_SHARE = "/var/lib/devmode-firstboot"
 
 // NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
 const DISABLE_CLOUD_OPTION = ""
@@ -119,6 +116,7 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 		}
 		log.Println("end_size:", end_size)
 
+		// make partition with optimal alignment
 		rplib.Shellexec("parted", "-a", "optimal", "-ms", device, "--", "mkpart", "primary", fstype, fmt.Sprintf("%vB", last_end+1), end_size, "name", fmt.Sprintf("%v", nr), partition)
 		_, new_end := rplib.GetPartitionBeginEnd(device, nr)
 
@@ -132,6 +130,7 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 
 		block := fmt.Sprintf("%s%d", device, nr)
 		log.Println("block:", block)
+		// create filesystem and dump snap system
 		switch partition {
 		case "writable":
 			rplib.Shellexec("mkfs.ext4", "-F", "-L", "writable", block)
@@ -193,23 +192,8 @@ func usbhid() {
 	rplib.Shellexec("modprobe", "hid-generic")
 }
 
-var configs rplib.ConfigRecovery
-
-func addFirstbootService(stage, systemDataDir string) {
-	const SYSTEMD_SYSTEM = "/etc/systemd/system/"
-	const MULTI_USER_TARGET_WANTS_FOLDER = "/etc/systemd/system/multi-user.target.wants/"
-	err := os.MkdirAll(filepath.Dir(filepath.Join(systemDataDir, FIRSTBOOT_SHARE)), 0755)
-	rplib.Checkerr(err)
-	rplib.Shellexec("cp", "-a", filepath.Join("/recovery_partition/recovery/factory/", stage), filepath.Join(systemDataDir, FIRSTBOOT_SHARE))
-	err = os.MkdirAll(filepath.Join(systemDataDir, SYSTEMD_SYSTEM), 0755)
-	rplib.Checkerr(err)
-	rplib.Shellexec("cp", "-a", filepath.Join("/recovery_partition/recovery/factory/", stage, "/devmode-firstboot.service"), filepath.Join(systemDataDir, SYSTEMD_SYSTEM))
-	err = os.MkdirAll(filepath.Join(systemDataDir, MULTI_USER_TARGET_WANTS_FOLDER), 0755)
-	rplib.Checkerr(err)
-	rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", filepath.Join(systemDataDir, MULTI_USER_TARGET_WANTS_FOLDER, "devmode-firstboot.service"))
-}
-
 func main() {
+	const GRUB_EDITENV = "grub-editenv"
 	const LOG_PATH = "/writable/system-data/var/log/recovery/log.txt"
 	const ASSERTION_FOLDER = "/writable/recovery"
 	const ASSERTION_BACKUP_FOLDER = "/tmp/assert_backup"
@@ -217,7 +201,7 @@ func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	if "" == version {
-		version = utils.Version
+		version = Version
 	}
 
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
@@ -233,12 +217,10 @@ func main() {
 	usbhid()
 
 	// Load config.yaml
-	var errBool bool
-	configs, errBool = rplib.LoadYamlConfig("/recovery/config.yaml")
-	if errBool {
-		log.Println("Can not load config.yaml")
-		os.Exit(1)
-	}
+	var configs rplib.ConfigRecovery
+	err := configs.Load("/recovery/config.yaml")
+	rplib.Checkerr(err)
+	log.Println(configs)
 
 	// TODO: use enum to represent RECOVERY_TYPE
 	var RECOVERY_TYPE, RECOVERY_LABEL = flag.Arg(0), flag.Arg(1)
@@ -248,14 +230,8 @@ func main() {
 	// find device name
 	recovery_part := rplib.Findfs(fmt.Sprintf("LABEL=%s", RECOVERY_LABEL))
 	log.Println("recovery_part: ", recovery_part)
-	syspath := path.Dir(rplib.Realpath(fmt.Sprintf("/sys/class/block/%s", path.Base(recovery_part))))
-	log.Println("syspath: ", syspath)
-
-	dat, err := ioutil.ReadFile(fmt.Sprintf("%s/dev", syspath))
+	device, err := rplib.FindDevice(recovery_part)
 	rplib.Checkerr(err)
-	dat_str := strings.TrimSpace(string(dat))
-	log.Println("dat_str: ", dat_str)
-	device := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
 	log.Println("device: ", device)
 
 	// TODO: verify the image
@@ -342,13 +318,18 @@ func main() {
 		rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
 	}
 
+	log.Println("[Add snaps for oem]")
+	os.MkdirAll("/tmp/writable/system-data/var/lib/oem/", 0755)
+	rplib.Shellexec("cp", "-a", "/recovery/factory/snaps", "/tmp/writable/system-data/var/lib/oem/")
+	rplib.Shellexec("cp", "-a", "/recovery/factory/snaps-devmode", "/tmp/writable/system-data/var/lib/oem/")
+
 	// add new uefi entry
 	log.Println("[add new uefi entry]")
 	const LOADER = "\\EFI\\BOOT\\BOOTX64.EFI"
+	const MULTI_USER_TARGET_WANTS_FOLDER = "/etc/systemd/system/multi-user.target.wants/"
 	rplib.CreateBootEntry(device, recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
 	rplib.CreateBootEntry(device, normal_boot_nr, LOADER, rplib.BOOT_ENTRY_SNAPPY)
 
-	const GRUB_EDITENV = "grub-editenv"
 	switch RECOVERY_TYPE {
 	case rplib.FACTORY_INSTALL:
 		log.Println("[EXECUTE FACTORY INSTALL]")
@@ -357,13 +338,13 @@ func main() {
 		// NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
 		rplib.Shellexec(GRUB_EDITENV, "/tmp/system-boot/EFI/ubuntu/grub/grubenv", "set", "cloud_init_disabled=cloud-init=disabled")
 		log.Println("[Add FIRSTBOOT service]")
-		addFirstbootService(rplib.FACTORY_INSTALL, "/tmp/writable/system-data/")
+		rplib.Shellexec("/recovery/bin/rsync", "-a", filepath.Join("/recovery/factory", rplib.FACTORY_INSTALL)+"/", "/tmp/writable/system-data/")
+		rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", filepath.Join("/tmp/writable/system-data/", MULTI_USER_TARGET_WANTS_FOLDER, "devmode-firstboot.service"))
 		rplib.Shellexec("sed", "-i", fmt.Sprintf("s/RECOVERYFSLABEL=\"recovery\"/RECOVERYFSLABEL=\"%s\"/g", RECOVERY_LABEL), "/tmp/writable/system-data/var/lib/devmode-firstboot/devmode-firstboot.sh")
 
 		log.Println("[set next recoverytype to factory_restore]")
 		rplib.Shellexec("mount", "-o", "rw,remount", "/recovery_partition")
 		log.Println("set recoverytype")
-
 		rplib.Shellexec(GRUB_EDITENV, "/recovery_partition/efi/ubuntu/grub/grubenv", "set", "recoverytype="+rplib.FACTORY_RESTORE)
 
 		log.Println("[Start serial vault]")
@@ -378,26 +359,29 @@ func main() {
 		}
 		eth := interface_list[1] // select first non "lo" network interface.
 		rplib.Shellexec("ip", "link", "set", "dev", eth, "up")
-		rplib.Shellexec("dhclient", eth)
+		rplib.Shellexec("dhclient", "-1", eth)
 
 		vaultServerIP := rplib.Shellcmdoutput("ip route | awk '/default/ { print $3 }'") // assume identity-vault is hosted on the gateway
 		log.Println("vaultServerIP:", vaultServerIP)
 
 		// TODO: read assertion information from gadget snap
-		if !configs.Yaml.Recovery.SignSerial {
+		if !configs.Recovery.SignSerial {
 			log.Println("Will not sign serial")
 			break
 		}
 		log.Println("Start signing serial")
 		fileContent, err := ioutil.ReadFile("/recovery/assertions/model.txt")
 		rplib.Checkerr(err)
-		modelAssertion, err := asserts.Decode(fileContent)
+		_, err = asserts.Decode(fileContent)
 		rplib.Checkerr(err)
 
 		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
-		rplib.SignSerial(modelAssertion, filepath.Join("/tmp/", ASSERTION_FOLDER), fmt.Sprintf("http://%s:8080/1.0/sign", vaultServerIP), configs.Yaml.Recovery.SignApiKey)
+		// TODO: generate serial-request
 	case rplib.FACTORY_RESTORE:
-		addFirstbootService(rplib.FACTORY_RESTORE, "/tmp/writable/system-data/")
+		log.Println("[Add FIRSTBOOT service]")
+		rplib.Shellexec("/recovery/bin/rsync", "-a", filepath.Join("/recovery/factory", rplib.FACTORY_RESTORE)+"/", "/tmp/writable/system-data/")
+		rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", filepath.Join("/tmp/writable/system-data/", MULTI_USER_TARGET_WANTS_FOLDER, "devmode-firstboot.service"))
+		rplib.Shellexec("sed", "-i", fmt.Sprintf("s/RECOVERYFSLABEL=\"recovery\"/RECOVERYFSLABEL=\"%s\"/g", RECOVERY_LABEL), "/tmp/writable/system-data/var/lib/devmode-firstboot/devmode-firstboot.sh")
 		log.Println("[User restores the system]")
 		// restore assertion if ever signed
 		if _, err := os.Stat(ASSERTION_BACKUP_FOLDER); err == nil {

@@ -11,14 +11,17 @@ configs:
   release: 16
   channel: edge
   size: 4
+  packages:
+    - snapweb
 udf:
   binary: ./ubuntu-device-flash
-  option: core
+  command: core
 debug:
   devmode: on
   ssh: on
   xz: off
 recovery:
+  type: factory_install
   filesystem-label: ESP
   boot-partition:
   systemboot-partition:

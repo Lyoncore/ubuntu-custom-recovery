@@ -99,7 +99,10 @@ mount --bind /run /$newroot/run
 
 echo "[chroot execute recovery.bin]"
 
-/bin/chroot /$newroot /recovery/bin/recovery.bin $recoverytype "$recoverylabel" || true
+set +e
+/bin/chroot /$newroot /recovery/bin/recovery.bin $recoverytype "$recoverylabel"
+ret=$?
+set -e
 
 sync
 reboot
