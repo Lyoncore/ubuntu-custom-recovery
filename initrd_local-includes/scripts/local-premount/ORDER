@@ -1,0 +1,2 @@
+[ -e /conf/param.conf ] && . /conf/param.conf
+/scripts/local-premount/00_recovery $@
