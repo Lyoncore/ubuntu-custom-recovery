@@ -369,14 +369,8 @@ func main() {
 			log.Println("Will not sign serial")
 			break
 		}
+		// TODO: Start signing serial
 		log.Println("Start signing serial")
-		fileContent, err := ioutil.ReadFile("/recovery/assertions/model.txt")
-		rplib.Checkerr(err)
-		_, err = asserts.Decode(fileContent)
-		rplib.Checkerr(err)
-
-		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
-		// TODO: generate serial-request
 	case rplib.FACTORY_RESTORE:
 		log.Println("[Add FIRSTBOOT service]")
 		rplib.Shellexec("/recovery/bin/rsync", "-a", "--exclude='.gitkeep'", filepath.Join("/recovery/factory", rplib.FACTORY_RESTORE)+"/", "/tmp/writable/system-data/")
