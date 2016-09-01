@@ -338,7 +338,7 @@ func main() {
 		// NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
 		rplib.Shellexec(GRUB_EDITENV, "/tmp/system-boot/EFI/ubuntu/grub/grubenv", "set", "cloud_init_disabled=cloud-init=disabled")
 		log.Println("[Add FIRSTBOOT service]")
-		rplib.Shellexec("/recovery/bin/rsync", "-a", filepath.Join("/recovery/factory", rplib.FACTORY_INSTALL)+"/", "/tmp/writable/system-data/")
+		rplib.Shellexec("/recovery/bin/rsync", "-a", "--exclude='.gitkeep'", filepath.Join("/recovery/factory", rplib.FACTORY_INSTALL)+"/", "/tmp/writable/system-data/")
 		rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", filepath.Join("/tmp/writable/system-data/", MULTI_USER_TARGET_WANTS_FOLDER, "devmode-firstboot.service"))
 		rplib.Shellexec("sed", "-i", fmt.Sprintf("s/RECOVERYFSLABEL=\"recovery\"/RECOVERYFSLABEL=\"%s\"/g", RECOVERY_LABEL), "/tmp/writable/system-data/var/lib/devmode-firstboot/devmode-firstboot.sh")
 
@@ -379,7 +379,7 @@ func main() {
 		// TODO: generate serial-request
 	case rplib.FACTORY_RESTORE:
 		log.Println("[Add FIRSTBOOT service]")
-		rplib.Shellexec("/recovery/bin/rsync", "-a", filepath.Join("/recovery/factory", rplib.FACTORY_RESTORE)+"/", "/tmp/writable/system-data/")
+		rplib.Shellexec("/recovery/bin/rsync", "-a", "--exclude='.gitkeep'", filepath.Join("/recovery/factory", rplib.FACTORY_RESTORE)+"/", "/tmp/writable/system-data/")
 		rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", filepath.Join("/tmp/writable/system-data/", MULTI_USER_TARGET_WANTS_FOLDER, "devmode-firstboot.service"))
 		rplib.Shellexec("sed", "-i", fmt.Sprintf("s/RECOVERYFSLABEL=\"recovery\"/RECOVERYFSLABEL=\"%s\"/g", RECOVERY_LABEL), "/tmp/writable/system-data/var/lib/devmode-firstboot/devmode-firstboot.sh")
 		log.Println("[User restores the system]")
