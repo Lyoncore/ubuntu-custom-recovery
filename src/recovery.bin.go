@@ -2,23 +2,20 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/satori/go.uuid"
-	"github.com/ubuntu-core/snappy/asserts"
-	"golang.org/x/crypto/openpgp"
+	"github.com/snapcore/snapd/asserts"
 )
 
 import rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
@@ -27,6 +24,9 @@ var version string
 var commit string
 var commitstamp string
 var build_date string
+
+// NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
+const DISABLE_CLOUD_OPTION = ""
 
 func getRecoveryPartition(device string, RECOVERY_LABEL string) (recovery_nr, recovery_end int) {
 	var err error
@@ -97,7 +97,7 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 	// Read information of recovery partition
 	// Keep only recovery partition
 
-	partitions := [...]string{"grub", "system-boot", "writable"}
+	partitions := [...]string{"system-boot", "writable"}
 	for _, partition := range partitions {
 		log.Println("last_end:", last_end)
 		log.Println("nr:", nr)
@@ -113,12 +113,10 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 			size := 64 * 1024 * 1024 // 64 MB in Bytes
 			end_size = strconv.Itoa(last_end+size) + "B"
 			fstype = "fat32"
-		} else if "grub" == partition {
-			size := 4 * 1024 * 1024 // 4 MB in Bytes
-			end_size = strconv.Itoa(last_end+size) + "B"
-			fstype = ""
 		}
 		log.Println("end_size:", end_size)
+
+		// make partition with optimal alignment
 		rplib.Shellexec("parted", "-a", "optimal", "-ms", device, "--", "mkpart", "primary", fstype, fmt.Sprintf("%vB", last_end+1), end_size, "name", fmt.Sprintf("%v", nr), partition)
 		_, new_end := rplib.GetPartitionBeginEnd(device, nr)
 
@@ -132,24 +130,25 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 
 		block := fmt.Sprintf("%s%d", device, nr)
 		log.Println("block:", block)
+		// create filesystem and dump snap system
 		switch partition {
 		case "writable":
 			rplib.Shellexec("mkfs.ext4", "-F", "-L", "writable", block)
-			os.MkdirAll("/tmp/writable/", 0644)
-			err := syscall.Mount(block, "/tmp/writable", "ext4", 0, "")
+			err := os.MkdirAll("/tmp/writable/", 0755)
+			rplib.Checkerr(err)
+			err = syscall.Mount(block, "/tmp/writable", "ext4", 0, "")
 			rplib.Checkerr(err)
 			defer syscall.Unmount("/tmp/writable", 0)
 			rplib.Shellexec("tar", "--xattrs", "-xJvpf", "/recovery/factory/writable.tar.xz", "-C", "/tmp/writable/")
 		case "system-boot":
 			rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", "system-boot", block)
-			os.MkdirAll("/tmp/system-boot/", 0644)
-			err := syscall.Mount(block, "/tmp/system-boot", "vfat", 0, "")
+			err := os.MkdirAll("/tmp/system-boot/", 0755)
+			rplib.Checkerr(err)
+			err = syscall.Mount(block, "/tmp/system-boot", "vfat", 0, "")
 			rplib.Checkerr(err)
 			defer syscall.Unmount("/tmp/system-boot", 0)
 			rplib.Shellexec("tar", "--xattrs", "-xJvpf", "/recovery/factory/system-boot.tar.xz", "-C", "/tmp/system-boot/")
 			rplib.Shellexec("parted", "-ms", device, "set", strconv.Itoa(nr), "boot", "on")
-		case "grub":
-			rplib.Shellexec("parted", "-ms", device, "set", strconv.Itoa(nr), "bios_grub", "on")
 		}
 		last_end = new_end
 		nr = nr + 1
@@ -157,7 +156,11 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 	return
 }
 
-func hack_grub_cfg(grub_cfg string, recovery_type_cfg string, recovery_type_label string, recovery_part_label string) {
+func hack_grub_cfg(recovery_type_cfg string, recovery_type_label string, recovery_part_label string, grub_cfg string) {
+	// add cloud-init disabled option
+	rplib.Shellexec("sed", "-i", "s/^set cmdline=\"\\(.*\\)\"$/set cmdline=\"\\1 $cloud_init_disabled\"/g", grub_cfg)
+
+	// add recovery grub menuentry
 	f, err := os.OpenFile(grub_cfg, os.O_APPEND|os.O_WRONLY, 0600)
 	rplib.Checkerr(err)
 
@@ -183,76 +186,6 @@ menuentry "%s" {
 	f.Close()
 }
 
-func DeviceSerial(authority, key, brand, model, revision, serial string, t time.Time) string {
-	content := fmt.Sprintf("type: device-serial\nauthority-id: %s\ndevice-key: %s\nbrand-id: %s\nmodel: %s\nrevision: %s\nserial: %s\ntimestamp: %s\n\n%s\n", authority, key, brand, model, revision, serial, t.UTC().Format("2006-01-02T15:04:05Z"), key)
-	return content
-}
-
-func getKeyByName(keyring openpgp.EntityList, name string) *openpgp.Entity {
-	for _, entity := range keyring {
-		for _, ident := range entity.Identities {
-			if ident.UserId.Name == name {
-				return entity
-			}
-		}
-	}
-
-	return nil
-}
-
-func SignDeviceSerial(targetFolder, vaultServer string) {
-	var err error
-
-	log.Println("targetFolder:", targetFolder)
-	gnupgHomedir := targetFolder + "/.gnupg/"
-	err = os.MkdirAll(gnupgHomedir, 0700)
-	rplib.Checkerr(err)
-
-	genkey := []byte("Key-Type: 1\nKey-Length: 4096\nName-Real: SERIAL\n")
-	err = ioutil.WriteFile("/tmp/gen-key-script", genkey, 0600)
-	rplib.Checkerr(err)
-
-	rplib.Shellexec("gpg", "--homedir="+gnupgHomedir, "--batch", "--gen-key", "/tmp/gen-key-script")
-
-	f, err := os.Open(gnupgHomedir + "/pubring.gpg")
-	rplib.Checkerr(err)
-	el, err := openpgp.ReadKeyRing(f)
-	rplib.Checkerr(err)
-	entity := getKeyByName(el, "SERIAL")
-	openPGPPublicKey := asserts.OpenPGPPublicKey(entity.PrimaryKey)
-	encodeKey, err := asserts.EncodePublicKey(openPGPPublicKey)
-	rplib.Checkerr(err)
-	key := string(encodeKey)
-
-	// TODO: verify the format of encodeKey
-	key = strings.Replace(key, "\n", "", -1)
-
-	authority := "System"
-	brand := "System Inc."
-	model := "Router 3400"
-	revision := "12"
-
-	product_serial, err := ioutil.ReadFile("/sys/class/dmi/id/product_serial")
-	rplib.Checkerr(err)
-	serial := strings.Split(string(product_serial), "\n")[0] + "-" + uuid.NewV4().String()
-
-	content := DeviceSerial(authority, key, brand, model, revision, serial, time.Now())
-	body := bytes.NewBuffer([]byte(content))
-
-	log.Println(content)
-	vaultServer = strings.TrimRight(vaultServer, "/")
-	log.Println("vaultServer:", vaultServer)
-	r, err := http.Post(vaultServer+"/sign", "application/x-www-form-urlencoded", body)
-	rplib.Checkerr(err)
-	response, err := ioutil.ReadAll(r.Body)
-	if nil != err {
-		log.Println("Device Sign error:", err)
-	}
-
-	err = ioutil.WriteFile(targetFolder+"/deviceSerial.txt", response, 0600)
-	rplib.Checkerr(err)
-}
-
 func usbhid() {
 	log.Println("modprobe hid-generic and usbhid for usb keyboard")
 	rplib.Shellexec("modprobe", "usbhid")
@@ -260,7 +193,16 @@ func usbhid() {
 }
 
 func main() {
+	const GRUB_EDITENV = "grub-editenv"
+	const LOG_PATH = "/writable/system-data/var/log/recovery/log.txt"
+	const ASSERTION_FOLDER = "/writable/recovery"
+	const ASSERTION_BACKUP_FOLDER = "/tmp/assert_backup"
+
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	if "" == version {
+		version = Version
+	}
 
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
 	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
@@ -274,6 +216,12 @@ func main() {
 
 	usbhid()
 
+	// Load config.yaml
+	var configs rplib.ConfigRecovery
+	err := configs.Load("/recovery/config.yaml")
+	rplib.Checkerr(err)
+	log.Println(configs)
+
 	// TODO: use enum to represent RECOVERY_TYPE
 	var RECOVERY_TYPE, RECOVERY_LABEL = flag.Arg(0), flag.Arg(1)
 	log.Println("RECOVERY_TYPE: ", RECOVERY_TYPE)
@@ -282,20 +230,14 @@ func main() {
 	// find device name
 	recovery_part := rplib.Findfs(fmt.Sprintf("LABEL=%s", RECOVERY_LABEL))
 	log.Println("recovery_part: ", recovery_part)
-	syspath := path.Dir(rplib.Realpath(fmt.Sprintf("/sys/class/block/%s", path.Base(recovery_part))))
-	log.Println("syspath: ", syspath)
-
-	dat, err := ioutil.ReadFile(fmt.Sprintf("%s/dev", syspath))
+	device, err := rplib.FindDevice(recovery_part)
 	rplib.Checkerr(err)
-	dat_str := strings.TrimSpace(string(dat))
-	log.Println("dat_str: ", dat_str)
-	device := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
 	log.Println("device: ", device)
 
 	// TODO: verify the image
 
 	// If this is user triggered factory restore (first time is in factory and should happen automatically), ask user for confirm.
-	if RECOVERY_TYPE == "restore" {
+	if rplib.FACTORY_RESTORE == RECOVERY_TYPE {
 		ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 		// io.WriteString(stdin, "Factory Restore will delete all user data, are you sure? [y/N] ")
 
@@ -310,6 +252,20 @@ func main() {
 		}
 	}
 
+	switch RECOVERY_TYPE {
+	case rplib.FACTORY_RESTORE:
+		// back up serial assertion
+		writable_part := rplib.Findfs("LABEL=writable")
+		err = os.MkdirAll("/tmp/writable/", 0755)
+		rplib.Checkerr(err)
+		err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
+		rplib.Checkerr(err)
+		// back up assertion if ever signed
+		if _, err := os.Stat(filepath.Join("/tmp/", ASSERTION_FOLDER)); err == nil {
+			rplib.Shellexec("cp", "-ar", filepath.Join("/tmp/", ASSERTION_FOLDER), ASSERTION_BACKUP_FOLDER)
+		}
+		syscall.Unmount("/tmp/writable", 0)
+	}
 	log.Println("[recover the backup GPT entry at end of the disk.]")
 	rplib.Shellexec("sgdisk", device, "--randomize-guids", "--move-second-header")
 
@@ -323,14 +279,16 @@ func main() {
 
 	// stream log to stdout and writable partition
 	writable_part := rplib.Findfs("LABEL=writable")
-	os.MkdirAll("/tmp/writable/", 0644)
+	err = os.MkdirAll("/tmp/writable/", 0755)
+	rplib.Checkerr(err)
 	err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
 	rplib.Checkerr(err)
-	defer syscall.Unmount(writable_part, 0)
+	defer syscall.Unmount("/tmp/writable", 0)
 
-	err = os.MkdirAll("/tmp/writable/system-data/var/log/recovery/", 0644)
+	logfile := filepath.Join("/tmp/", LOG_PATH)
+	err = os.MkdirAll(path.Dir(logfile), 0755)
 	rplib.Checkerr(err)
-	log_writable, err := os.OpenFile("/tmp/writable/system-data/var/log/recovery/log.txt", os.O_CREATE|os.O_WRONLY, 0600)
+	log_writable, err := os.OpenFile(logfile, os.O_CREATE|os.O_WRONLY, 0600)
 	rplib.Checkerr(err)
 	f := io.MultiWriter(log_writable, os.Stdout)
 	log.SetOutput(f)
@@ -339,42 +297,55 @@ func main() {
 	// add grub entry
 	system_boot_part := rplib.Findfs("LABEL=system-boot")
 	log.Println("system_boot_part:", system_boot_part)
-	os.MkdirAll("/tmp/system-boot", 0644)
+	err = os.MkdirAll("/tmp/system-boot", 0755)
+	rplib.Checkerr(err)
 	err = syscall.Mount(system_boot_part, "/tmp/system-boot", "vfat", 0, "")
 	rplib.Checkerr(err)
 	defer syscall.Unmount("/tmp/system-boot", 0)
 
 	log.Println("add grub entry")
-	hack_grub_cfg("/tmp/system-boot/EFI/ubuntu/grub/grub.cfg", "factory_restore", "Factory Restore", RECOVERY_LABEL)
-	rplib.Shellexec("mount", "-o", "ro,remount", "/tmp/system-boot")
+	hack_grub_cfg(rplib.FACTORY_RESTORE, "Factory Restore", RECOVERY_LABEL, "/tmp/system-boot/EFI/ubuntu/grub/grub.cfg")
 
 	// remove past uefi entry
 	log.Println("[remove past uefi entry]")
 	const EFIBOOTMGR = "efibootmgr"
-	entries := rplib.GetBootEntries("factory_restore")
+	entries := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
 	for _, entry := range entries {
 		rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
 	}
-	entries = rplib.GetBootEntries("snappy_ubuntu_core")
+	entries = rplib.GetBootEntries(rplib.BOOT_ENTRY_SNAPPY)
 	for _, entry := range entries {
 		rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
 	}
+
+	log.Println("[Add snaps for oem]")
+	os.MkdirAll("/tmp/writable/system-data/var/lib/oem/", 0755)
+	rplib.Shellexec("cp", "-a", "/recovery/factory/snaps", "/tmp/writable/system-data/var/lib/oem/")
+	rplib.Shellexec("cp", "-a", "/recovery/factory/snaps-devmode", "/tmp/writable/system-data/var/lib/oem/")
 
 	// add new uefi entry
 	log.Println("[add new uefi entry]")
 	const LOADER = "\\EFI\\BOOT\\BOOTX64.EFI"
-	rplib.CreateBootEntry(device, recovery_nr, LOADER, "factory_restore")
-	rplib.CreateBootEntry(device, normal_boot_nr, LOADER, "snappy_ubuntu_core")
+	const MULTI_USER_TARGET_WANTS_FOLDER = "/etc/systemd/system/multi-user.target.wants/"
+	rplib.CreateBootEntry(device, recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
+	rplib.CreateBootEntry(device, normal_boot_nr, LOADER, rplib.BOOT_ENTRY_SNAPPY)
 
-	const GRUB_EDITENV = "grub-editenv"
 	switch RECOVERY_TYPE {
-	case "install":
+	case rplib.FACTORY_INSTALL:
 		log.Println("[EXECUTE FACTORY INSTALL]")
+
+		log.Println("[disable cloud-init at factory-diag stage]")
+		// NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
+		rplib.Shellexec(GRUB_EDITENV, "/tmp/system-boot/EFI/ubuntu/grub/grubenv", "set", "cloud_init_disabled=cloud-init=disabled")
+		log.Println("[Add FIRSTBOOT service]")
+		rplib.Shellexec("/recovery/bin/rsync", "-a", "--exclude='.gitkeep'", filepath.Join("/recovery/factory", rplib.FACTORY_INSTALL)+"/", "/tmp/writable/system-data/")
+		rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", filepath.Join("/tmp/writable/system-data/", MULTI_USER_TARGET_WANTS_FOLDER, "devmode-firstboot.service"))
+		rplib.Shellexec("sed", "-i", fmt.Sprintf("s/RECOVERYFSLABEL=\"recovery\"/RECOVERYFSLABEL=\"%s\"/g", RECOVERY_LABEL), "/tmp/writable/system-data/var/lib/devmode-firstboot/devmode-firstboot.sh")
 
 		log.Println("[set next recoverytype to factory_restore]")
 		rplib.Shellexec("mount", "-o", "rw,remount", "/recovery_partition")
 		log.Println("set recoverytype")
-		rplib.Shellexec(GRUB_EDITENV, "/recovery_partition/efi/ubuntu/grub/grubenv", "set", "recoverytype=factory_restore")
+		rplib.Shellexec(GRUB_EDITENV, "/recovery_partition/efi/ubuntu/grub/grubenv", "set", "recoverytype="+rplib.FACTORY_RESTORE)
 
 		log.Println("[Start serial vault]")
 
@@ -388,16 +359,29 @@ func main() {
 		}
 		eth := interface_list[1] // select first non "lo" network interface.
 		rplib.Shellexec("ip", "link", "set", "dev", eth, "up")
-		rplib.Shellexec("dhclient", eth)
+		rplib.Shellexec("dhclient", "-1", eth)
 
 		vaultServerIP := rplib.Shellcmdoutput("ip route | awk '/default/ { print $3 }'") // assume identity-vault is hosted on the gateway
 		log.Println("vaultServerIP:", vaultServerIP)
 
-		rplib.Shellexec("/recovery/bin/rngd", "-r", "/dev/urandom")
-		SignDeviceSerial("/tmp/writable/recovery/", fmt.Sprintf("http://%s:8080/1.0/", vaultServerIP))
-	case "restore":
-		log.Println("[Use restores the system]")
-		log.Println("Restore gpg key and device serial")
+		// TODO: read assertion information from gadget snap
+		if !configs.Recovery.SignSerial {
+			log.Println("Will not sign serial")
+			break
+		}
+		// TODO: Start signing serial
+		log.Println("Start signing serial")
+	case rplib.FACTORY_RESTORE:
+		log.Println("[Add FIRSTBOOT service]")
+		rplib.Shellexec("/recovery/bin/rsync", "-a", "--exclude='.gitkeep'", filepath.Join("/recovery/factory", rplib.FACTORY_RESTORE)+"/", "/tmp/writable/system-data/")
+		rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", filepath.Join("/tmp/writable/system-data/", MULTI_USER_TARGET_WANTS_FOLDER, "devmode-firstboot.service"))
+		rplib.Shellexec("sed", "-i", fmt.Sprintf("s/RECOVERYFSLABEL=\"recovery\"/RECOVERYFSLABEL=\"%s\"/g", RECOVERY_LABEL), "/tmp/writable/system-data/var/lib/devmode-firstboot/devmode-firstboot.sh")
+		log.Println("[User restores the system]")
+		// restore assertion if ever signed
+		if _, err := os.Stat(ASSERTION_BACKUP_FOLDER); err == nil {
+			log.Println("Restore gpg key and serial")
+			rplib.Shellexec("cp", "-ar", ASSERTION_BACKUP_FOLDER, filepath.Join("/tmp/", ASSERTION_FOLDER))
+		}
 	}
 
 	rplib.Sync()

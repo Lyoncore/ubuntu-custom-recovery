@@ -1,0 +1,108 @@
+#! /bin/sh -e
+# initramfs local-premount script for repartition
+
+PREREQ=""
+
+# Output pre-requisites
+prereqs()
+{
+    echo "$PREREQ"
+}
+
+debugshell()
+{
+    PS1='debugshell> ' /bin/sh -i </dev/console >/dev/console 2>&1 # XXX: debug
+}
+
+case "$1" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+set -x
+
+recoverytype=
+for t in $(cat /proc/cmdline); do
+    if [ "$t" = "recoverytype=factory_restore" ]; then
+        recoverytype=factory_restore
+        break
+    elif [ "$t" = "recoverytype=factory_install" ]; then
+        recoverytype=factory_install
+        break
+    elif [ "$t" = "recoverytype=custom" ]; then
+        recoverytype=custom
+        break
+    fi
+done
+
+[ -n "$recoverytype" ] || exit 0 # nothing to do in non-recovery mode
+
+#get recovery_label
+recoverylabel=$(tr " " "\n" </proc/cmdline | grep "root=LABEL=" | sed -e 's/root=LABEL=\(.*\)/\1/')
+
+BASE=/run/initramfs/recovery
+mkdir -p $BASE
+
+wait-for-root "LABEL=$recoverylabel" "${ROOTDELAY:-180}" >/dev/null || true
+recovery_part="$(findfs LABEL="$recoverylabel")"
+[ -n "$recovery_part" ] || exit 1 # recovery partition not found
+
+syspath="$(dirname "$(realpath /sys/class/block/"$(basename "$recovery_part")")")"
+device="$(realpath /dev/block/"$(cat "$syspath/dev")")"
+
+echo "[mount the recovery partition]"
+mkdir -p $BASE/recovery
+mount -o defaults,ro "$recovery_part" $BASE/recovery
+ls $BASE/recovery # XXX: debug
+
+# mount os snap on chroot
+modprobe squashfs
+osrootfs=$BASE/ossnap/
+mkdir -p $osrootfs
+mount $BASE/recovery/os.snap $osrootfs
+
+newroot=$BASE/chroot/
+mkdir -p $newroot
+for dir in /bin /lib /lib64 /etc /var/ /usr /sbin; do
+    mkdir -p $BASE/chroot/$dir/
+    mount --bind  $osrootfs/$dir/ $newroot/$dir/
+done
+for dir in /run /dev /tmp /sys /srv /proc /mnt /root /recovery /recovery_partition; do
+    mkdir -p $newroot/$dir/
+done
+
+kernelfs=$BASE/kerelsnap/
+mkdir -p $kernelfs
+mount $BASE/recovery/kernel.snap $kernelfs
+# mount lib/modules/, lib/firmware/
+for d in modules firmware; do
+    # old deprecated
+    if [ -d "$kernelfs/lib/$d" ]; then
+        mount --bind $kernelfs/lib/$d $newroot/lib/$d
+    fi
+    # new style
+    if [ -d "$kernelfs/$d" ]; then
+        mount --bind $kernelfs/$d $newroot/lib/$d
+    fi
+done
+
+mount --bind $BASE/recovery/recovery/ $newroot/recovery/
+mount -o defaults,ro "$recovery_part" $newroot/recovery_partition
+
+echo "[switch_root to newroot]"
+mount --bind /sys /$newroot/sys
+mount --bind /proc /$newroot/proc
+mount --bind /dev /$newroot/dev
+mount --bind /run /$newroot/run
+
+echo "[chroot execute recovery.bin]"
+
+set +e
+/bin/chroot /$newroot /recovery/bin/recovery.bin $recoverytype "$recoverylabel"
+ret=$?
+set -e
+
+sync
+reboot

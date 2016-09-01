@@ -1,33 +1,33 @@
 project: generic-amd64
 snaps:
-  kernel: 
-    - canonical-pc-linux
-  os: 
-    - ubuntu-core
-  gadget: 
-    - canonical-pc
+  kernel: pc-kernel
+  os: ubuntu-core
+  gadget: pc
 configs:
-  baseimagename: 
-    - base.img
-  recoverytype: 
-    - full
-  recoverysize: 
-    - 768
-  release: 
-    - 16
-  channel: 
-    - stable
-  size: 
-    - 4
+  arch: amd64
+  baseimage: base.img
+  recoverytype: full
+  recoverysize: 768
+  release: 16
+  channel: edge
+  size: 4
+  packages:
+    - snapweb
 udf:
-  binary: 
-    - ./ubuntu-device-flash
-  option: 
-    - core
+  binary: ./ubuntu-device-flash
+  command: core
 debug:
-  devmode: 
-    - enable
-  ssh: 
-    - enable
-  xz: 
-    - enable
+  devmode: on
+  ssh: on
+  xz: off
+recovery:
+  type: factory_install
+  filesystem-label: ESP
+  boot-partition:
+  systemboot-partition:
+  writable-partition:
+  boot-image:
+  systemboot-image:
+  writable-image:
+  sign-serial: on
+  sign-api-key: U2VyaWFsIFZhdWx0Cg
