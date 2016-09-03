@@ -3,7 +3,8 @@
 set -x
 set -e
 
-RECOVERYFSLABEL="recovery"
+# import variable RECOVERYFSLABEL, RECOVERY_TYPE
+. /writable/system-data/var/lib/devmode-firstboot/conf.sh
 
 cd /writable/system-data/var/lib/devmode-firstboot
 
