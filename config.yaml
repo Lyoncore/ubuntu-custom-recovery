@@ -1,18 +1,20 @@
-project: generic-amd64
+project: dragon-board
 snaps:
-  kernel: pc-kernel
+  kernel: dragonboard-kernel
   os: ubuntu-core
-  gadget: pc
+  gadget: dragonboard
 configs:
-  arch: amd64
+  arch: arm64
   baseimage: base.img
-  recoverytype: full
+  recoverytype: recovery
   recoverysize: 768
   release: 16
   channel: edge
   size: 4
   packages:
     - snapweb
+  partition-type: gpt
+  bootloader: u-boot
 udf:
   binary: ./ubuntu-device-flash
   command: core
