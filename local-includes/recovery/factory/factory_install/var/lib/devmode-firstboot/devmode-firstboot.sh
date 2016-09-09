@@ -8,17 +8,18 @@ set -e
 
 cd /writable/system-data/var/lib/devmode-firstboot
 
-for SNAPS in `find . -name "*.snap" -type f` ; do
-	snap install --devmode "$SNAPS"
-done
+#FIXME: when checkbox snap for arm ready
+#for SNAPS in `find . -name "*.snap" -type f` ; do
+#	snap install --devmode "$SNAPS"
+#done
 
-for SNAPS in `find /writable/system-data/var/lib/oem/snaps-devmode/ -name "*.snap" -type f` ; do
-	snap install --devmode "$SNAPS"
-done
+#for SNAPS in `find /writable/system-data/var/lib/oem/snaps-devmode/ -name "*.snap" -type f` ; do
+#	snap install --devmode "$SNAPS"
+#done
 
-for SNAPS in `find /writable/system-data/var/lib/oem/snaps/ -name "*.snap" -type f` ; do
-	snap install "$SNAPS"
-done
+#for SNAPS in `find /writable/system-data/var/lib/oem/snaps/ -name "*.snap" -type f` ; do
+#	snap install "$SNAPS"
+#done
 
 count=0
 while true; do
@@ -53,8 +54,9 @@ cp /writable/factory-diag-result "$recovery_dir"/factory-log/
 umount "$recovery_dir"
 
 # remove factory-diag snap
-echo "Remove factory-diag"
-snap remove factory-diag
+#echo "Remove factory-diag"
+#snap remove factory-diag
+# FIXME: when checkbox snap for pi3 ready
 
 # umount, inactive snappy_boot_entry and reboot
 grub-editenv /boot/efi/EFI/ubuntu/grub/grubenv unset cloud_init_disabled

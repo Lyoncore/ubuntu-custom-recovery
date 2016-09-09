@@ -66,8 +66,10 @@ mount $BASE/recovery/os.snap $osrootfs
 newroot=$BASE/chroot/
 mkdir -p $newroot
 for dir in /bin /lib /lib64 /etc /var/ /usr /sbin; do
-    mkdir -p $BASE/chroot/$dir/
-    mount --bind  $osrootfs/$dir/ $newroot/$dir/
+    if [ -d $osrootfs/$dir/ ]; then
+    	mkdir -p $BASE/chroot/$dir/
+    	mount --bind  $osrootfs/$dir/ $newroot/$dir/
+    fi
 done
 for dir in /run /dev /tmp /sys /srv /proc /mnt /root /recovery /recovery_partition; do
     mkdir -p $newroot/$dir/
@@ -105,4 +107,5 @@ ret=$?
 set -e
 
 sync
-reboot
+
+udevadm trigger

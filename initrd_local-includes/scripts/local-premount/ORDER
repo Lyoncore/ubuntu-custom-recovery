@@ -1,2 +1,10 @@
 [ -e /conf/param.conf ] && . /conf/param.conf
 /scripts/local-premount/00_recovery $@
+/scripts/local-premount/dragonmac "$@"
+[ -e /conf/param.conf ] && . /conf/param.conf
+/scripts/local-premount/fixrtc "$@"
+[ -e /conf/param.conf ] && . /conf/param.conf
+/scripts/local-premount/resize "$@"
+[ -e /conf/param.conf ] && . /conf/param.conf
+/scripts/local-premount/resume "$@"
+[ -e /conf/param.conf ] && . /conf/param.conf
