@@ -8,12 +8,15 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/mvo5/uboot-go/uenv"
 )
 
 import rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
@@ -26,11 +29,13 @@ var build_date string
 // NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
 const DISABLE_CLOUD_OPTION = ""
 
-func getRecoveryPartition(device string, RECOVERY_LABEL string) (recovery_nr, recovery_end int) {
+func getRecoveryPartition(device string, RECOVERY_LABEL string) (recovery_nr int, recovery_end int64) {
 	var err error
 	const OLD_PARTITION = "/tmp/old-partition.txt"
 	recovery_nr = -1
 
+	recovery_part := rplib.Findfs(fmt.Sprintf("LABEL=%s", RECOVERY_LABEL))
+	recovery_nr, err = strconv.Atoi(strings.Trim(strings.Trim(recovery_part, device), "p"))
 	rplib.Shellcmd(fmt.Sprintf("parted -ms %s unit B print | sed -n '1,2!p' > %s", device, OLD_PARTITION))
 
 	// Read information of recovery partition
@@ -46,31 +51,17 @@ func getRecoveryPartition(device string, RECOVERY_LABEL string) (recovery_nr, re
 		log.Println("fields: ", fields)
 		nr, err := strconv.Atoi(fields[0])
 		rplib.Checkerr(err)
-		begin := strings.TrimRight(fields[1], "B")
-		end, err := strconv.Atoi(strings.TrimRight(fields[2], "B"))
-		rplib.Checkerr(err)
-		size := strings.TrimRight(fields[3], "B")
-		fstype := fields[4]
-		label := fields[5]
-		log.Println("nr: ", nr)
-		log.Println("begin: ", begin)
-		log.Println("end: ", end)
-		log.Println("size: ", size)
-		log.Println("fstype: ", fstype)
-		log.Println("label: ", label)
-
-		if RECOVERY_LABEL == label {
-			recovery_nr = nr
+		if recovery_nr == nr {
+			end, err := strconv.ParseInt(strings.TrimRight(fields[2], "B"), 10, 64)
+			rplib.Checkerr(err)
 			recovery_end = end
 			log.Println("recovery_nr:", recovery_nr)
 			log.Println("recovery_end:", recovery_end)
 			continue
 		}
 
-		if -1 != recovery_nr {
-			// delete all the partitions after recovery partition
-			rplib.Shellexec("parted", "-ms", device, "rm", fmt.Sprintf("%v", nr))
-		}
+		// delete all the partitions after recovery partition
+		rplib.Shellexec("parted", "-ms", device, "rm", fmt.Sprintf("%v", nr))
 	}
 	err = scanner.Err()
 	rplib.Checkerr(err)
@@ -88,7 +79,7 @@ func mib2Blocks(size int) int {
 	return s
 }
 
-func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr int, recovery_end int) (normal_boot_nr int) {
+func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr int, recovery_end int64) (normal_boot_nr int) {
 	last_end := recovery_end
 	nr := recovery_nr + 1
 
@@ -102,6 +93,7 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 
 		var end_size string
 		var fstype string
+		var block string
 		// TODO: allocate partition according to gadget.PartitionLayout
 		// create the new partition
 		if "writable" == partition {
@@ -109,14 +101,18 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 			fstype = "ext4"
 		} else if "system-boot" == partition {
 			size := 64 * 1024 * 1024 // 64 MB in Bytes
-			end_size = strconv.Itoa(last_end+size) + "B"
+			end_size = strconv.FormatInt(last_end+int64(size), 10) + "B"
 			fstype = "fat32"
 		}
 		log.Println("end_size:", end_size)
 
 		// make partition with optimal alignment
-		rplib.Shellexec("parted", "-a", "optimal", "-ms", device, "--", "mkpart", "primary", fstype, fmt.Sprintf("%vB", last_end+1), end_size, "name", fmt.Sprintf("%v", nr), partition)
-		_, new_end := rplib.GetPartitionBeginEnd(device, nr)
+		if configs.Configs.Bootloader == "gpt" {
+			rplib.Shellexec("parted", "-a", "optimal", "-ms", device, "--", "mkpart", "primary", fstype, fmt.Sprintf("%vB", last_end+1), end_size, "name", fmt.Sprintf("%v", nr), partition)
+		} else { //mbr don't support partition name
+			rplib.Shellexec("parted", "-a", "optimal", "-ms", device, "--", "mkpart", "primary", fstype, fmt.Sprintf("%vB", last_end+1), end_size)
+		}
+		_, new_end := rplib.GetPartitionBeginEnd64(device, nr)
 
 		if "system-boot" == partition {
 			normal_boot_nr = nr
@@ -126,7 +122,11 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 		rplib.Shellexec("udevadm", "settle")
 		rplib.Shellexec("parted", "-ms", device, "unit", "B", "print") // debug
 
-		block := fmt.Sprintf("%s%d", device, nr)
+		if strings.Contains(device, "mmcblk") == true {
+			block = fmt.Sprintf("%sp%d", device, nr) //mmcblk0pX
+		} else {
+			block = fmt.Sprintf("%s%d", device, nr)
+		}
 		log.Println("block:", block)
 		// create filesystem and dump snap system
 		switch partition {
@@ -185,11 +185,55 @@ menuentry "%s" {
 	f.Close()
 }
 
+func hack_uboot_env(uboot_cfg string) {
+	env, err := uenv.Open(uboot_cfg)
+	rplib.Checkerr(err)
+
+	var name, value string
+	//update env
+	//1. mmcreco=1
+	name = "mmcreco"
+	value = "1"
+	env.Set(name, value)
+	err = env.Save()
+	rplib.Checkerr(err)
+
+	//2. mmcpart=2
+	name = "mmcpart"
+	value = "2"
+	env.Set(name, value)
+	err = env.Save()
+	rplib.Checkerr(err)
+
+	//3. snappy_boot
+	name = "snappy_boot"
+	value = "if test \"${snap_mode}\" = \"try\"; then setenv snap_mode \"trying\"; saveenv; if test \"${snap_try_core}\" != \"\"; then setenv snap_core \"${snap_try_core}\"; fi; if test \"${snap_try_kernel}\" != \"\"; then setenv snap_kernel \"${snap_try_kernel}\"; fi; elif test \"${snap_mode}\" = \"trying\"; then setenv snap_mode \"\"; saveenv; elif test \"${snap_mode}\" = \"recovery\"; then setenv loadinitrd \"load mmc ${mmcdev}:${mmcreco} ${initrd_addr} ${initrd_file}; setenv initrd_size ${filesize}\"; setenv loadkernel \"load mmc ${mmcdev}:${mmcreco} ${loadaddr} ${kernel_file}\"; setenv factory_recovery \"run loadfiles; setenv mmcroot \"/dev/disk/by-label/writable ${snappy_cmdline} snap_core=${snap_core} snap_kernel=${snap_kernel} recoverytype=factory_restore\"; run mmcargs; bootz ${loadaddr} ${initrd_addr}:${initrd_size} 0x02000000\"; echo \"RECOVERY\"; run factory_recovery; fi; run loadfiles; setenv mmcroot \"/dev/disk/by-label/writable ${snappy_cmdline} snap_core=${snap_core} snap_kernel=${snap_kernel}\"; run mmcargs; bootz ${loadaddr} ${initrd_addr}:${initrd_size} 0x02000000"
+	env.Set(name, value)
+	err = env.Save()
+	rplib.Checkerr(err)
+
+	//4. loadbootenv (load uboot.env from system-boot, because snapd always update uboot.env in system-boot while os/kernel snap updated)
+	name = "loadbootenv"
+	value = "load ${devtype} ${devnum}:${mmcpart} ${loadaddr} ${bootenv}"
+	env.Set(name, value)
+	err = env.Save()
+	rplib.Checkerr(err)
+
+	//5. bootenv (for system-boot/uboot.env)
+	name = "bootenv"
+	value = "uboot.env"
+	env.Set(name, value)
+	err = env.Save()
+	rplib.Checkerr(err)
+}
+
 func usbhid() {
 	log.Println("modprobe hid-generic and usbhid for usb keyboard")
 	rplib.Shellexec("modprobe", "usbhid")
 	rplib.Shellexec("modprobe", "hid-generic")
 }
+
+var configs rplib.ConfigRecovery
 
 func main() {
 	const GRUB_EDITENV = "grub-editenv"
@@ -216,7 +260,6 @@ func main() {
 	usbhid()
 
 	// Load config.yaml
-	var configs rplib.ConfigRecovery
 	err := configs.Load("/recovery/config.yaml")
 	rplib.Checkerr(err)
 	log.Println(configs)
@@ -265,16 +308,18 @@ func main() {
 		}
 		syscall.Unmount("/tmp/writable", 0)
 	}
-	log.Println("[recover the backup GPT entry at end of the disk.]")
-	rplib.Shellexec("sgdisk", device, "--randomize-guids", "--move-second-header")
 
-	log.Println("[recreate gpt partition table.]")
+	if configs.Configs.PartitionType == "gpt" {
+		log.Println("[recover the backup GPT entry at end of the disk.]")
+		rplib.Shellexec("sgdisk", device, "--randomize-guids", "--move-second-header")
+		log.Println("[recreate gpt partition table.]")
+	}
 
 	recovery_nr, recovery_end := getRecoveryPartition(device, RECOVERY_LABEL)
 
 	// rebuild the partitions
 	log.Println("[rebuild the partitions]")
-	normal_boot_nr := recreateRecoveryPartition(device, RECOVERY_LABEL, recovery_nr, recovery_end)
+	recreateRecoveryPartition(device, RECOVERY_LABEL, recovery_nr, recovery_end)
 
 	// stream log to stdout and writable partition
 	writable_part := rplib.Findfs("LABEL=writable")
@@ -294,29 +339,7 @@ func main() {
 	log.SetOutput(f)
 	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
 
-	// add grub entry
-	system_boot_part := rplib.Findfs("LABEL=system-boot")
-	log.Println("system_boot_part:", system_boot_part)
-	err = os.MkdirAll("/tmp/system-boot", 0755)
-	rplib.Checkerr(err)
-	err = syscall.Mount(system_boot_part, "/tmp/system-boot", "vfat", 0, "")
-	rplib.Checkerr(err)
-	defer syscall.Unmount("/tmp/system-boot", 0)
-
-	log.Println("add grub entry")
-	hack_grub_cfg(rplib.FACTORY_RESTORE, "Factory Restore", RECOVERY_LABEL, "/tmp/system-boot/EFI/ubuntu/grub/grub.cfg")
-
-	// remove past uefi entry
-	log.Println("[remove past uefi entry]")
-	const EFIBOOTMGR = "efibootmgr"
-	entries := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
-	for _, entry := range entries {
-		rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
-	}
-	entries = rplib.GetBootEntries(rplib.BOOT_ENTRY_SNAPPY)
-	for _, entry := range entries {
-		rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
-	}
+	// FIXME, if grub need to support
 
 	log.Println("[Add snaps for oem]")
 	os.MkdirAll(filepath.Join(rootdir, "/var/lib/oem/"), 0755)
@@ -330,36 +353,27 @@ func main() {
 	rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", filepath.Join(rootdir, MULTI_USER_TARGET_WANTS_FOLDER, "devmode-firstboot.service"))
 	ioutil.WriteFile(filepath.Join(rootdir, "/var/lib/devmode-firstboot/conf.sh"), []byte(fmt.Sprintf("RECOVERYFSLABEL=\"%s\"\nRECOVERY_TYPE=\"%s\"\n", RECOVERY_LABEL, RECOVERY_TYPE)), 0644)
 
-	// add new uefi entry
-	log.Println("[add new uefi entry]")
-	const LOADER = "\\EFI\\BOOT\\BOOTX64.EFI"
-	rplib.CreateBootEntry(device, recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
-	rplib.CreateBootEntry(device, normal_boot_nr, LOADER, rplib.BOOT_ENTRY_SNAPPY)
-
 	switch RECOVERY_TYPE {
 	case rplib.FACTORY_INSTALL:
 		log.Println("[EXECUTE FACTORY INSTALL]")
 
-		log.Println("[disable cloud-init at factory-diag stage]")
-		// NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
-		rplib.Shellexec(GRUB_EDITENV, "/tmp/system-boot/EFI/ubuntu/grub/grubenv", "set", "cloud_init_disabled=cloud-init=disabled")
-
 		log.Println("[set next recoverytype to factory_restore]")
 		rplib.Shellexec("mount", "-o", "rw,remount", "/recovery_partition")
-		log.Println("set recoverytype")
-		rplib.Shellexec(GRUB_EDITENV, "/recovery_partition/efi/ubuntu/grub/grubenv", "set", "recoverytype="+rplib.FACTORY_RESTORE)
 
 		log.Println("[Start serial vault]")
-
-		// modprobe ethernet driver
-		rplib.Shellexec("modprobe", "r8169")
-		rplib.Shellexec("modprobe", "e1000")
 		interface_list := strings.Split(rplib.Shellcmdoutput("ip -o link show | awk -F': ' '{print $2}'"), "\n")
 		log.Println("interface_list:", interface_list)
-		if len(interface_list) < 2 {
-			log.Fatal(fmt.Sprintf("Need one network interface to connect to identity-vault. Current network interface: %v", interface_list))
+
+		var net = 0
+		for ; net < len(interface_list); net++ {
+			if strings.Contains(interface_list[net], "eth") == true || strings.Contains(interface_list[net], "enx") == true {
+				break
+			}
 		}
-		eth := interface_list[1] // select first non "lo" network interface.
+		if net == len(interface_list) {
+			panic(fmt.Sprintf("Need one ethernet interface to connect to identity-vault. Current network interface: %v", interface_list))
+		}
+		eth := interface_list[net] // select nethernet interface.
 		rplib.Shellexec("ip", "link", "set", "dev", eth, "up")
 		rplib.Shellexec("dhclient", "-1", eth)
 
@@ -382,5 +396,27 @@ func main() {
 		}
 	}
 
+	// update uboot env
+	system_boot_part := rplib.Findfs("LABEL=system-boot")
+	log.Println("system_boot_part:", system_boot_part)
+	err = os.MkdirAll("/tmp/system-boot", 0755)
+	rplib.Checkerr(err)
+	err = syscall.Mount(system_boot_part, "/tmp/system-boot", "vfat", 0, "")
+	rplib.Checkerr(err)
+	defer syscall.Unmount("/tmp/system-boot", 0)
+
+	log.Println("Update uboot env(ESP/system-boot)")
+	//fsck needs ignore error code
+	cmd := exec.Command("fsck", "-y", fmt.Sprintf("/dev/disk/by-label/%s", RECOVERY_LABEL))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+	rplib.Shellexec("mount", "-o", "remount,rw", fmt.Sprintf("/dev/disk/by-label/%s", RECOVERY_LABEL), "/recovery_partition")
+	hack_uboot_env("/recovery_partition/uboot.env")
+	rplib.Shellexec("mount", "-o", "remount,ro", fmt.Sprintf("/dev/disk/by-label/%s", RECOVERY_LABEL), "/recovery_partition")
+	hack_uboot_env("/tmp/system-boot/uboot.env")
+
+	//release dhclient
+	rplib.Shellexec("dhclient", "-x")
 	rplib.Sync()
 }
