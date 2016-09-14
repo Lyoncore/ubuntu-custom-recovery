@@ -1,5 +1,7 @@
+// -*- Mode: Go; indent-tabs-mode: t -*-
+
 /*
- * Copyright (C) 2016 Canonical Ltd
+ * Copyright (C) 2016-2017 Canonical Ltd
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -15,7 +17,7 @@
  *
  */
 
-package part
+package part_test
 
 import (
 	"fmt"
@@ -25,6 +27,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/Lyoncore/arm-config/src/part"
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 	"github.com/snapcore/snapd/logger"
 	. "gopkg.in/check.v1"
@@ -39,6 +42,8 @@ var _ = Suite(&GetPartSuite{})
 const (
 	MBRimage      = "/tmp/mbr.img"
 	GPTimage      = "/tmp/gpt.img"
+	SysbootLabel  = "system-boot"
+	WritableLabel = "writable"
 	RecoveryLabel = "recovery"
 	RecoveryPart  = "6" // /dev/mapper/loopXp6
 	SysbootPart   = "5" // /dev/mapper/loopXp5
@@ -130,36 +135,36 @@ func (s *GetPartSuite) TearDownSuite(c *C) {
 func (s *GetPartSuite) TestgetPartitions(c *C) {
 
 	MountTestImg(MBRimage, "")
-	parts, err := getPartitions(MBRimage, RecoveryLabel)
+	parts, err := part.GetPartitions(MBRimage, RecoveryLabel)
 	c.Assert(err, IsNil)
 
 	nr, err := strconv.Atoi(RecoveryPart)
 	c.Assert(err, IsNil)
-	c.Assert(parts.recovery_nr, Equals, nr)
+	c.Assert(parts.Recovery_nr, Equals, nr)
 
 	nr, err = strconv.Atoi(SysbootPart)
 	c.Assert(err, IsNil)
-	c.Assert(parts.sysboot_nr, Equals, nr)
+	c.Assert(parts.Sysboot_nr, Equals, nr)
 
 	nr, err = strconv.Atoi(WritablePart)
 	c.Assert(err, IsNil)
-	c.Assert(parts.writable_nr, Equals, nr)
+	c.Assert(parts.Writable_nr, Equals, nr)
 
 	MountTestImg(GPTimage, mbrLoop)
-	parts, err = getPartitions(GPTimage, RecoveryLabel)
+	parts, err = part.GetPartitions(GPTimage, RecoveryLabel)
 	c.Assert(err, IsNil)
 
 	nr, err = strconv.Atoi(RecoveryPart)
 	c.Assert(err, IsNil)
-	c.Assert(parts.recovery_nr, Equals, nr)
+	c.Assert(parts.Recovery_nr, Equals, nr)
 
 	nr, err = strconv.Atoi(SysbootPart)
 	c.Assert(err, IsNil)
-	c.Assert(parts.sysboot_nr, Equals, nr)
+	c.Assert(parts.Sysboot_nr, Equals, nr)
 
 	nr, err = strconv.Atoi(WritablePart)
 	c.Assert(err, IsNil)
-	c.Assert(parts.writable_nr, Equals, nr)
+	c.Assert(parts.Writable_nr, Equals, nr)
 
 	MountTestImg("", gptLoop)
 }
