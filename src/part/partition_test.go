@@ -136,35 +136,35 @@ func (s *GetPartSuite) TestgetPartitions(c *C) {
 
 	MountTestImg(MBRimage, "")
 	parts, err := part.GetPartitions(MBRimage, RecoveryLabel)
-	c.Assert(err, IsNil)
+	c.Check(err, IsNil)
 
 	nr, err := strconv.Atoi(RecoveryPart)
-	c.Assert(err, IsNil)
-	c.Assert(parts.Recovery_nr, Equals, nr)
+	c.Check(err, IsNil)
+	c.Check(parts.Recovery_nr, Equals, nr)
 
 	nr, err = strconv.Atoi(SysbootPart)
-	c.Assert(err, IsNil)
-	c.Assert(parts.Sysboot_nr, Equals, nr)
+	c.Check(err, IsNil)
+	c.Check(parts.Sysboot_nr, Equals, nr)
 
 	nr, err = strconv.Atoi(WritablePart)
-	c.Assert(err, IsNil)
-	c.Assert(parts.Writable_nr, Equals, nr)
+	c.Check(err, IsNil)
+	c.Check(parts.Writable_nr, Equals, nr)
 
 	MountTestImg(GPTimage, mbrLoop)
 	parts, err = part.GetPartitions(GPTimage, RecoveryLabel)
-	c.Assert(err, IsNil)
+	c.Check(err, IsNil)
 
 	nr, err = strconv.Atoi(RecoveryPart)
-	c.Assert(err, IsNil)
-	c.Assert(parts.Recovery_nr, Equals, nr)
+	c.Check(err, IsNil)
+	c.Check(parts.Recovery_nr, Equals, nr)
 
 	nr, err = strconv.Atoi(SysbootPart)
-	c.Assert(err, IsNil)
-	c.Assert(parts.Sysboot_nr, Equals, nr)
+	c.Check(err, IsNil)
+	c.Check(parts.Sysboot_nr, Equals, nr)
 
 	nr, err = strconv.Atoi(WritablePart)
-	c.Assert(err, IsNil)
-	c.Assert(parts.Writable_nr, Equals, nr)
+	c.Check(err, IsNil)
+	c.Check(parts.Writable_nr, Equals, nr)
 
 	MountTestImg("", gptLoop)
 }
