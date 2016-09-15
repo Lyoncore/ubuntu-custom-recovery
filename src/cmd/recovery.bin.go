@@ -1,7 +1,26 @@
+// -*- Mode: Go; indent-tabs-mode: t -*-
+
+/*
+ * Copyright (C) 2016-2017 Canonical Ltd
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package main
 
 import (
-	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,10 +35,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Lyoncore/arm-config/src/part"
 	"github.com/mvo5/uboot-go/uenv"
-)
+	"github.com/snapcore/snapd/logger"
 
-import rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+)
 
 var version string
 var commit string
@@ -27,47 +48,13 @@ var commitstamp string
 var build_date string
 
 // NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
-const DISABLE_CLOUD_OPTION = ""
-
-func getRecoveryPartition(device string, RECOVERY_LABEL string) (recovery_nr int, recovery_end int64) {
-	var err error
-	const OLD_PARTITION = "/tmp/old-partition.txt"
-	recovery_nr = -1
-
-	recovery_part := rplib.Findfs(fmt.Sprintf("LABEL=%s", RECOVERY_LABEL))
-	recovery_nr, err = strconv.Atoi(strings.Trim(strings.Trim(recovery_part, device), "p"))
-	rplib.Shellcmd(fmt.Sprintf("parted -ms %s unit B print | sed -n '1,2!p' > %s", device, OLD_PARTITION))
-
-	// Read information of recovery partition
-	// Keep only recovery partition
-	var f *(os.File)
-	f, err = os.Open(OLD_PARTITION)
-	rplib.Checkerr(err)
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		log.Println("line: ", line)
-		fields := strings.Split(line, ":")
-		log.Println("fields: ", fields)
-		nr, err := strconv.Atoi(fields[0])
-		rplib.Checkerr(err)
-		if recovery_nr == nr {
-			end, err := strconv.ParseInt(strings.TrimRight(fields[2], "B"), 10, 64)
-			rplib.Checkerr(err)
-			recovery_end = end
-			log.Println("recovery_nr:", recovery_nr)
-			log.Println("recovery_end:", recovery_end)
-			continue
-		}
-
-		// delete all the partitions after recovery partition
-		rplib.Shellexec("parted", "-ms", device, "rm", fmt.Sprintf("%v", nr))
-	}
-	err = scanner.Err()
-	rplib.Checkerr(err)
-
-	return
-}
+const (
+	DISABLE_CLOUD_OPTION    = ""
+	LOG_PATH                = "/writable/system-data/var/log/recovery/log.txt"
+	ASSERTION_FOLDER        = "/writable/recovery"
+	ASSERTION_BACKUP_FOLDER = "/tmp/assert_backup"
+	CONFIG_YAML             = "/recovery/config.yaml"
+)
 
 func mib2Blocks(size int) int {
 	s := size * 1024 * 1024 / 512
@@ -79,14 +66,14 @@ func mib2Blocks(size int) int {
 	return s
 }
 
-func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr int, recovery_end int64) (normal_boot_nr int) {
+func recreateRecoveryPartition(device string, RecoveryLabel string, recovery_nr int, recovery_end int64) (normal_boot_nr int) {
 	last_end := recovery_end
 	nr := recovery_nr + 1
 
 	// Read information of recovery partition
 	// Keep only recovery partition
 
-	partitions := [...]string{"system-boot", "writable"}
+	partitions := [...]string{part.SysbootLabel, part.WritableLabel}
 	for _, partition := range partitions {
 		log.Println("last_end:", last_end)
 		log.Println("nr:", nr)
@@ -96,10 +83,10 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 		var block string
 		// TODO: allocate partition according to gadget.PartitionLayout
 		// create the new partition
-		if "writable" == partition {
+		if part.WritableLabel == partition {
 			end_size = "-1M"
 			fstype = "ext4"
-		} else if "system-boot" == partition {
+		} else if part.SysbootLabel == partition {
 			size := 64 * 1024 * 1024 // 64 MB in Bytes
 			end_size = strconv.FormatInt(last_end+int64(size), 10) + "B"
 			fstype = "fat32"
@@ -114,7 +101,7 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 		}
 		_, new_end := rplib.GetPartitionBeginEnd64(device, nr)
 
-		if "system-boot" == partition {
+		if part.SysbootLabel == partition {
 			normal_boot_nr = nr
 			log.Println("normal_boot_nr:", normal_boot_nr)
 		}
@@ -130,16 +117,16 @@ func recreateRecoveryPartition(device string, RECOVERY_LABEL string, recovery_nr
 		log.Println("block:", block)
 		// create filesystem and dump snap system
 		switch partition {
-		case "writable":
-			rplib.Shellexec("mkfs.ext4", "-F", "-L", "writable", block)
+		case part.WritableLabel:
+			rplib.Shellexec("mkfs.ext4", "-F", "-L", part.WritableLabel, block)
 			err := os.MkdirAll("/tmp/writable/", 0755)
 			rplib.Checkerr(err)
 			err = syscall.Mount(block, "/tmp/writable", "ext4", 0, "")
 			rplib.Checkerr(err)
 			defer syscall.Unmount("/tmp/writable", 0)
 			rplib.Shellexec("tar", "--xattrs", "-xJvpf", "/recovery/factory/writable.tar.xz", "-C", "/tmp/writable/")
-		case "system-boot":
-			rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", "system-boot", block)
+		case part.SysbootLabel:
+			rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", part.SysbootLabel, block)
 			err := os.MkdirAll("/tmp/system-boot/", 0755)
 			rplib.Checkerr(err)
 			err = syscall.Mount(block, "/tmp/system-boot", "vfat", 0, "")
@@ -227,99 +214,130 @@ func hack_uboot_env(uboot_cfg string) {
 	rplib.Checkerr(err)
 }
 
-func usbhid() {
-	log.Println("modprobe hid-generic and usbhid for usb keyboard")
-	rplib.Shellexec("modprobe", "usbhid")
-	rplib.Shellexec("modprobe", "hid-generic")
-}
-
 var configs rplib.ConfigRecovery
 
-func main() {
-	const GRUB_EDITENV = "grub-editenv"
-	const LOG_PATH = "/writable/system-data/var/log/recovery/log.txt"
-	const ASSERTION_FOLDER = "/writable/recovery"
-	const ASSERTION_BACKUP_FOLDER = "/tmp/assert_backup"
+func ConfirmRecovry(in *os.File) bool {
+	//in is for golang testing input.
+	//Get user input, if in is nil
+	if in == nil {
+		in = os.Stdin
+	}
+	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	fmt.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
+	var response string
+	fmt.Scanf("%s\n", &response)
+	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("4 4 1 7"), 0644)
+
+	if "y" != response && "Y" != response {
+		return true
+	}
+
+	return false
+}
+
+func BackupWritable() {
+	// back up serial assertion
+	writable_part := rplib.Findfs("LABEL=writable")
+	err := os.MkdirAll("/tmp/writable/", 0755)
+	rplib.Checkerr(err)
+	err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
+	rplib.Checkerr(err)
+	// back up assertion if ever signed
+	if _, err := os.Stat(filepath.Join("/tmp/", ASSERTION_FOLDER)); err == nil {
+		rplib.Shellexec("cp", "-ar", filepath.Join("/tmp/", ASSERTION_FOLDER), ASSERTION_BACKUP_FOLDER)
+	}
+	syscall.Unmount("/tmp/writable", 0)
+}
+
+func GetBootDevName(RecoveryLabel string) (devNode string, devPath string, err error) {
+	//devPath = rplib.Findfs(fmt.Sprintf("LABEL=%s", RecoveryLabel))
+	cmd := exec.Command("findfs", fmt.Sprintf("LABEL=%s", RecoveryLabel))
+	out, err := cmd.Output()
+	if err != nil {
+		return
+	}
+	devPath = strings.TrimSpace(string(out[:]))
+
+	if strings.Contains(devPath, "/dev/") == false {
+		err = errors.New(fmt.Sprintf("RecoveryLabel of %q not found", RecoveryLabel))
+		return
+	}
+
+	// The devPath is with partiion /dev/sdX1 or /dev/mmcblkXp1
+	// Here to remove the partition information
+	for {
+		if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
+			devPath = devPath[:len(devPath)-1]
+		} else if devPath[len(devPath)-1] == 'p' {
+			devPath = devPath[:len(devPath)-1]
+			break
+		} else {
+			break
+		}
+	}
+
+	field := strings.Split(devPath, "/")
+	devNode = field[len(field)-1]
+
+	return
+}
+
+func main() {
+	//setup logger
+	logger.SimpleSetup()
 
 	if "" == version {
 		version = Version
 	}
 
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
-	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
+	logger.Noticef("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
 
 	flag.Parse()
-	log.Println("flag: ", flag.Args())
-
 	if len(flag.Args()) != 2 {
-		log.Fatal(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] and [RECOVERY_LABEL]. Current arguments: %v", flag.Args()))
+		logger.Noticef(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] and [RECOVERY_LABEL]. Current arguments: %v", flag.Args()))
 	}
-
-	usbhid()
+	// TODO: use enum to represent RECOVERY_TYPE
+	var RecoveryType, RecoveryLabel = flag.Arg(0), flag.Arg(1)
+	logger.Debugf("RECOVERY_TYPE: ", RecoveryType)
+	logger.Debugf("RECOVERY_LABEL: ", RecoveryLabel)
 
 	// Load config.yaml
-	err := configs.Load("/recovery/config.yaml")
+	err := configs.Load(CONFIG_YAML)
 	rplib.Checkerr(err)
 	log.Println(configs)
 
-	// TODO: use enum to represent RECOVERY_TYPE
-	var RECOVERY_TYPE, RECOVERY_LABEL = flag.Arg(0), flag.Arg(1)
-	log.Println("RECOVERY_TYPE: ", RECOVERY_TYPE)
-	log.Println("RECOVERY_LABEL: ", RECOVERY_LABEL)
-
-	// find device name
-	recovery_part := rplib.Findfs(fmt.Sprintf("LABEL=%s", RECOVERY_LABEL))
-	log.Println("recovery_part: ", recovery_part)
-	device, err := rplib.FindDevice(recovery_part)
-	rplib.Checkerr(err)
-	log.Println("device: ", device)
-
 	// TODO: verify the image
-
 	// If this is user triggered factory restore (first time is in factory and should happen automatically), ask user for confirm.
-	if rplib.FACTORY_RESTORE == RECOVERY_TYPE {
-		ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
-		// io.WriteString(stdin, "Factory Restore will delete all user data, are you sure? [y/N] ")
-
-		fmt.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
-		var response string
-		fmt.Scanf("%s\n", &response)
-		ioutil.WriteFile("/proc/sys/kernel/printk", []byte("4 4 1 7"), 0644)
-
-		log.Println("response:", response)
-		if "y" != response && "Y" != response {
+	if rplib.FACTORY_RESTORE == RecoveryType {
+		if ConfirmRecovry() == false {
 			os.Exit(1)
 		}
+
+		//backup user data
+		BackupWritable()
 	}
 
-	switch RECOVERY_TYPE {
-	case rplib.FACTORY_RESTORE:
-		// back up serial assertion
-		writable_part := rplib.Findfs("LABEL=writable")
-		err = os.MkdirAll("/tmp/writable/", 0755)
-		rplib.Checkerr(err)
-		err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
-		rplib.Checkerr(err)
-		// back up assertion if ever signed
-		if _, err := os.Stat(filepath.Join("/tmp/", ASSERTION_FOLDER)); err == nil {
-			rplib.Shellexec("cp", "-ar", filepath.Join("/tmp/", ASSERTION_FOLDER), ASSERTION_BACKUP_FOLDER)
-		}
-		syscall.Unmount("/tmp/writable", 0)
+	// Find boot device name
+	_, BootDevPath, err := GetBootDevName(RecoveryLabel)
+	if err != nil {
+		logger.Panicf("Boot device not found, error: %s\n", err)
 	}
 
 	if configs.Configs.PartitionType == "gpt" {
 		log.Println("[recover the backup GPT entry at end of the disk.]")
-		rplib.Shellexec("sgdisk", device, "--randomize-guids", "--move-second-header")
+		rplib.Shellexec("sgdisk", BootDevPath, "--randomize-guids", "--move-second-header")
 		log.Println("[recreate gpt partition table.]")
 	}
 
-	recovery_nr, recovery_end := getRecoveryPartition(device, RECOVERY_LABEL)
+	//Get system-boot, writable, recovery partition location
+	parts, err := part.GetPartitions(BootDevPath, RecoveryLabel)
+	fmt.Println(parts)
 
 	// rebuild the partitions
 	log.Println("[rebuild the partitions]")
-	recreateRecoveryPartition(device, RECOVERY_LABEL, recovery_nr, recovery_end)
+	//recreateRecoveryPartition(BootDevPath, RecoveryLabel, recovery_nr, recovery_end)
 
 	// stream log to stdout and writable partition
 	writable_part := rplib.Findfs("LABEL=writable")
@@ -349,11 +367,11 @@ func main() {
 	// add firstboot service
 	const MULTI_USER_TARGET_WANTS_FOLDER = "/etc/systemd/system/multi-user.target.wants/"
 	log.Println("[Add FIRSTBOOT service]")
-	rplib.Shellexec("/recovery/bin/rsync", "-a", "--exclude='.gitkeep'", filepath.Join("/recovery/factory", RECOVERY_TYPE)+"/", rootdir+"/")
+	rplib.Shellexec("/recovery/bin/rsync", "-a", "--exclude='.gitkeep'", filepath.Join("/recovery/factory", RecoveryType)+"/", rootdir+"/")
 	rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", filepath.Join(rootdir, MULTI_USER_TARGET_WANTS_FOLDER, "devmode-firstboot.service"))
-	ioutil.WriteFile(filepath.Join(rootdir, "/var/lib/devmode-firstboot/conf.sh"), []byte(fmt.Sprintf("RECOVERYFSLABEL=\"%s\"\nRECOVERY_TYPE=\"%s\"\n", RECOVERY_LABEL, RECOVERY_TYPE)), 0644)
+	ioutil.WriteFile(filepath.Join(rootdir, "/var/lib/devmode-firstboot/conf.sh"), []byte(fmt.Sprintf("RECOVERYFSLABEL=\"%s\"\nRECOVERY_TYPE=\"%s\"\n", RecoveryLabel, RecoveryType)), 0644)
 
-	switch RECOVERY_TYPE {
+	switch RecoveryType {
 	case rplib.FACTORY_INSTALL:
 		log.Println("[EXECUTE FACTORY INSTALL]")
 
@@ -407,13 +425,13 @@ func main() {
 
 	log.Println("Update uboot env(ESP/system-boot)")
 	//fsck needs ignore error code
-	cmd := exec.Command("fsck", "-y", fmt.Sprintf("/dev/disk/by-label/%s", RECOVERY_LABEL))
+	cmd := exec.Command("fsck", "-y", fmt.Sprintf("/dev/disk/by-label/%s", RecoveryLabel))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
-	rplib.Shellexec("mount", "-o", "remount,rw", fmt.Sprintf("/dev/disk/by-label/%s", RECOVERY_LABEL), "/recovery_partition")
+	rplib.Shellexec("mount", "-o", "remount,rw", fmt.Sprintf("/dev/disk/by-label/%s", RecoveryLabel), "/recovery_partition")
 	hack_uboot_env("/recovery_partition/uboot.env")
-	rplib.Shellexec("mount", "-o", "remount,ro", fmt.Sprintf("/dev/disk/by-label/%s", RECOVERY_LABEL), "/recovery_partition")
+	rplib.Shellexec("mount", "-o", "remount,ro", fmt.Sprintf("/dev/disk/by-label/%s", RecoveryLabel), "/recovery_partition")
 	hack_uboot_env("/tmp/system-boot/uboot.env")
 
 	//release dhclient
