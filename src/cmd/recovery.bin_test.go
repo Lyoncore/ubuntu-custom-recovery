@@ -21,6 +21,8 @@ package main_test
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"syscall"
@@ -67,7 +69,7 @@ func MountTestImg(mntImg string, umntLoop string) {
 	}
 }
 
-func (s *MainTestSuite) SetUpSuite(c *C) {
+func CreateImgs() {
 	logger.SimpleSetup()
 	//Create a MBR image
 	mbr_img, _ := os.Create(MBRimage)
@@ -126,12 +128,14 @@ func (s *MainTestSuite) SetUpSuite(c *C) {
 
 }
 
-func (s *MainTestSuite) TearDownSuite(c *C) {
+func RmImgs() {
 	os.Remove(MBRimage)
 	os.Remove(GPTimage)
 }
 
 func (s *MainTestSuite) TestGetBootDevName(c *C) {
+	CreateImgs()
+	defer RmImgs()
 
 	MountTestImg(MBRimage, "")
 	BootDev, DevPath, err := reco.GetBootDevName(RecoveryLabel)
@@ -148,4 +152,40 @@ func (s *MainTestSuite) TestGetBootDevName(c *C) {
 
 	BootDev, DevPath, err = reco.GetBootDevName("WrongLabel")
 	c.Check(err, NotNil)
+}
+
+func (s *MainTestSuite) TestConfirmRecovery(c *C) {
+
+	in, err := ioutil.TempFile("", "")
+	if err != nil {
+		c.Fatal(err)
+	}
+	defer in.Close()
+
+	//input 'y'
+	io.WriteString(in, "y\n")
+	in.Seek(0, os.SEEK_SET)
+	ret_bool := reco.ConfirmRecovry(in)
+	c.Check(ret_bool, Equals, true)
+
+	//input 'Y'
+	in.Seek(0, os.SEEK_SET)
+	io.WriteString(in, "Y\n")
+	in.Seek(0, os.SEEK_SET)
+	ret_bool = reco.ConfirmRecovry(in)
+	c.Check(ret_bool, Equals, true)
+
+	//input 'n'
+	in.Seek(0, os.SEEK_SET)
+	io.WriteString(in, "n\n")
+	in.Seek(0, os.SEEK_SET)
+	ret_bool = reco.ConfirmRecovry(in)
+	c.Check(ret_bool, Equals, false)
+
+	//input 'N'
+	in.Seek(0, os.SEEK_SET)
+	io.WriteString(in, "N\n")
+	in.Seek(0, os.SEEK_SET)
+	ret_bool = reco.ConfirmRecovry(in)
+	c.Check(ret_bool, Equals, false)
 }

@@ -225,15 +225,15 @@ func ConfirmRecovry(in *os.File) bool {
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 
 	fmt.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
-	var response string
-	fmt.Scanf("%s\n", &response)
+	var input string
+	fmt.Fscanf(in, "%s\n", &input)
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("4 4 1 7"), 0644)
 
-	if "y" != response && "Y" != response {
-		return true
+	if "y" != input && "Y" != input {
+		return false
 	}
 
-	return false
+	return true
 }
 
 func BackupWritable() {
@@ -311,7 +311,7 @@ func main() {
 	// TODO: verify the image
 	// If this is user triggered factory restore (first time is in factory and should happen automatically), ask user for confirm.
 	if rplib.FACTORY_RESTORE == RecoveryType {
-		if ConfirmRecovry() == false {
+		if ConfirmRecovry(nil) == false {
 			os.Exit(1)
 		}
 
