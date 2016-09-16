@@ -20,6 +20,7 @@
 package main_test
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -188,4 +189,43 @@ func (s *MainTestSuite) TestConfirmRecovery(c *C) {
 	in.Seek(0, os.SEEK_SET)
 	ret_bool = reco.ConfirmRecovry(in)
 	c.Check(ret_bool, Equals, false)
+}
+
+func (s *MainTestSuite) TestBackupAssertions(c *C) {
+	const gptMnt = "/tmp/gptmnt"
+	CreateImgs()
+	defer RmImgs()
+
+	MountTestImg(GPTimage, "")
+	err := os.MkdirAll(gptMnt, 0755)
+	c.Assert(err, IsNil)
+	defer os.Remove(gptMnt)
+	err = syscall.Mount(fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart), gptMnt, "ext4", 0, "")
+	c.Assert(err, IsNil)
+
+	//Create testing files
+	wdata := []byte("hello\n")
+	err = os.MkdirAll(fmt.Sprintf("%s%s", gptMnt, reco.ASSERTION_DIR), 0755)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(fmt.Sprintf("%s%s/assertion", gptMnt, reco.ASSERTION_DIR), wdata, 0644)
+	c.Assert(err, IsNil)
+
+	//Create symlink files
+	err = os.Symlink("assertion", fmt.Sprintf("%s%s/assertion.ln", gptMnt, reco.ASSERTION_DIR))
+	c.Assert(err, IsNil)
+	//umount image
+	syscall.Unmount(gptMnt, 0)
+
+	err = reco.BackupAssertions()
+	c.Assert(err, IsNil)
+
+	rdata, err := ioutil.ReadFile(fmt.Sprintf("%s/assertion", reco.ASSERTION_BACKUP_DIR))
+	c.Assert(err, IsNil)
+	cmp := bytes.Compare(rdata, wdata)
+	c.Assert(cmp, Equals, 0)
+	syscall.Unmount(gptMnt, 0)
+
+	MountTestImg("", gptLoop)
+	os.RemoveAll(reco.ASSERTION_BACKUP_DIR)
+	os.RemoveAll(reco.WRITABLE_MNT_DIR)
 }

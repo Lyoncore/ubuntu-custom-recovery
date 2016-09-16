@@ -49,11 +49,12 @@ var build_date string
 
 // NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
 const (
-	DISABLE_CLOUD_OPTION    = ""
-	LOG_PATH                = "/writable/system-data/var/log/recovery/log.txt"
-	ASSERTION_FOLDER        = "/writable/recovery"
-	ASSERTION_BACKUP_FOLDER = "/tmp/assert_backup"
-	CONFIG_YAML             = "/recovery/config.yaml"
+	DISABLE_CLOUD_OPTION = ""
+	LOG_PATH             = "/writable/system-data/var/log/recovery/log.txt"
+	ASSERTION_DIR        = "/writable/recovery"
+	ASSERTION_BACKUP_DIR = "/tmp/assert_backup"
+	CONFIG_YAML          = "/recovery/config.yaml"
+	WRITABLE_MNT_DIR     = "/tmp/writableMnt/"
 )
 
 func mib2Blocks(size int) int {
@@ -236,22 +237,44 @@ func ConfirmRecovry(in *os.File) bool {
 	return true
 }
 
-func BackupWritable() {
+func BackupAssertions() error {
 	// back up serial assertion
-	writable_part := rplib.Findfs("LABEL=writable")
-	err := os.MkdirAll("/tmp/writable/", 0755)
-	rplib.Checkerr(err)
-	err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
-	rplib.Checkerr(err)
-	// back up assertion if ever signed
-	if _, err := os.Stat(filepath.Join("/tmp/", ASSERTION_FOLDER)); err == nil {
-		rplib.Shellexec("cp", "-ar", filepath.Join("/tmp/", ASSERTION_FOLDER), ASSERTION_BACKUP_FOLDER)
+	cmd := exec.Command("findfs", fmt.Sprintf("LABEL=%s", part.WritableLabel))
+	out, err := cmd.Output()
+	if err != nil {
+		return err
 	}
-	syscall.Unmount("/tmp/writable", 0)
+	writable_part := strings.TrimSpace(string(out[:]))
+
+	err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
+	if err != nil {
+		return err
+	}
+	err = syscall.Mount(writable_part, WRITABLE_MNT_DIR, "ext4", 0, "")
+	if err != nil {
+		return err
+	}
+	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
+	// back up assertion if ever signed
+	if _, err := os.Stat(filepath.Join(WRITABLE_MNT_DIR, ASSERTION_DIR)); err == nil {
+		src := filepath.Join(WRITABLE_MNT_DIR, ASSERTION_DIR)
+		err = os.MkdirAll(ASSERTION_BACKUP_DIR, 0755)
+		if err != nil {
+			return err
+		}
+		dst := ASSERTION_BACKUP_DIR
+
+		err = rplib.CopyTree(src, dst)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+
+	return nil
 }
 
 func GetBootDevName(RecoveryLabel string) (devNode string, devPath string, err error) {
-	//devPath = rplib.Findfs(fmt.Sprintf("LABEL=%s", RecoveryLabel))
 	cmd := exec.Command("findfs", fmt.Sprintf("LABEL=%s", RecoveryLabel))
 	out, err := cmd.Output()
 	if err != nil {
@@ -315,8 +338,8 @@ func main() {
 			os.Exit(1)
 		}
 
-		//backup user data
-		BackupWritable()
+		//backup assertions
+		BackupAssertions()
 	}
 
 	// Find boot device name
@@ -408,9 +431,9 @@ func main() {
 	case rplib.FACTORY_RESTORE:
 		log.Println("[User restores the system]")
 		// restore assertion if ever signed
-		if _, err := os.Stat(ASSERTION_BACKUP_FOLDER); err == nil {
+		if _, err := os.Stat(ASSERTION_BACKUP_DIR); err == nil {
 			log.Println("Restore gpg key and serial")
-			rplib.Shellexec("cp", "-ar", ASSERTION_BACKUP_FOLDER, filepath.Join("/tmp/", ASSERTION_FOLDER))
+			rplib.Shellexec("cp", "-ar", ASSERTION_BACKUP_DIR, filepath.Join("/tmp/", ASSERTION_DIR))
 		}
 	}
 
