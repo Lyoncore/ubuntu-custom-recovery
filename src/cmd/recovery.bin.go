@@ -20,7 +20,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -55,6 +54,9 @@ const (
 	ASSERTION_BACKUP_DIR = "/tmp/assert_backup"
 	CONFIG_YAML          = "/recovery/config.yaml"
 	WRITABLE_MNT_DIR     = "/tmp/writableMnt/"
+	SYSBOOT_MNT_DIR      = "/tmp/system-boot/"
+	SYSBOOT_TARBALL      = "/recovery/factory/system-boot.tar.xz"
+	WRITABLE_TARBALL     = "/recovery/factory/writable.tar.xz"
 )
 
 func mib2Blocks(size int) int {
@@ -67,79 +69,83 @@ func mib2Blocks(size int) int {
 	return s
 }
 
-func recreateRecoveryPartition(device string, RecoveryLabel string, recovery_nr int, recovery_end int64) (normal_boot_nr int) {
-	last_end := recovery_end
-	nr := recovery_nr + 1
-
-	// Read information of recovery partition
-	// Keep only recovery partition
-
-	partitions := [...]string{part.SysbootLabel, part.WritableLabel}
-	for _, partition := range partitions {
-		log.Println("last_end:", last_end)
-		log.Println("nr:", nr)
-
-		var end_size string
-		var fstype string
-		var block string
-		// TODO: allocate partition according to gadget.PartitionLayout
-		// create the new partition
-		if part.WritableLabel == partition {
-			end_size = "-1M"
-			fstype = "ext4"
-		} else if part.SysbootLabel == partition {
-			size := 64 * 1024 * 1024 // 64 MB in Bytes
-			end_size = strconv.FormatInt(last_end+int64(size), 10) + "B"
-			fstype = "fat32"
-		}
-		log.Println("end_size:", end_size)
-
-		// make partition with optimal alignment
-		if configs.Configs.Bootloader == "gpt" {
-			rplib.Shellexec("parted", "-a", "optimal", "-ms", device, "--", "mkpart", "primary", fstype, fmt.Sprintf("%vB", last_end+1), end_size, "name", fmt.Sprintf("%v", nr), partition)
-		} else { //mbr don't support partition name
-			rplib.Shellexec("parted", "-a", "optimal", "-ms", device, "--", "mkpart", "primary", fstype, fmt.Sprintf("%vB", last_end+1), end_size)
-		}
-		_, new_end := rplib.GetPartitionBeginEnd64(device, nr)
-
-		if part.SysbootLabel == partition {
-			normal_boot_nr = nr
-			log.Println("normal_boot_nr:", normal_boot_nr)
-		}
-
-		rplib.Shellexec("udevadm", "settle")
-		rplib.Shellexec("parted", "-ms", device, "unit", "B", "print") // debug
-
-		if strings.Contains(device, "mmcblk") == true {
-			block = fmt.Sprintf("%sp%d", device, nr) //mmcblk0pX
-		} else {
-			block = fmt.Sprintf("%s%d", device, nr)
-		}
-		log.Println("block:", block)
-		// create filesystem and dump snap system
-		switch partition {
-		case part.WritableLabel:
-			rplib.Shellexec("mkfs.ext4", "-F", "-L", part.WritableLabel, block)
-			err := os.MkdirAll("/tmp/writable/", 0755)
-			rplib.Checkerr(err)
-			err = syscall.Mount(block, "/tmp/writable", "ext4", 0, "")
-			rplib.Checkerr(err)
-			defer syscall.Unmount("/tmp/writable", 0)
-			rplib.Shellexec("tar", "--xattrs", "-xJvpf", "/recovery/factory/writable.tar.xz", "-C", "/tmp/writable/")
-		case part.SysbootLabel:
-			rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", part.SysbootLabel, block)
-			err := os.MkdirAll("/tmp/system-boot/", 0755)
-			rplib.Checkerr(err)
-			err = syscall.Mount(block, "/tmp/system-boot", "vfat", 0, "")
-			rplib.Checkerr(err)
-			defer syscall.Unmount("/tmp/system-boot", 0)
-			rplib.Shellexec("tar", "--xattrs", "-xJvpf", "/recovery/factory/system-boot.tar.xz", "-C", "/tmp/system-boot/")
-			rplib.Shellexec("parted", "-ms", device, "set", strconv.Itoa(nr), "boot", "on")
-		}
-		last_end = new_end
-		nr = nr + 1
+func fmtPartPath(devPath string, nr int) string {
+	if strings.Contains(devPath, "mmcblk") || strings.Contains(devPath, "mapper/") {
+		return fmt.Sprintf("%sp%d", devPath, nr)
+	} else {
+		return fmt.Sprintf("%s%d", devPath, nr)
 	}
-	return
+}
+
+func RestoreParts(parts *part.Partitions, bootloader string, partType string) error {
+	var dev_path string = strings.Replace(parts.DevPath, "mapper/", "", -1)
+	if partType == "gpt" {
+		rplib.Shellexec("sgdisk", dev_path, "--randomize-guids", "--move-second-header")
+	}
+
+	//TODO: bootloader if need to support grub
+
+	// Keep system-boot partition, and only mkfs
+	if parts.Sysboot_nr == -1 {
+		// oops, don't known the location of system-boot.
+		// In the u-boot, system-boot would be in fron of recovery partition
+		// If we lose system-boot, and we cannot know the proper location
+		return fmt.Errorf("Oops, We lose system-boot")
+	}
+	sysboot_path := fmtPartPath(parts.DevPath, parts.Sysboot_nr)
+	cmd := exec.Command("mkfs.vfat", "-F", "32", "-n", part.SysbootLabel, sysboot_path)
+	cmd.Run()
+	err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
+	if err != nil {
+		return err
+	}
+	err = syscall.Mount(sysboot_path, SYSBOOT_MNT_DIR, "vfat", 0, "")
+	if err != nil {
+		return err
+	}
+	defer syscall.Unmount(SYSBOOT_MNT_DIR, 0)
+	cmd = exec.Command("tar", "--xattrs", "-xJvpf", SYSBOOT_TARBALL, "-C", SYSBOOT_MNT_DIR)
+	cmd.Run()
+	cmd = exec.Command("parted", "-ms", dev_path, "set", strconv.Itoa(parts.Sysboot_nr), "boot", "on")
+	cmd.Run()
+
+	// Remove partitions after recovery which include writable partition
+	// And do mkfs in writable (For ensure the writable is enlarged)
+	parts.Writable_start = parts.Recovery_end + 1
+	var writable_start string = fmt.Sprintf("%vB", parts.Writable_start)
+	parts.Writable_nr = parts.Recovery_nr + 1 //writable is one after recovery
+	var writable_nr string = strconv.Itoa(parts.Writable_nr)
+	writable_path := fmtPartPath(parts.DevPath, parts.Writable_nr)
+
+	part_nr := parts.Recovery_nr + 1
+	for part_nr <= parts.Last_part_nr {
+		cmd = exec.Command("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))
+		cmd.Run()
+		part_nr++
+	}
+
+	if partType == "gpt" {
+		cmd = exec.Command("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "ext4", writable_start, "-1M", "name", writable_nr, part.WritableLabel)
+		cmd.Run()
+	} else { //mbr
+		cmd = exec.Command("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "fat32", writable_start, "-1M")
+		cmd.Run()
+	}
+
+	cmd = exec.Command("udevadm", "settle")
+	cmd.Run()
+
+	cmd = exec.Command("mkfs.ext4", "-F", "-L", part.WritableLabel, writable_path)
+	cmd.Run()
+	err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
+	rplib.Checkerr(err)
+	err = syscall.Mount(writable_path, WRITABLE_MNT_DIR, "ext4", 0, "")
+	rplib.Checkerr(err)
+	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
+	cmd = exec.Command("tar", "--xattrs", "-xJvpf", WRITABLE_TARBALL, "-C", WRITABLE_MNT_DIR)
+	cmd.Run()
+
+	return nil
 }
 
 func hack_grub_cfg(recovery_type_cfg string, recovery_type_label string, recovery_part_label string, grub_cfg string) {
@@ -237,24 +243,22 @@ func ConfirmRecovry(in *os.File) bool {
 	return true
 }
 
-func BackupAssertions() error {
+func BackupAssertions(parts *part.Partitions) error {
 	// back up serial assertion
-	cmd := exec.Command("findfs", fmt.Sprintf("LABEL=%s", part.WritableLabel))
-	out, err := cmd.Output()
+	err := os.MkdirAll(WRITABLE_MNT_DIR, 0755)
 	if err != nil {
 		return err
 	}
-	writable_part := strings.TrimSpace(string(out[:]))
-
-	err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
-	if err != nil {
-		return err
+	if strings.Contains(parts.DevPath, "mmc") == true || strings.Contains(parts.DevPath, "loop") == true {
+		err = syscall.Mount(fmt.Sprintf("%sp%d", parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
+	} else {
+		err = syscall.Mount(fmt.Sprintf("%s%d", parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
 	}
-	err = syscall.Mount(writable_part, WRITABLE_MNT_DIR, "ext4", 0, "")
 	if err != nil {
 		return err
 	}
 	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
+
 	// back up assertion if ever signed
 	if _, err := os.Stat(filepath.Join(WRITABLE_MNT_DIR, ASSERTION_DIR)); err == nil {
 		src := filepath.Join(WRITABLE_MNT_DIR, ASSERTION_DIR)
@@ -272,38 +276,6 @@ func BackupAssertions() error {
 	}
 
 	return nil
-}
-
-func GetBootDevName(RecoveryLabel string) (devNode string, devPath string, err error) {
-	cmd := exec.Command("findfs", fmt.Sprintf("LABEL=%s", RecoveryLabel))
-	out, err := cmd.Output()
-	if err != nil {
-		return
-	}
-	devPath = strings.TrimSpace(string(out[:]))
-
-	if strings.Contains(devPath, "/dev/") == false {
-		err = errors.New(fmt.Sprintf("RecoveryLabel of %q not found", RecoveryLabel))
-		return
-	}
-
-	// The devPath is with partiion /dev/sdX1 or /dev/mmcblkXp1
-	// Here to remove the partition information
-	for {
-		if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
-			devPath = devPath[:len(devPath)-1]
-		} else if devPath[len(devPath)-1] == 'p' {
-			devPath = devPath[:len(devPath)-1]
-			break
-		} else {
-			break
-		}
-	}
-
-	field := strings.Split(devPath, "/")
-	devNode = field[len(field)-1]
-
-	return
 }
 
 func main() {
@@ -331,6 +303,12 @@ func main() {
 	rplib.Checkerr(err)
 	log.Println(configs)
 
+	// Find boot device, all other partiitons info
+	parts, err := part.GetPartitions(RecoveryLabel)
+	if err != nil {
+		logger.Panicf("Boot device not found, error: %s\n", err)
+	}
+
 	// TODO: verify the image
 	// If this is user triggered factory restore (first time is in factory and should happen automatically), ask user for confirm.
 	if rplib.FACTORY_RESTORE == RecoveryType {
@@ -339,24 +317,8 @@ func main() {
 		}
 
 		//backup assertions
-		BackupAssertions()
+		BackupAssertions(parts)
 	}
-
-	// Find boot device name
-	_, BootDevPath, err := GetBootDevName(RecoveryLabel)
-	if err != nil {
-		logger.Panicf("Boot device not found, error: %s\n", err)
-	}
-
-	if configs.Configs.PartitionType == "gpt" {
-		log.Println("[recover the backup GPT entry at end of the disk.]")
-		rplib.Shellexec("sgdisk", BootDevPath, "--randomize-guids", "--move-second-header")
-		log.Println("[recreate gpt partition table.]")
-	}
-
-	//Get system-boot, writable, recovery partition location
-	parts, err := part.GetPartitions(BootDevPath, RecoveryLabel)
-	fmt.Println(parts)
 
 	// rebuild the partitions
 	log.Println("[rebuild the partitions]")

@@ -212,3 +212,69 @@ func (s *MainTestSuite) TestBackupAssertions(c *C) {
 	os.RemoveAll(reco.ASSERTION_BACKUP_DIR)
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)
 }
+
+func (s *MainTestSuite) TestRestoreParts(c *C) {
+	const gptMnt = "/tmp/gptmnt"
+	const (
+		SYS_TAR     = "tests/system-boot.tar.xz"
+		WR_TAR      = "tests/writable.tar.xz"
+		RECO_PATH   = "/recovery/"
+		TAR_PATH    = RECO_PATH + "factory/"
+		SYS_TAR_TMP = "/tmp/systar"
+		WR_TAR_TMP  = "/tmp/wrtar"
+	)
+	CreateImgs()
+	defer RmImgs()
+
+	os.MkdirAll(TAR_PATH, 0755)
+	rplib.FileCopy(SYS_TAR, TAR_PATH)
+	rplib.FileCopy(WR_TAR, TAR_PATH)
+	defer os.RemoveAll(RECO_PATH)
+
+	// GPT case
+	// Find boot device, all other partiitons info
+	MountTestImg(GPTimage, "")
+	parts, err := part.GetPartitions(RecoveryLabel)
+	c.Assert(err, IsNil)
+	err = reco.RestoreParts(parts, "u-boot", "gpt")
+	c.Check(err, IsNil)
+
+	err = os.MkdirAll(gptMnt, 0755)
+	c.Assert(err, IsNil)
+	defer os.Remove(gptMnt)
+
+	//Check extrat data
+	err = syscall.Mount(fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, SysbootPart), gptMnt, "vfat", 0, "")
+	c.Assert(err, IsNil)
+	rdata, err := ioutil.ReadFile(fmt.Sprintf("%s/system-boot", gptMnt))
+	c.Assert(err, IsNil)
+	err = os.MkdirAll(SYS_TAR_TMP, 0755)
+	c.Assert(err, IsNil)
+	defer os.RemoveAll(SYS_TAR_TMP)
+	cmd := exec.Command("tar", "--xattrs", "-xJvpf", SYS_TAR, "-C", SYS_TAR_TMP)
+	cmd.Run()
+	wdata, err := ioutil.ReadFile(fmt.Sprintf("%s/system-boot", SYS_TAR_TMP))
+	cmp := bytes.Compare(rdata, wdata)
+	c.Assert(cmp, Equals, 0)
+	syscall.Unmount(gptMnt, 0)
+
+	//Check extrat data
+	err = syscall.Mount(fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart), gptMnt, "ext4", 0, "")
+	c.Assert(err, IsNil)
+	rdata, err = ioutil.ReadFile(fmt.Sprintf("%s/writable", gptMnt))
+	c.Assert(err, IsNil)
+	err = os.MkdirAll(WR_TAR_TMP, 0755)
+	c.Assert(err, IsNil)
+	defer os.RemoveAll(WR_TAR_TMP)
+	cmd = exec.Command("tar", "--xattrs", "-xJvpf", WR_TAR, "-C", WR_TAR_TMP)
+	cmd.Run()
+	wdata, err = ioutil.ReadFile(fmt.Sprintf("%s/writable", WR_TAR_TMP))
+	cmp = bytes.Compare(rdata, wdata)
+	c.Assert(cmp, Equals, 0)
+	syscall.Unmount(gptMnt, 0)
+
+	MountTestImg("", gptLoop)
+
+	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
+	os.RemoveAll(reco.WRITABLE_MNT_DIR)
+}
