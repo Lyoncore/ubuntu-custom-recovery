@@ -155,8 +155,7 @@ func GetPartitions(recoveryLabel string) (*Partitions, error) {
 	}
 
 	// find out detail information of each partition
-	// FIXME: It needs sudo, anyway to do not use root
-	cmd := exec.Command("sudo", "parted", "-ms", fmt.Sprintf("/dev/%s", parts.DevNode), "unit", "B", "print")
+	cmd := exec.Command("parted", "-ms", fmt.Sprintf("/dev/%s", parts.DevNode), "unit", "B", "print")
 	stdout, _ := cmd.StdoutPipe()
 	cmd.Start()
 	scanner := bufio.NewScanner(stdout)
