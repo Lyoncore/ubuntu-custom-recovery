@@ -134,27 +134,6 @@ func RmImgs() {
 	os.Remove(GPTimage)
 }
 
-func (s *MainTestSuite) TestGetBootDevName(c *C) {
-	CreateImgs()
-	defer RmImgs()
-
-	MountTestImg(MBRimage, "")
-	BootDev, DevPath, err := reco.GetBootDevName(RecoveryLabel)
-	c.Check(err, IsNil)
-	c.Check(BootDev, Equals, mbrLoop)
-	c.Check(DevPath, Equals, fmt.Sprintf("/dev/mapper/%s", BootDev))
-
-	MountTestImg(GPTimage, mbrLoop)
-	BootDev, DevPath, err = reco.GetBootDevName(RecoveryLabel)
-	c.Check(err, IsNil)
-	c.Check(BootDev, Equals, gptLoop)
-	c.Check(DevPath, Equals, fmt.Sprintf("/dev/mapper/%s", BootDev))
-	MountTestImg("", gptLoop)
-
-	BootDev, DevPath, err = reco.GetBootDevName("WrongLabel")
-	c.Check(err, NotNil)
-}
-
 func (s *MainTestSuite) TestConfirmRecovery(c *C) {
 
 	in, err := ioutil.TempFile("", "")

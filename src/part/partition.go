@@ -19,12 +19,11 @@ package part
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
-
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 )
 
 /*            The partiion layout
@@ -70,6 +69,8 @@ import (
  */
 
 type Partitions struct {
+	//DevNode: sda (W/O partiiton number),  DevPath: /dev/sda (W/O partition number)
+	DevNode, DevPath                     string
 	Recovery_nr, Sysboot_nr, Writable_nr int
 	Recovery_start, Recovery_end         int64
 	Sysboot_start, Sysboot_end           int64
@@ -81,36 +82,80 @@ const (
 	WritableLabel = "writable"
 )
 
-func GetPartitions(device string, recoveryLabel string) (*Partitions, error) {
+func FindPart(Label string) (devNode string, devPath string, partNr int, err error) {
+	partNr = -1
+	cmd := exec.Command("findfs", fmt.Sprintf("LABEL=%s", Label))
+	out, err := cmd.Output()
+	if err != nil {
+		return
+	}
+	fullPath := strings.TrimSpace(string(out[:]))
+
+	if strings.Contains(fullPath, "/dev/") == false {
+		err = errors.New(fmt.Sprintf("Label of %q not found", Label))
+		return
+	}
+	devPath = fullPath
+
+	// The devPath is with partiion /dev/sdX1 or /dev/mmcblkXp1
+	// Here to remove the partition information
+	for {
+		if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
+			devPath = devPath[:len(devPath)-1]
+		} else if devPath[len(devPath)-1] == 'p' {
+			devPath = devPath[:len(devPath)-1]
+			break
+		} else {
+			break
+		}
+	}
+
+	field := strings.Split(devPath, "/")
+	devNode = field[len(field)-1]
+
+	part_nr := strings.Trim(fullPath, devPath)
+	if partNr, err = strconv.Atoi(part_nr); err != nil {
+		err = errors.New("Unknown error while FindPart")
+		return "", "", -1, err
+	}
+
+	return
+}
+
+func GetPartitions(recoveryLabel string) (*Partitions, error) {
 	var err error
 	const OLD_PARTITION = "/tmp/old-partition.txt"
-	parts := Partitions{-1, -1, -1, -1, -1, -1, -1, -1, -1}
+	parts := Partitions{"", "", -1, -1, -1, -1, -1, -1, -1, -1, -1}
 
-	//recovery partiiton info
-	recovery_part := rplib.Findfs(fmt.Sprintf("LABEL=%s", recoveryLabel))
-	part_nr := recovery_part[len(recovery_part)-1:]
-	parts.Recovery_nr, err = strconv.Atoi(part_nr)
+	//Get boot device
+	//The boot device must has a recovery partition
+	parts.DevNode, parts.DevPath, parts.Recovery_nr, err = FindPart(recoveryLabel)
 	if err != nil {
+		err = errors.New(fmt.Sprintf("Recovery partition (LABEL=%s) not found", recoveryLabel))
 		return nil, err
 	}
 
 	//system-boot partition info
-	sysboot_part := rplib.Findfs(fmt.Sprintf("LABEL=%s", SysbootLabel))
-	part_nr = sysboot_part[len(sysboot_part)-1:]
-	parts.Sysboot_nr, err = strconv.Atoi(part_nr)
+	_, _, parts.Sysboot_nr, err = FindPart(SysbootLabel)
 	if err != nil {
-		return nil, err
+		//Partition not found, keep value in '-1'
+		parts.Sysboot_nr = -1
 	}
 
 	//writable-boot partition info
-	writable_part := rplib.Findfs(fmt.Sprintf("LABEL=%s", WritableLabel))
-	part_nr = writable_part[len(writable_part)-1:]
-	parts.Writable_nr, err = strconv.Atoi(part_nr)
+	_, _, parts.Writable_nr, err = FindPart(WritableLabel)
 	if err != nil {
-		return nil, err
+		//Partition not found, keep value in '-1'
+		parts.Writable_nr = -1
 	}
 
-	cmd := exec.Command("parted", "-ms", device, "unit", "B", "print")
+	if parts.Recovery_nr == -1 && parts.Sysboot_nr == -1 && parts.Writable_nr == -1 {
+		//Noting to find, return.
+		return &parts, nil
+	}
+
+	// find out detail information of each partition
+	cmd := exec.Command("parted", "-ms", parts.DevPath, "unit", "B", "print")
 	stdout, _ := cmd.StdoutPipe()
 	scanner := bufio.NewScanner(stdout)
 	cmd.Start()
@@ -132,13 +177,13 @@ func GetPartitions(device string, recoveryLabel string) (*Partitions, error) {
 			return nil, err
 		}
 
-		if parts.Recovery_nr == nr {
+		if parts.Recovery_nr != -1 && parts.Recovery_nr == nr {
 			parts.Recovery_start = start
 			parts.Recovery_end = end
-		} else if parts.Sysboot_nr == nr {
+		} else if parts.Sysboot_nr != -1 && parts.Sysboot_nr == nr {
 			parts.Sysboot_start = start
 			parts.Sysboot_end = end
-		} else if parts.Writable_nr == nr {
+		} else if parts.Writable_nr != -1 && parts.Writable_nr == nr {
 			parts.Writable_start = start
 			parts.Writable_end = end
 		}

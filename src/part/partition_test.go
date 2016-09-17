@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -132,39 +133,130 @@ func (s *GetPartSuite) TearDownSuite(c *C) {
 	os.Remove(GPTimage)
 }
 
+func getPartsConds(c *C, Label string, Loop string, passCase bool, recoCase bool, sysbootCase bool, writableCase bool) {
+	parts, err := part.GetPartitions(Label)
+	if passCase == false {
+		c.Check(err, NotNil)
+		c.Check(parts, IsNil)
+		return
+	} else {
+		c.Check(err, IsNil)
+
+		ret := strings.Compare(parts.DevNode, Loop)
+		c.Check(ret, Equals, 0)
+
+		ret = strings.Compare(parts.DevPath, fmt.Sprintf("/dev/mapper/%s", Loop))
+		c.Check(ret, Equals, 0)
+	}
+
+	if recoCase {
+		nr, err := strconv.Atoi(RecoveryPart)
+		c.Check(err, IsNil)
+		c.Check(parts.Recovery_nr, Equals, nr)
+	} else {
+		c.Check(parts.Recovery_nr, Equals, -1)
+	}
+
+	if sysbootCase {
+		nr, err := strconv.Atoi(SysbootPart)
+		c.Check(err, IsNil)
+		c.Check(parts.Sysboot_nr, Equals, nr)
+	} else {
+		c.Check(parts.Sysboot_nr, Equals, -1)
+	}
+
+	if writableCase {
+		nr, err := strconv.Atoi(WritablePart)
+		c.Check(err, IsNil)
+		c.Check(parts.Writable_nr, Equals, nr)
+	} else {
+		c.Check(parts.Writable_nr, Equals, -1)
+	}
+}
+
 func (s *GetPartSuite) TestgetPartitions(c *C) {
 
+	//Case in MBR
 	MountTestImg(MBRimage, "")
-	parts, err := part.GetPartitions(MBRimage, RecoveryLabel)
-	c.Check(err, IsNil)
 
-	nr, err := strconv.Atoi(RecoveryPart)
-	c.Check(err, IsNil)
-	c.Check(parts.Recovery_nr, Equals, nr)
+	//Case1 : recovery, writable, system-boot exist
+	getPartsConds(c, RecoveryLabel, mbrLoop, true, true, true, true)
 
-	nr, err = strconv.Atoi(SysbootPart)
-	c.Check(err, IsNil)
-	c.Check(parts.Sysboot_nr, Equals, nr)
+	//Case 2, only recovery, system-boot partition exist
+	cmd := exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", mbrLoop, WritablePart))
+	cmd.Run()
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", mbrLoop))
+	cmd.Run()
+	getPartsConds(c, RecoveryLabel, mbrLoop, true, true, true, false)
 
-	nr, err = strconv.Atoi(WritablePart)
-	c.Check(err, IsNil)
-	c.Check(parts.Writable_nr, Equals, nr)
+	//Case 3, only recovery partition exist
+	cmd = exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", mbrLoop, SysbootPart))
+	cmd.Run()
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", mbrLoop))
+	cmd.Run()
+	getPartsConds(c, RecoveryLabel, mbrLoop, true, true, false, false)
 
+	//Case 4, all, not exist
+	cmd = exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
+	cmd.Run()
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", mbrLoop))
+	cmd.Run()
+	getPartsConds(c, RecoveryLabel, mbrLoop, false, false, false, false)
+
+	//GPT case
 	MountTestImg(GPTimage, mbrLoop)
-	parts, err = part.GetPartitions(GPTimage, RecoveryLabel)
-	c.Check(err, IsNil)
 
-	nr, err = strconv.Atoi(RecoveryPart)
-	c.Check(err, IsNil)
-	c.Check(parts.Recovery_nr, Equals, nr)
+	//Case1 : recovery, writable, system-boot exist
+	getPartsConds(c, RecoveryLabel, gptLoop, true, true, true, true)
 
-	nr, err = strconv.Atoi(SysbootPart)
-	c.Check(err, IsNil)
-	c.Check(parts.Sysboot_nr, Equals, nr)
+	//Case 2, only recovery, system-boot partition exist
+	cmd = exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", gptLoop, WritablePart))
+	cmd.Run()
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", gptLoop))
+	cmd.Run()
+	getPartsConds(c, RecoveryLabel, gptLoop, true, true, true, false)
 
-	nr, err = strconv.Atoi(WritablePart)
-	c.Check(err, IsNil)
-	c.Check(parts.Writable_nr, Equals, nr)
+	//Case 3, only recovery partition exist
+	cmd = exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", gptLoop, SysbootPart))
+	cmd.Run()
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", gptLoop))
+	cmd.Run()
+	getPartsConds(c, RecoveryLabel, gptLoop, true, true, false, false)
+
+	//Case 4, all, not exist
+	cmd = exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", gptLoop, RecoveryPart))
+	cmd.Run()
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", gptLoop))
+	cmd.Run()
+	getPartsConds(c, RecoveryLabel, gptLoop, false, false, false, false)
 
 	MountTestImg("", gptLoop)
+}
+
+func (s *GetPartSuite) TestFindPart(c *C) {
+
+	MountTestImg(MBRimage, "")
+	DevNode, DevPath, PartNr, err := part.FindPart(RecoveryLabel)
+	c.Check(err, IsNil)
+	c.Check(DevNode, Equals, mbrLoop)
+	c.Check(DevPath, Equals, fmt.Sprintf("/dev/mapper/%s", DevNode))
+	nr, err := strconv.Atoi(RecoveryPart)
+	c.Check(err, IsNil)
+	c.Check(PartNr, Equals, nr)
+
+	MountTestImg(GPTimage, mbrLoop)
+	DevNode, DevPath, PartNr, err = part.FindPart(RecoveryLabel)
+	c.Check(err, IsNil)
+	c.Check(DevNode, Equals, gptLoop)
+	c.Check(DevPath, Equals, fmt.Sprintf("/dev/mapper/%s", DevNode))
+	nr, err = strconv.Atoi(RecoveryPart)
+	c.Check(err, IsNil)
+	c.Check(PartNr, Equals, nr)
+	MountTestImg("", gptLoop)
+
+	DevNode, DevPath, PartNr, err = part.FindPart("WrongLabel")
+	c.Check(err, NotNil)
+	c.Check(DevNode, Equals, "")
+	c.Check(DevPath, Equals, "")
+	c.Check(PartNr, Equals, -1)
 }
