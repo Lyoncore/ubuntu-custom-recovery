@@ -172,6 +172,8 @@ func getPartsConds(c *C, Label string, Loop string, passCase bool, recoCase bool
 	} else {
 		c.Check(parts.Writable_nr, Equals, -1)
 	}
+
+	c.Check(parts.Last_part_nr, Equals, 8)
 }
 
 func (s *GetPartSuite) TestgetPartitions(c *C) {

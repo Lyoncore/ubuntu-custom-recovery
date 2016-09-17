@@ -70,11 +70,11 @@ import (
 
 type Partitions struct {
 	//DevNode: sda (W/O partiiton number),  DevPath: /dev/sda (W/O partition number)
-	DevNode, DevPath                     string
-	Recovery_nr, Sysboot_nr, Writable_nr int
-	Recovery_start, Recovery_end         int64
-	Sysboot_start, Sysboot_end           int64
-	Writable_start, Writable_end         int64
+	DevNode, DevPath                                   string
+	Recovery_nr, Sysboot_nr, Writable_nr, Last_part_nr int
+	Recovery_start, Recovery_end                       int64
+	Sysboot_start, Sysboot_end                         int64
+	Writable_start, Writable_end                       int64
 }
 
 const (
@@ -125,7 +125,7 @@ func FindPart(Label string) (devNode string, devPath string, partNr int, err err
 func GetPartitions(recoveryLabel string) (*Partitions, error) {
 	var err error
 	const OLD_PARTITION = "/tmp/old-partition.txt"
-	parts := Partitions{"", "", -1, -1, -1, -1, -1, -1, -1, -1, -1}
+	parts := Partitions{"", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 
 	//Get boot device
 	//The boot device must has a recovery partition
@@ -155,10 +155,11 @@ func GetPartitions(recoveryLabel string) (*Partitions, error) {
 	}
 
 	// find out detail information of each partition
-	cmd := exec.Command("parted", "-ms", parts.DevPath, "unit", "B", "print")
+	// FIXME: It needs sudo, anyway to do not use root
+	cmd := exec.Command("sudo", "parted", "-ms", fmt.Sprintf("/dev/%s", parts.DevNode), "unit", "B", "print")
 	stdout, _ := cmd.StdoutPipe()
-	scanner := bufio.NewScanner(stdout)
 	cmd.Start()
+	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := scanner.Text()
 		fields := strings.Split(line, ":")
@@ -166,13 +167,14 @@ func GetPartitions(recoveryLabel string) (*Partitions, error) {
 		if err != nil { //ignore the line don't neeed
 			continue
 		}
-
 		end, err := strconv.ParseInt(strings.TrimRight(fields[2], "B"), 10, 64)
+
 		if err != nil {
 			return nil, err
 		}
 
 		start, err := strconv.ParseInt(strings.TrimRight(fields[1], "B"), 10, 64)
+
 		if err != nil {
 			return nil, err
 		}
@@ -187,12 +189,12 @@ func GetPartitions(recoveryLabel string) (*Partitions, error) {
 			parts.Writable_start = start
 			parts.Writable_end = end
 		}
+		parts.Last_part_nr = nr
 	}
 	cmd.Wait()
 	err = scanner.Err()
 	if err != nil {
 		return nil, err
 	}
-
 	return &parts, nil
 }
