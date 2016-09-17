@@ -30,6 +30,7 @@ import (
 	"testing"
 
 	reco "github.com/Lyoncore/arm-config/src/cmd"
+	part "github.com/Lyoncore/arm-config/src/part"
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 	"github.com/snapcore/snapd/logger"
 	. "gopkg.in/check.v1"
@@ -195,7 +196,10 @@ func (s *MainTestSuite) TestBackupAssertions(c *C) {
 	//umount image
 	syscall.Unmount(gptMnt, 0)
 
-	err = reco.BackupAssertions()
+	// Find boot device, all other partiitons info
+	parts, err := part.GetPartitions(RecoveryLabel)
+	c.Assert(err, IsNil)
+	err = reco.BackupAssertions(parts)
 	c.Assert(err, IsNil)
 
 	rdata, err := ioutil.ReadFile(fmt.Sprintf("%s/assertion", reco.ASSERTION_BACKUP_DIR))
