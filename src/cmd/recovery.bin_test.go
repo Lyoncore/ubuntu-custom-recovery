@@ -36,6 +36,8 @@ import (
 	. "gopkg.in/check.v1"
 )
 
+const gptMnt = "/tmp/gptmnt"
+
 func Test(t *testing.T) { TestingT(t) }
 
 type MainTestSuite struct{}
@@ -56,7 +58,7 @@ const (
 var mbrLoop, gptLoop string
 var part_size int64 = 600 * 1024 * 1024
 
-func MountTestImg(mntImg string, umntLoop string) {
+func LoopUnloopImg(mntImg string, umntLoop string) {
 	if umntLoop != "" {
 		cmd := exec.Command("sudo", "kpartx", "-ds", fmt.Sprintf("/dev/%s", umntLoop))
 		cmd.Run()
@@ -71,7 +73,7 @@ func MountTestImg(mntImg string, umntLoop string) {
 	}
 }
 
-func CreateImgs() {
+func (s *MainTestSuite) SetUpSuite(c *C) {
 	logger.SimpleSetup()
 	//Create a MBR image
 	mbr_img, _ := os.Create(MBRimage)
@@ -130,7 +132,7 @@ func CreateImgs() {
 
 }
 
-func RmImgs() {
+func (s *MainTestSuite) TearDownSuite(c *C) {
 	os.Remove(MBRimage)
 	os.Remove(GPTimage)
 }
@@ -172,11 +174,7 @@ func (s *MainTestSuite) TestConfirmRecovery(c *C) {
 }
 
 func (s *MainTestSuite) TestBackupAssertions(c *C) {
-	const gptMnt = "/tmp/gptmnt"
-	CreateImgs()
-	defer RmImgs()
-
-	MountTestImg(GPTimage, "")
+	LoopUnloopImg(GPTimage, "")
 	err := os.MkdirAll(gptMnt, 0755)
 	c.Assert(err, IsNil)
 	defer os.Remove(gptMnt)
@@ -206,15 +204,70 @@ func (s *MainTestSuite) TestBackupAssertions(c *C) {
 	c.Assert(err, IsNil)
 	cmp := bytes.Compare(rdata, wdata)
 	c.Assert(cmp, Equals, 0)
+	// Check link data
+	rdata, err = ioutil.ReadFile(fmt.Sprintf("%s/assertion.ln", reco.ASSERTION_BACKUP_DIR))
+	c.Assert(err, IsNil)
+	cmp = bytes.Compare(rdata, wdata)
+	c.Assert(cmp, Equals, 0)
+	//check it's link
+	stat, err := os.Lstat(fmt.Sprintf("%s/assertion.ln", reco.ASSERTION_BACKUP_DIR))
+	islink := stat.Mode()&os.ModeSymlink == os.ModeSymlink
+	c.Assert(islink, Equals, true)
 	syscall.Unmount(gptMnt, 0)
 
-	MountTestImg("", gptLoop)
+	LoopUnloopImg("", gptLoop)
 	os.RemoveAll(reco.ASSERTION_BACKUP_DIR)
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)
 }
 
+func (s *MainTestSuite) TestRestoreAssertions(c *C) {
+	LoopUnloopImg(GPTimage, "")
+	//Create testing files
+	wdata := []byte("hello\n")
+	err := os.MkdirAll(fmt.Sprintf("%s", reco.ASSERTION_BACKUP_DIR), 0755)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(fmt.Sprintf("%s/assertion", reco.ASSERTION_BACKUP_DIR), wdata, 0644)
+	c.Assert(err, IsNil)
+
+	//Create symlink files
+	err = os.Symlink("assertion", fmt.Sprintf("%s/assertion.ln", reco.ASSERTION_BACKUP_DIR))
+	c.Assert(err, IsNil)
+	defer os.RemoveAll(reco.ASSERTION_BACKUP_DIR)
+
+	// Find boot device, all other partiitons info
+	parts, err := part.GetPartitions(RecoveryLabel)
+	c.Assert(err, IsNil)
+	err = reco.RestoreAsserions(parts)
+	c.Assert(err, IsNil)
+
+	// Verify
+	err = os.MkdirAll(gptMnt, 0755)
+	c.Assert(err, IsNil)
+	defer os.Remove(gptMnt)
+	err = syscall.Mount(fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart), gptMnt, "ext4", 0, "")
+	c.Assert(err, IsNil)
+
+	rdata, err := ioutil.ReadFile(fmt.Sprintf("%s/%s/assertion", gptMnt, reco.ASSERTION_DIR))
+	c.Assert(err, IsNil)
+	cmp := bytes.Compare(rdata, wdata)
+	c.Assert(cmp, Equals, 0)
+	// Check link data
+	rdata, err = ioutil.ReadFile(fmt.Sprintf("%s/%s/assertion.ln", gptMnt, reco.ASSERTION_DIR))
+	c.Assert(err, IsNil)
+	cmp = bytes.Compare(rdata, wdata)
+	c.Assert(cmp, Equals, 0)
+	//check it's link
+	stat, err := os.Lstat(fmt.Sprintf("%s/%s/assertion.ln", gptMnt, reco.ASSERTION_DIR))
+	islink := stat.Mode()&os.ModeSymlink == os.ModeSymlink
+	c.Assert(islink, Equals, true)
+
+	syscall.Unmount(gptMnt, 0)
+	LoopUnloopImg("", gptLoop)
+
+	os.RemoveAll(reco.WRITABLE_MNT_DIR)
+}
+
 func (s *MainTestSuite) TestRestoreParts(c *C) {
-	const gptMnt = "/tmp/gptmnt"
 	const (
 		SYS_TAR     = "tests/system-boot.tar.xz"
 		WR_TAR      = "tests/writable.tar.xz"
@@ -223,8 +276,6 @@ func (s *MainTestSuite) TestRestoreParts(c *C) {
 		SYS_TAR_TMP = "/tmp/systar"
 		WR_TAR_TMP  = "/tmp/wrtar"
 	)
-	CreateImgs()
-	defer RmImgs()
 
 	os.MkdirAll(TAR_PATH, 0755)
 	rplib.FileCopy(SYS_TAR, TAR_PATH)
@@ -233,7 +284,7 @@ func (s *MainTestSuite) TestRestoreParts(c *C) {
 
 	// GPT case
 	// Find boot device, all other partiitons info
-	MountTestImg(GPTimage, "")
+	LoopUnloopImg(GPTimage, "")
 	parts, err := part.GetPartitions(RecoveryLabel)
 	c.Assert(err, IsNil)
 	err = reco.RestoreParts(parts, "u-boot", "gpt")
@@ -273,7 +324,7 @@ func (s *MainTestSuite) TestRestoreParts(c *C) {
 	c.Assert(cmp, Equals, 0)
 	syscall.Unmount(gptMnt, 0)
 
-	MountTestImg("", gptLoop)
+	LoopUnloopImg("", gptLoop)
 
 	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)

@@ -49,14 +49,27 @@ var build_date string
 // NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
 const (
 	DISABLE_CLOUD_OPTION = ""
-	LOG_PATH             = "/writable/system-data/var/log/recovery/log.txt"
-	ASSERTION_DIR        = "/writable/recovery"
-	ASSERTION_BACKUP_DIR = "/tmp/assert_backup"
+	ASSERTION_DIR        = "/writable/recovery/"
+	ASSERTION_BACKUP_DIR = "/tmp/assert_backup/"
 	CONFIG_YAML          = "/recovery/config.yaml"
 	WRITABLE_MNT_DIR     = "/tmp/writableMnt/"
 	SYSBOOT_MNT_DIR      = "/tmp/system-boot/"
-	SYSBOOT_TARBALL      = "/recovery/factory/system-boot.tar.xz"
-	WRITABLE_TARBALL     = "/recovery/factory/writable.tar.xz"
+	RECO_FACTORY_DIR     = "/recovery/factory/"
+	SYSBOOT_TARBALL      = RECO_FACTORY_DIR + "system-boot.tar.xz"
+	WRITABLE_TARBALL     = RECO_FACTORY_DIR + "writable.tar.xz"
+	LOG_PATH             = WRITABLE_MNT_DIR + "system-data/var/log/recovery/log.txt"
+
+	SYSTEM_DATA_PATH               = WRITABLE_MNT_DIR + "system-data/"
+	SNAPS_SRC_PATH                 = RECO_FACTORY_DIR + "snaps/"
+	DEV_SNAPS_SRC_PATH             = RECO_FACTORY_DIR + "snaps-devmode/"
+	OEM_SNAPS_PATH                 = SYSTEM_DATA_PATH + "/var/lib/oem/"
+	MULTI_USER_TARGET_WANTS_FOLDER = "/etc/systemd/system/multi-user.target.wants/"
+	SYSTEMD_SYSTEM_DIR             = "/lib/systemd/system/"
+	FIRSTBOOT_SERVICE_FILE         = "devmode-firstboot.service"
+	FIRSTBOOT_SERVICE_FILE_SRC     = SYSTEMD_SYSTEM_DIR + FIRSTBOOT_SERVICE_FILE
+	FIRSTBOOT_SREVICE_SCRIPT       = "/var/lib/devmode-firstboot/conf.sh"
+
+	UBOOT_ENV = SYSBOOT_MNT_DIR + "uboot.env"
 )
 
 func mib2Blocks(size int) int {
@@ -179,9 +192,26 @@ menuentry "%s" {
 	f.Close()
 }
 
-func hack_uboot_env(uboot_cfg string) {
-	env, err := uenv.Open(uboot_cfg)
-	rplib.Checkerr(err)
+func updateUbootEnv(parts *part.Partitions) error {
+	// mount system-boot to update uboot.env
+	_, err := os.Stat(SYSBOOT_MNT_DIR)
+	if err != nil {
+		err = os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
+		if err != nil {
+			return err
+		}
+	}
+	err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Sysboot_nr), SYSBOOT_MNT_DIR, "vfat", 0, "")
+	if err != nil {
+		return err
+	}
+	defer syscall.Unmount(SYSBOOT_MNT_DIR, 0)
+
+	// update uboot.env
+	env, err := uenv.Open(UBOOT_ENV)
+	if err != nil {
+		return err
+	}
 
 	var name, value string
 	//update env
@@ -190,35 +220,44 @@ func hack_uboot_env(uboot_cfg string) {
 	value = "1"
 	env.Set(name, value)
 	err = env.Save()
-	rplib.Checkerr(err)
+	if err != nil {
+		return err
+	}
 
 	//2. mmcpart=2
 	name = "mmcpart"
 	value = "2"
 	env.Set(name, value)
 	err = env.Save()
-	rplib.Checkerr(err)
+	if err != nil {
+		return err
+	}
 
 	//3. snappy_boot
 	name = "snappy_boot"
 	value = "if test \"${snap_mode}\" = \"try\"; then setenv snap_mode \"trying\"; saveenv; if test \"${snap_try_core}\" != \"\"; then setenv snap_core \"${snap_try_core}\"; fi; if test \"${snap_try_kernel}\" != \"\"; then setenv snap_kernel \"${snap_try_kernel}\"; fi; elif test \"${snap_mode}\" = \"trying\"; then setenv snap_mode \"\"; saveenv; elif test \"${snap_mode}\" = \"recovery\"; then setenv loadinitrd \"load mmc ${mmcdev}:${mmcreco} ${initrd_addr} ${initrd_file}; setenv initrd_size ${filesize}\"; setenv loadkernel \"load mmc ${mmcdev}:${mmcreco} ${loadaddr} ${kernel_file}\"; setenv factory_recovery \"run loadfiles; setenv mmcroot \"/dev/disk/by-label/writable ${snappy_cmdline} snap_core=${snap_core} snap_kernel=${snap_kernel} recoverytype=factory_restore\"; run mmcargs; bootz ${loadaddr} ${initrd_addr}:${initrd_size} 0x02000000\"; echo \"RECOVERY\"; run factory_recovery; fi; run loadfiles; setenv mmcroot \"/dev/disk/by-label/writable ${snappy_cmdline} snap_core=${snap_core} snap_kernel=${snap_kernel}\"; run mmcargs; bootz ${loadaddr} ${initrd_addr}:${initrd_size} 0x02000000"
 	env.Set(name, value)
 	err = env.Save()
-	rplib.Checkerr(err)
+	if err != nil {
+		return err
+	}
 
 	//4. loadbootenv (load uboot.env from system-boot, because snapd always update uboot.env in system-boot while os/kernel snap updated)
 	name = "loadbootenv"
 	value = "load ${devtype} ${devnum}:${mmcpart} ${loadaddr} ${bootenv}"
 	env.Set(name, value)
 	err = env.Save()
-	rplib.Checkerr(err)
+	if err != nil {
+		return err
+	}
 
 	//5. bootenv (for system-boot/uboot.env)
 	name = "bootenv"
 	value = "uboot.env"
 	env.Set(name, value)
 	err = env.Save()
-	rplib.Checkerr(err)
+
+	return err
 }
 
 var configs rplib.ConfigRecovery
@@ -249,11 +288,7 @@ func BackupAssertions(parts *part.Partitions) error {
 	if err != nil {
 		return err
 	}
-	if strings.Contains(parts.DevPath, "mmc") == true || strings.Contains(parts.DevPath, "loop") == true {
-		err = syscall.Mount(fmt.Sprintf("%sp%d", parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
-	} else {
-		err = syscall.Mount(fmt.Sprintf("%s%d", parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
-	}
+	err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
 	if err != nil {
 		return err
 	}
@@ -275,6 +310,107 @@ func BackupAssertions(parts *part.Partitions) error {
 		}
 	}
 
+	return nil
+}
+
+func RestoreAsserions(parts *part.Partitions) error {
+
+	if _, err := os.Stat(ASSERTION_BACKUP_DIR); err == nil {
+		// mount writable to restore
+		err := os.MkdirAll(WRITABLE_MNT_DIR, 0755)
+		if err != nil {
+			return err
+		}
+		err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
+		if err != nil {
+			return err
+		}
+		defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
+
+		log.Println("Restore gpg key and serial")
+		return rplib.CopyTree(ASSERTION_BACKUP_DIR, filepath.Join(WRITABLE_MNT_DIR, ASSERTION_DIR))
+	}
+
+	return nil
+}
+
+func enableLogger(parts *part.Partitions) {
+	_, err := os.Stat(WRITABLE_MNT_DIR)
+	if err != nil {
+		err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
+		rplib.Checkerr(err)
+	}
+	err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
+	rplib.Checkerr(err)
+	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
+
+	err = os.MkdirAll(path.Dir(LOG_PATH), 0755)
+	rplib.Checkerr(err)
+	log_writable, err := os.OpenFile(LOG_PATH, os.O_CREATE|os.O_WRONLY, 0600)
+	rplib.Checkerr(err)
+	f := io.MultiWriter(log_writable, os.Stdout)
+	log.SetOutput(f)
+}
+
+func copySnaps() {
+	os.MkdirAll(OEM_SNAPS_PATH, 0755)
+	err := rplib.CopyTree(SNAPS_SRC_PATH, OEM_SNAPS_PATH)
+	rplib.Checkerr(err)
+	err = rplib.CopyTree(DEV_SNAPS_SRC_PATH, OEM_SNAPS_PATH)
+	rplib.Checkerr(err)
+}
+
+func addFirstBootService(RecoveryType, RecoveryLabel string) {
+	err := rplib.CopyTree(filepath.Join(RECO_FACTORY_DIR, RecoveryType), SYSTEM_DATA_PATH)
+	// FIXME, remove .gitkeep
+	rplib.Checkerr(err)
+	err = os.Symlink(FIRSTBOOT_SERVICE_FILE_SRC, filepath.Join(SYSTEM_DATA_PATH, MULTI_USER_TARGET_WANTS_FOLDER, FIRSTBOOT_SERVICE_FILE))
+	rplib.Checkerr(err)
+	err = ioutil.WriteFile(filepath.Join(SYSTEM_DATA_PATH, FIRSTBOOT_SREVICE_SCRIPT), []byte(fmt.Sprintf("RECOVERYFSLABEL=\"%s\"\nRECOVERY_TYPE=\"%s\"\n", RecoveryLabel, RecoveryType)), 0644)
+	rplib.Checkerr(err)
+}
+
+//FIXME: now only support eth0, enx0 interface
+func startupNetwork() error {
+	interface_list := strings.Split(rplib.Shellcmdoutput("ip -o link show | awk -F': ' '{print $2}'"), "\n")
+	//log.Println("interface_list:", interface_list)
+
+	var net = 0
+	for ; net < len(interface_list); net++ {
+		if strings.Contains(interface_list[net], "eth") == true || strings.Contains(interface_list[net], "enx") == true {
+			break
+		}
+	}
+	if net == len(interface_list) {
+		return fmt.Errorf("No network interface avalible. Current network interface: %v", interface_list)
+	}
+	eth := interface_list[net] // select nethernet interface.
+	cmd := exec.Command("ip", "link", "set", "dev", eth, "up")
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+	cmd = exec.Command("dhclient", "-1", eth)
+	err = cmd.Run()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func releaseDhcp() error {
+	cmd := exec.Command("dhclient", "-x")
+	return cmd.Run()
+}
+
+func serialVaultService() error {
+	vaultServerIP := rplib.Shellcmdoutput("ip route | awk '/default/ { print $3 }'") // assume identity-vault is hosted on the gateway
+	log.Println("vaultServerIP:", vaultServerIP)
+
+	if !configs.Recovery.SignSerial {
+	}
+	// TODO: Start signing serial
 	return nil
 }
 
@@ -322,104 +458,45 @@ func main() {
 
 	// rebuild the partitions
 	log.Println("[rebuild the partitions]")
-	//recreateRecoveryPartition(BootDevPath, RecoveryLabel, recovery_nr, recovery_end)
+	RestoreParts(parts, configs.Configs.Bootloader, configs.Configs.PartitionType)
 
 	// stream log to stdout and writable partition
-	writable_part := rplib.Findfs("LABEL=writable")
-	err = os.MkdirAll("/tmp/writable/", 0755)
-	rplib.Checkerr(err)
-	err = syscall.Mount(writable_part, "/tmp/writable/", "ext4", 0, "")
-	rplib.Checkerr(err)
-	defer syscall.Unmount("/tmp/writable", 0)
-	rootdir := "/tmp/writable/system-data/"
-
-	logfile := filepath.Join("/tmp/", LOG_PATH)
-	err = os.MkdirAll(path.Dir(logfile), 0755)
-	rplib.Checkerr(err)
-	log_writable, err := os.OpenFile(logfile, os.O_CREATE|os.O_WRONLY, 0600)
-	rplib.Checkerr(err)
-	f := io.MultiWriter(log_writable, os.Stdout)
-	log.SetOutput(f)
+	enableLogger(parts)
 	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
 
-	// FIXME, if grub need to support
-
+	// Copy snaps
 	log.Println("[Add snaps for oem]")
-	os.MkdirAll(filepath.Join(rootdir, "/var/lib/oem/"), 0755)
-	rplib.Shellexec("cp", "-a", "/recovery/factory/snaps", filepath.Join(rootdir, "/var/lib/oem/"))
-	rplib.Shellexec("cp", "-a", "/recovery/factory/snaps-devmode", filepath.Join(rootdir, "/var/lib/oem/"))
+	copySnaps()
 
 	// add firstboot service
-	const MULTI_USER_TARGET_WANTS_FOLDER = "/etc/systemd/system/multi-user.target.wants/"
 	log.Println("[Add FIRSTBOOT service]")
-	rplib.Shellexec("/recovery/bin/rsync", "-a", "--exclude='.gitkeep'", filepath.Join("/recovery/factory", RecoveryType)+"/", rootdir+"/")
-	rplib.Shellexec("ln", "-s", "/lib/systemd/system/devmode-firstboot.service", filepath.Join(rootdir, MULTI_USER_TARGET_WANTS_FOLDER, "devmode-firstboot.service"))
-	ioutil.WriteFile(filepath.Join(rootdir, "/var/lib/devmode-firstboot/conf.sh"), []byte(fmt.Sprintf("RECOVERYFSLABEL=\"%s\"\nRECOVERY_TYPE=\"%s\"\n", RecoveryLabel, RecoveryType)), 0644)
+	addFirstBootService(RecoveryType, RecoveryLabel)
 
 	switch RecoveryType {
 	case rplib.FACTORY_INSTALL:
 		log.Println("[EXECUTE FACTORY INSTALL]")
-
-		log.Println("[set next recoverytype to factory_restore]")
-		rplib.Shellexec("mount", "-o", "rw,remount", "/recovery_partition")
-
-		log.Println("[Start serial vault]")
-		interface_list := strings.Split(rplib.Shellcmdoutput("ip -o link show | awk -F': ' '{print $2}'"), "\n")
-		log.Println("interface_list:", interface_list)
-
-		var net = 0
-		for ; net < len(interface_list); net++ {
-			if strings.Contains(interface_list[net], "eth") == true || strings.Contains(interface_list[net], "enx") == true {
-				break
-			}
-		}
-		if net == len(interface_list) {
-			panic(fmt.Sprintf("Need one ethernet interface to connect to identity-vault. Current network interface: %v", interface_list))
-		}
-		eth := interface_list[net] // select nethernet interface.
-		rplib.Shellexec("ip", "link", "set", "dev", eth, "up")
-		rplib.Shellexec("dhclient", "-1", eth)
-
-		vaultServerIP := rplib.Shellcmdoutput("ip route | awk '/default/ { print $3 }'") // assume identity-vault is hosted on the gateway
-		log.Println("vaultServerIP:", vaultServerIP)
-
 		// TODO: read assertion information from gadget snap
 		if !configs.Recovery.SignSerial {
-			log.Println("Will not sign serial")
-			break
+			log.Println("[Start serial vault]")
+			err = startupNetwork()
+			rplib.Checkerr(err)
+			err = serialVaultService()
+			rplib.Checkerr(err)
+			//release dhclient
+			err = releaseDhcp()
+			rplib.Checkerr(err)
 		}
-		// TODO: Start signing serial
-		log.Println("Start signing serial")
 	case rplib.FACTORY_RESTORE:
-		log.Println("[User restores the system]")
+		log.Println("[User restores system]")
 		// restore assertion if ever signed
-		if _, err := os.Stat(ASSERTION_BACKUP_DIR); err == nil {
-			log.Println("Restore gpg key and serial")
-			rplib.Shellexec("cp", "-ar", ASSERTION_BACKUP_DIR, filepath.Join("/tmp/", ASSERTION_DIR))
-		}
+		RestoreAsserions(parts)
 	}
 
+	//Darren works here
 	// update uboot env
-	system_boot_part := rplib.Findfs("LABEL=system-boot")
-	log.Println("system_boot_part:", system_boot_part)
-	err = os.MkdirAll("/tmp/system-boot", 0755)
-	rplib.Checkerr(err)
-	err = syscall.Mount(system_boot_part, "/tmp/system-boot", "vfat", 0, "")
-	rplib.Checkerr(err)
-	defer syscall.Unmount("/tmp/system-boot", 0)
-
 	log.Println("Update uboot env(ESP/system-boot)")
 	//fsck needs ignore error code
-	cmd := exec.Command("fsck", "-y", fmt.Sprintf("/dev/disk/by-label/%s", RecoveryLabel))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Run()
-	rplib.Shellexec("mount", "-o", "remount,rw", fmt.Sprintf("/dev/disk/by-label/%s", RecoveryLabel), "/recovery_partition")
-	hack_uboot_env("/recovery_partition/uboot.env")
-	rplib.Shellexec("mount", "-o", "remount,ro", fmt.Sprintf("/dev/disk/by-label/%s", RecoveryLabel), "/recovery_partition")
-	hack_uboot_env("/tmp/system-boot/uboot.env")
-
-	//release dhclient
-	rplib.Shellexec("dhclient", "-x")
-	rplib.Sync()
+	log.Println("[set next recoverytype to factory_restore]")
+	err = updateUbootEnv(parts)
+	rplib.Checkerr(err)
 }
