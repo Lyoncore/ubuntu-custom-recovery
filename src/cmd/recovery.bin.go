@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/Lyoncore/arm-config/src/part"
+	recoverydirs "github.com/Lyoncore/ubuntu-recovery-rplib/dirs/recovery"
 	"github.com/mvo5/uboot-go/uenv"
 	"github.com/snapcore/snapd/logger"
 
@@ -59,15 +60,12 @@ const (
 	WRITABLE_TARBALL     = RECO_FACTORY_DIR + "writable.tar.xz"
 	LOG_PATH             = WRITABLE_MNT_DIR + "system-data/var/log/recovery/log.txt"
 
-	SYSTEM_DATA_PATH               = WRITABLE_MNT_DIR + "system-data/"
-	SNAPS_SRC_PATH                 = RECO_FACTORY_DIR + "snaps/"
-	DEV_SNAPS_SRC_PATH             = RECO_FACTORY_DIR + "snaps-devmode/"
-	OEM_SNAPS_PATH                 = SYSTEM_DATA_PATH + "/var/lib/oem/"
-	MULTI_USER_TARGET_WANTS_FOLDER = "/etc/systemd/system/multi-user.target.wants/"
-	SYSTEMD_SYSTEM_DIR             = "/lib/systemd/system/"
-	FIRSTBOOT_SERVICE_FILE         = "devmode-firstboot.service"
-	FIRSTBOOT_SERVICE_FILE_SRC     = SYSTEMD_SYSTEM_DIR + FIRSTBOOT_SERVICE_FILE
-	FIRSTBOOT_SREVICE_SCRIPT       = "/var/lib/devmode-firstboot/conf.sh"
+	SYSTEM_DATA_PATH         = WRITABLE_MNT_DIR + "system-data/"
+	SNAPS_SRC_PATH           = RECO_FACTORY_DIR + "snaps/"
+	DEV_SNAPS_SRC_PATH       = RECO_FACTORY_DIR + "snaps-devmode/"
+	OEM_SNAPS_PATH           = SYSTEM_DATA_PATH + "/var/lib/oem/"
+	SYSTEMD_SYSTEM_DIR       = "/lib/systemd/system/"
+	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
 
 	UBOOT_ENV = SYSBOOT_MNT_DIR + "uboot.env"
 )
@@ -365,14 +363,39 @@ func CopySnaps() error {
 	return nil
 }
 
-func addFirstBootService(RecoveryType, RecoveryLabel string) {
-	err := rplib.CopyTree(filepath.Join(RECO_FACTORY_DIR, RecoveryType), SYSTEM_DATA_PATH)
-	// FIXME, remove .gitkeep
-	rplib.Checkerr(err)
-	err = os.Symlink(FIRSTBOOT_SERVICE_FILE_SRC, filepath.Join(SYSTEM_DATA_PATH, MULTI_USER_TARGET_WANTS_FOLDER, FIRSTBOOT_SERVICE_FILE))
-	rplib.Checkerr(err)
+func AddFirstBootService(RecoveryType, RecoveryLabel string) error {
+	// before add firstboot service
+	// we need to do what "writable-paths" normally does on
+	// boot for etc/systemd/system, i.e. copy all the stuff
+	// from the os into the writable partition. normally
+	// this is the job of the initrd, however it won't touch
+	// the dir if there are files in there already. and a
+	// kernel/os install will create auto-mount units in there
+	// TODO: this is workaround, better to copy from os.snap
+
+	src := filepath.Join("etc", "systemd", "system")
+	dst := filepath.Join(SYSTEM_DATA_PATH, "etc", "systemd", "system")
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return err
+	}
+
+	if err := rplib.CopyTree(src, dst); err != nil {
+		return err
+	}
+
+	// unpack writable_local-include
+	cmd := exec.Command("unsquashfs", "-f", "-d", WRITABLE_MNT_DIR, recoverydirs.WritableLocalIncludeSquashfs)
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+
 	err = ioutil.WriteFile(filepath.Join(SYSTEM_DATA_PATH, FIRSTBOOT_SREVICE_SCRIPT), []byte(fmt.Sprintf("RECOVERYFSLABEL=\"%s\"\nRECOVERY_TYPE=\"%s\"\n", RecoveryLabel, RecoveryType)), 0644)
-	rplib.Checkerr(err)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 //FIXME: now only support eth0, enx0 interface
@@ -486,7 +509,8 @@ func main() {
 
 	// add firstboot service
 	log.Println("[Add FIRSTBOOT service]")
-	addFirstBootService(RecoveryType, RecoveryLabel)
+	err = AddFirstBootService(RecoveryType, RecoveryLabel)
+	rplib.Checkerr(err)
 
 	switch RecoveryType {
 	case rplib.FACTORY_INSTALL:

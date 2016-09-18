@@ -136,6 +136,8 @@ func (s *MainTestSuite) SetUpSuite(c *C) {
 }
 
 func (s *MainTestSuite) TearDownSuite(c *C) {
+	LoopUnloopImg("", gptLoop)
+	LoopUnloopImg("", mbrLoop)
 	os.Remove(MBRimage)
 	os.Remove(GPTimage)
 }
@@ -369,6 +371,50 @@ func (s *MainTestSuite) TestCopySnaps(c *C) {
 	cmp = bytes.Compare(rdevSnap, wdevSnap)
 	c.Assert(cmp, Equals, 0)
 
+	os.RemoveAll(reco.WRITABLE_MNT_DIR)
+	os.RemoveAll("/recovery")
+}
+
+func (s *MainTestSuite) TestAddFirstBootService(c *C) {
+	//Create testing files
+	var RecoveryType = "recovery"
+	var RecoveryLabel = "recovery"
+	var EtcPath = "etc/systemd/system"
+	err := os.MkdirAll(reco.RECO_FACTORY_DIR, 0755)
+	c.Assert(err, IsNil)
+	err = os.MkdirAll(reco.SYSTEM_DATA_PATH, 0755)
+	c.Assert(err, IsNil)
+	err = os.MkdirAll(reco.WRITABLE_MNT_DIR, 0755)
+	c.Assert(err, IsNil)
+	err = os.MkdirAll(EtcPath, 0755)
+	c.Assert(err, IsNil)
+
+	err = rplib.FileCopy("tests/syslog.service", EtcPath)
+	c.Assert(err, IsNil)
+
+	err = rplib.FileCopy("tests/writable_local-include.squashfs", "/recovery/")
+	c.Assert(err, IsNil)
+
+	err = reco.AddFirstBootService(RecoveryType, RecoveryLabel)
+	c.Assert(err, IsNil)
+
+	// Verify
+	// Verify /etc/systemd/system/syslog.service should be exist
+	_, err = os.Stat(filepath.Join(reco.SYSTEM_DATA_PATH, "/etc/systemd/system/syslog.service"))
+	c.Check(err, IsNil)
+
+	// Verify writable_local-include/system-data/etc/systemd/system/devmode-firstboot.service should be exist
+	_, err = os.Stat(filepath.Join(reco.WRITABLE_MNT_DIR, "system-data/etc/systemd/system/devmode-firstboot.service"))
+	c.Check(err, IsNil)
+
+	// Verify conf.sh data
+	wdata := []byte(fmt.Sprintf("RECOVERYFSLABEL=\"%s\"\nRECOVERY_TYPE=\"%s\"\n", RecoveryLabel, RecoveryType))
+	rdata, err := ioutil.ReadFile(filepath.Join(reco.SYSTEM_DATA_PATH, reco.FIRSTBOOT_SREVICE_SCRIPT))
+	c.Assert(err, IsNil)
+	cmp := bytes.Compare(rdata, wdata)
+	c.Assert(cmp, Equals, 0)
+
+	os.RemoveAll(EtcPath)
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)
 	os.RemoveAll("/recovery")
 }
