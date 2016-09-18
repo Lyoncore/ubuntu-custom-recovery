@@ -327,7 +327,9 @@ func RestoreAsserions() error {
 func EnableLogger() error {
 	if _, err := os.Stat(path.Dir(LOG_PATH)); err != nil {
 		err = os.MkdirAll(path.Dir(LOG_PATH), 0755)
-		return err
+		if err != nil {
+			return err
+		}
 	}
 	log_writable, err := os.OpenFile(LOG_PATH, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
