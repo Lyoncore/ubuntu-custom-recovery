@@ -324,22 +324,19 @@ func RestoreAsserions() error {
 	return nil
 }
 
-func enableLogger(parts *part.Partitions) {
-	_, err := os.Stat(WRITABLE_MNT_DIR)
-	if err != nil {
-		err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
-		rplib.Checkerr(err)
+func EnableLogger() error {
+	if _, err := os.Stat(path.Dir(LOG_PATH)); err != nil {
+		err = os.MkdirAll(path.Dir(LOG_PATH), 0755)
+		return err
 	}
-	err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
-	rplib.Checkerr(err)
-	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
-
-	err = os.MkdirAll(path.Dir(LOG_PATH), 0755)
-	rplib.Checkerr(err)
 	log_writable, err := os.OpenFile(LOG_PATH, os.O_CREATE|os.O_WRONLY, 0600)
-	rplib.Checkerr(err)
+	if err != nil {
+		return err
+	}
+
 	f := io.MultiWriter(log_writable, os.Stdout)
 	log.SetOutput(f)
+	return nil
 }
 
 func copySnaps() {
@@ -460,7 +457,8 @@ func main() {
 	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
 
 	// stream log to stdout and writable partition
-	enableLogger(parts)
+	err = EnableLogger()
+	rplib.Checkerr(err)
 	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
 
 	// Copy snaps

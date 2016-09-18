@@ -24,9 +24,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -234,15 +236,10 @@ func (s *MainTestSuite) TestRestoreAssertions(c *C) {
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(reco.ASSERTION_BACKUP_DIR)
 
-	// Find boot device, all other partiitons info
 	err = reco.RestoreAsserions()
 	c.Assert(err, IsNil)
 
 	// Verify
-	err = os.MkdirAll(gptMnt, 0755)
-	c.Assert(err, IsNil)
-	defer os.Remove(gptMnt)
-
 	rdata, err := ioutil.ReadFile(filepath.Join(reco.WRITABLE_MNT_DIR, reco.ASSERTION_DIR, "assertion"))
 	c.Assert(err, IsNil)
 	cmp := bytes.Compare(rdata, wdata)
@@ -320,5 +317,23 @@ func (s *MainTestSuite) TestRestoreParts(c *C) {
 	LoopUnloopImg("", gptLoop)
 
 	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
+	os.RemoveAll(reco.WRITABLE_MNT_DIR)
+}
+
+func (s *MainTestSuite) TestEnableLogger(c *C) {
+	//Create testing files
+	wdata := []byte("hello logger\n")
+
+	err := reco.EnableLogger()
+	c.Assert(err, IsNil)
+
+	log.Printf("%s", wdata)
+
+	// Verify
+	rdata, err := ioutil.ReadFile(reco.LOG_PATH)
+	c.Assert(err, IsNil)
+	found := strings.Contains(string(rdata), string(wdata))
+	c.Assert(found, Equals, true)
+
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)
 }
