@@ -63,15 +63,15 @@ var part_size int64 = 600 * 1024 * 1024
 
 func LoopUnloopImg(mntImg string, umntLoop string) {
 	if umntLoop != "" {
-		cmd := exec.Command("sudo", "kpartx", "-ds", fmt.Sprintf("/dev/%s", umntLoop))
+		cmd := exec.Command("sudo", "kpartx", "-ds", filepath.Join("/dev/", umntLoop))
 		cmd.Run()
-		cmd = exec.Command("sudo", "losetup", "-d", fmt.Sprintf("/dev/%s", umntLoop))
+		cmd = exec.Command("sudo", "losetup", "-d", filepath.Join("/dev/", umntLoop))
 		cmd.Run()
 	}
 
 	if mntImg != "" {
 		mbrLoop = rplib.Shellcmdoutput(fmt.Sprintf("sudo losetup --find --show %s | xargs basename", mntImg))
-		cmd := exec.Command("sudo", "kpartx", "-avs", fmt.Sprintf("/dev/%s", mbrLoop))
+		cmd := exec.Command("sudo", "kpartx", "-avs", filepath.Join("/dev/", mbrLoop))
 		cmd.Run()
 	}
 }
@@ -91,7 +91,7 @@ func (s *MainTestSuite) SetUpSuite(c *C) {
 	cmd2.Wait()
 
 	mbrLoop = rplib.Shellcmdoutput(fmt.Sprintf("sudo losetup --find --show %s | xargs basename", MBRimage))
-	cmd := exec.Command("sudo", "kpartx", "-avs", fmt.Sprintf("/dev/%s", mbrLoop))
+	cmd := exec.Command("sudo", "kpartx", "-avs", filepath.Join("/dev/", mbrLoop))
 	cmd.Run()
 	cmd = exec.Command("sudo", "mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
 	cmd.Run()
@@ -102,9 +102,9 @@ func (s *MainTestSuite) SetUpSuite(c *C) {
 	cmd = exec.Command("sudo", "partprobe")
 	cmd.Run()
 
-	cmd = exec.Command("sudo", "kpartx", "-ds", fmt.Sprintf("/dev/%s", mbrLoop))
+	cmd = exec.Command("sudo", "kpartx", "-ds", filepath.Join("/dev/", mbrLoop))
 	cmd.Run()
-	cmd = exec.Command("sudo", "losetup", "-d", fmt.Sprintf("/dev/%s", mbrLoop))
+	cmd = exec.Command("sudo", "losetup", "-d", filepath.Join("/dev/", mbrLoop))
 	cmd.Run()
 
 	//Create a GPT image
@@ -120,7 +120,7 @@ func (s *MainTestSuite) SetUpSuite(c *C) {
 	cmd2.Wait()
 
 	gptLoop = rplib.Shellcmdoutput(fmt.Sprintf("sudo losetup --find --show %s | xargs basename", GPTimage))
-	cmd = exec.Command("sudo", "kpartx", "-avs", fmt.Sprintf("/dev/%s", gptLoop))
+	cmd = exec.Command("sudo", "kpartx", "-avs", filepath.Join("/dev/", gptLoop))
 	cmd.Run()
 	cmd = exec.Command("sudo", "mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, RecoveryPart))
 	cmd.Run()
@@ -128,9 +128,9 @@ func (s *MainTestSuite) SetUpSuite(c *C) {
 	cmd.Run()
 	cmd = exec.Command("sudo", "mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart))
 	cmd.Run()
-	cmd = exec.Command("sudo", "kpartx", "-ds", fmt.Sprintf("/dev/%s", mbrLoop))
+	cmd = exec.Command("sudo", "kpartx", "-ds", filepath.Join("/dev/", mbrLoop))
 	cmd.Run()
-	cmd = exec.Command("sudo", "losetup", "-d", fmt.Sprintf("/dev/%s", mbrLoop))
+	cmd = exec.Command("sudo", "losetup", "-d", filepath.Join("/dev/", mbrLoop))
 	cmd.Run()
 
 }
@@ -186,13 +186,13 @@ func (s *MainTestSuite) TestBackupAssertions(c *C) {
 
 	//Create testing files
 	wdata := []byte("hello\n")
-	err = os.MkdirAll(fmt.Sprintf("%s%s", gptMnt, reco.ASSERTION_DIR), 0755)
+	err = os.MkdirAll(filepath.Join(gptMnt, reco.ASSERTION_DIR), 0755)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(fmt.Sprintf("%s%s/assertion", gptMnt, reco.ASSERTION_DIR), wdata, 0644)
+	err = ioutil.WriteFile(filepath.Join(gptMnt, reco.ASSERTION_DIR, "assertion"), wdata, 0644)
 	c.Assert(err, IsNil)
 
 	//Create symlink files
-	err = os.Symlink("assertion", fmt.Sprintf("%s%s/assertion.ln", gptMnt, reco.ASSERTION_DIR))
+	err = os.Symlink("assertion", filepath.Join(gptMnt, reco.ASSERTION_DIR, "assertion.ln"))
 	c.Assert(err, IsNil)
 	//umount image
 	syscall.Unmount(gptMnt, 0)
@@ -203,17 +203,17 @@ func (s *MainTestSuite) TestBackupAssertions(c *C) {
 	err = reco.BackupAssertions(parts)
 	c.Assert(err, IsNil)
 
-	rdata, err := ioutil.ReadFile(fmt.Sprintf("%s/assertion", reco.ASSERTION_BACKUP_DIR))
+	rdata, err := ioutil.ReadFile(filepath.Join(reco.ASSERTION_BACKUP_DIR, "assertion"))
 	c.Assert(err, IsNil)
 	cmp := bytes.Compare(rdata, wdata)
 	c.Assert(cmp, Equals, 0)
 	// Check link data
-	rdata, err = ioutil.ReadFile(fmt.Sprintf("%s/assertion.ln", reco.ASSERTION_BACKUP_DIR))
+	rdata, err = ioutil.ReadFile(filepath.Join(reco.ASSERTION_BACKUP_DIR, "assertion.ln"))
 	c.Assert(err, IsNil)
 	cmp = bytes.Compare(rdata, wdata)
 	c.Assert(cmp, Equals, 0)
 	//check it's link
-	stat, err := os.Lstat(fmt.Sprintf("%s/assertion.ln", reco.ASSERTION_BACKUP_DIR))
+	stat, err := os.Lstat(filepath.Join(reco.ASSERTION_BACKUP_DIR, "assertion.ln"))
 	islink := stat.Mode()&os.ModeSymlink == os.ModeSymlink
 	c.Assert(islink, Equals, true)
 	syscall.Unmount(gptMnt, 0)
@@ -226,13 +226,13 @@ func (s *MainTestSuite) TestBackupAssertions(c *C) {
 func (s *MainTestSuite) TestRestoreAssertions(c *C) {
 	//Create testing files
 	wdata := []byte("hello\n")
-	err := os.MkdirAll(fmt.Sprintf("%s", reco.ASSERTION_BACKUP_DIR), 0755)
+	err := os.MkdirAll(reco.ASSERTION_BACKUP_DIR, 0755)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(fmt.Sprintf("%s/assertion", reco.ASSERTION_BACKUP_DIR), wdata, 0644)
+	err = ioutil.WriteFile(filepath.Join(reco.ASSERTION_BACKUP_DIR, "assertion"), wdata, 0644)
 	c.Assert(err, IsNil)
 
 	//Create symlink files
-	err = os.Symlink("assertion", fmt.Sprintf("%s/assertion.ln", reco.ASSERTION_BACKUP_DIR))
+	err = os.Symlink("assertion", filepath.Join(reco.ASSERTION_BACKUP_DIR, "assertion.ln"))
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(reco.ASSERTION_BACKUP_DIR)
 
@@ -287,14 +287,14 @@ func (s *MainTestSuite) TestRestoreParts(c *C) {
 	//Check extrat data
 	err = syscall.Mount(fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, SysbootPart), gptMnt, "vfat", 0, "")
 	c.Assert(err, IsNil)
-	rdata, err := ioutil.ReadFile(fmt.Sprintf("%s/system-boot", gptMnt))
+	rdata, err := ioutil.ReadFile(filepath.Join(gptMnt, "system-boot"))
 	c.Assert(err, IsNil)
 	err = os.MkdirAll(SYS_TAR_TMP, 0755)
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(SYS_TAR_TMP)
 	cmd := exec.Command("tar", "--xattrs", "-xJvpf", SYS_TAR, "-C", SYS_TAR_TMP)
 	cmd.Run()
-	wdata, err := ioutil.ReadFile(fmt.Sprintf("%s/system-boot", SYS_TAR_TMP))
+	wdata, err := ioutil.ReadFile(filepath.Join(SYS_TAR_TMP, "system-boot"))
 	cmp := bytes.Compare(rdata, wdata)
 	c.Assert(cmp, Equals, 0)
 	syscall.Unmount(gptMnt, 0)
@@ -302,14 +302,14 @@ func (s *MainTestSuite) TestRestoreParts(c *C) {
 	//Check extrat data
 	err = syscall.Mount(fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart), gptMnt, "ext4", 0, "")
 	c.Assert(err, IsNil)
-	rdata, err = ioutil.ReadFile(fmt.Sprintf("%s/writable", gptMnt))
+	rdata, err = ioutil.ReadFile(filepath.Join(gptMnt, "writable"))
 	c.Assert(err, IsNil)
 	err = os.MkdirAll(WR_TAR_TMP, 0755)
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(WR_TAR_TMP)
 	cmd = exec.Command("tar", "--xattrs", "-xJvpf", WR_TAR, "-C", WR_TAR_TMP)
 	cmd.Run()
-	wdata, err = ioutil.ReadFile(fmt.Sprintf("%s/writable", WR_TAR_TMP))
+	wdata, err = ioutil.ReadFile(filepath.Join(WR_TAR_TMP, "writable"))
 	cmp = bytes.Compare(rdata, wdata)
 	c.Assert(cmp, Equals, 0)
 	syscall.Unmount(gptMnt, 0)
@@ -336,4 +336,39 @@ func (s *MainTestSuite) TestEnableLogger(c *C) {
 	c.Assert(found, Equals, true)
 
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)
+}
+
+func (s *MainTestSuite) TestCopySnaps(c *C) {
+	//Create testing files
+	const TEST_SNAP = "test.snap"
+	const TEST_DEV_SNAP = "test_dev.snap"
+
+	err := os.MkdirAll(reco.SNAPS_SRC_PATH, 0755)
+	c.Assert(err, IsNil)
+	wsnap := []byte("hello snaps\n")
+	err = ioutil.WriteFile(filepath.Join(reco.SNAPS_SRC_PATH, TEST_SNAP), wsnap, 0644)
+	c.Assert(err, IsNil)
+
+	err = os.MkdirAll(reco.DEV_SNAPS_SRC_PATH, 0755)
+	c.Assert(err, IsNil)
+	wdevSnap := []byte("hello dev snaps\n")
+	err = ioutil.WriteFile(filepath.Join(reco.DEV_SNAPS_SRC_PATH, TEST_DEV_SNAP), wdevSnap, 0644)
+	c.Assert(err, IsNil)
+
+	err = reco.CopySnaps()
+	c.Assert(err, IsNil)
+
+	// Verify
+	rsnap, err := ioutil.ReadFile(filepath.Join(reco.OEM_SNAPS_PATH, TEST_SNAP))
+	c.Assert(err, IsNil)
+	cmp := bytes.Compare(rsnap, wsnap)
+	c.Assert(cmp, Equals, 0)
+
+	rdevSnap, err := ioutil.ReadFile(filepath.Join(reco.OEM_SNAPS_PATH, TEST_DEV_SNAP))
+	c.Assert(err, IsNil)
+	cmp = bytes.Compare(rdevSnap, wdevSnap)
+	c.Assert(cmp, Equals, 0)
+
+	os.RemoveAll(reco.WRITABLE_MNT_DIR)
+	os.RemoveAll("/recovery")
 }

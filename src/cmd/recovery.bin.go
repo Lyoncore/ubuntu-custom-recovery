@@ -90,13 +90,12 @@ func fmtPartPath(devPath string, nr int) string {
 	}
 }
 
+// TODO: bootloader if need to support grub
 func RestoreParts(parts *part.Partitions, bootloader string, partType string) error {
 	var dev_path string = strings.Replace(parts.DevPath, "mapper/", "", -1)
 	if partType == "gpt" {
 		rplib.Shellexec("sgdisk", dev_path, "--randomize-guids", "--move-second-header")
 	}
-
-	//TODO: bootloader if need to support grub
 
 	// Keep system-boot partition, and only mkfs
 	if parts.Sysboot_nr == -1 {
@@ -341,12 +340,29 @@ func EnableLogger() error {
 	return nil
 }
 
-func copySnaps() {
-	os.MkdirAll(OEM_SNAPS_PATH, 0755)
-	err := rplib.CopyTree(SNAPS_SRC_PATH, OEM_SNAPS_PATH)
-	rplib.Checkerr(err)
-	err = rplib.CopyTree(DEV_SNAPS_SRC_PATH, OEM_SNAPS_PATH)
-	rplib.Checkerr(err)
+func CopySnaps() error {
+	if _, err := os.Stat(OEM_SNAPS_PATH); err != nil {
+		err = os.MkdirAll(OEM_SNAPS_PATH, 0755)
+		if err != nil {
+			return err
+		}
+	}
+
+	if _, err := os.Stat(SNAPS_SRC_PATH); err == nil {
+		err = rplib.CopyTree(SNAPS_SRC_PATH, OEM_SNAPS_PATH)
+		if err != nil {
+			return err
+		}
+	}
+
+	if _, err := os.Stat(DEV_SNAPS_SRC_PATH); err == nil {
+		err = rplib.CopyTree(DEV_SNAPS_SRC_PATH, OEM_SNAPS_PATH)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func addFirstBootService(RecoveryType, RecoveryLabel string) {
@@ -465,7 +481,8 @@ func main() {
 
 	// Copy snaps
 	log.Println("[Add snaps for oem]")
-	copySnaps()
+	err = CopySnaps()
+	rplib.Checkerr(err)
 
 	// add firstboot service
 	log.Println("[Add FIRSTBOOT service]")
