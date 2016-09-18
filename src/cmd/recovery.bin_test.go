@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"testing"
 
@@ -221,7 +222,6 @@ func (s *MainTestSuite) TestBackupAssertions(c *C) {
 }
 
 func (s *MainTestSuite) TestRestoreAssertions(c *C) {
-	LoopUnloopImg(GPTimage, "")
 	//Create testing files
 	wdata := []byte("hello\n")
 	err := os.MkdirAll(fmt.Sprintf("%s", reco.ASSERTION_BACKUP_DIR), 0755)
@@ -235,34 +235,27 @@ func (s *MainTestSuite) TestRestoreAssertions(c *C) {
 	defer os.RemoveAll(reco.ASSERTION_BACKUP_DIR)
 
 	// Find boot device, all other partiitons info
-	parts, err := part.GetPartitions(RecoveryLabel)
-	c.Assert(err, IsNil)
-	err = reco.RestoreAsserions(parts)
+	err = reco.RestoreAsserions()
 	c.Assert(err, IsNil)
 
 	// Verify
 	err = os.MkdirAll(gptMnt, 0755)
 	c.Assert(err, IsNil)
 	defer os.Remove(gptMnt)
-	err = syscall.Mount(fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart), gptMnt, "ext4", 0, "")
-	c.Assert(err, IsNil)
 
-	rdata, err := ioutil.ReadFile(fmt.Sprintf("%s/%s/assertion", gptMnt, reco.ASSERTION_DIR))
+	rdata, err := ioutil.ReadFile(filepath.Join(reco.WRITABLE_MNT_DIR, reco.ASSERTION_DIR, "assertion"))
 	c.Assert(err, IsNil)
 	cmp := bytes.Compare(rdata, wdata)
 	c.Assert(cmp, Equals, 0)
 	// Check link data
-	rdata, err = ioutil.ReadFile(fmt.Sprintf("%s/%s/assertion.ln", gptMnt, reco.ASSERTION_DIR))
+	rdata, err = ioutil.ReadFile(filepath.Join(reco.WRITABLE_MNT_DIR, reco.ASSERTION_DIR, "assertion.ln"))
 	c.Assert(err, IsNil)
 	cmp = bytes.Compare(rdata, wdata)
 	c.Assert(cmp, Equals, 0)
 	//check it's link
-	stat, err := os.Lstat(fmt.Sprintf("%s/%s/assertion.ln", gptMnt, reco.ASSERTION_DIR))
+	stat, err := os.Lstat(filepath.Join(reco.WRITABLE_MNT_DIR, reco.ASSERTION_DIR, "assertion.ln"))
 	islink := stat.Mode()&os.ModeSymlink == os.ModeSymlink
 	c.Assert(islink, Equals, true)
-
-	syscall.Unmount(gptMnt, 0)
-	LoopUnloopImg("", gptLoop)
 
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)
 }

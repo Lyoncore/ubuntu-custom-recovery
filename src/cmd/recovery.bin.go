@@ -313,20 +313,10 @@ func BackupAssertions(parts *part.Partitions) error {
 	return nil
 }
 
-func RestoreAsserions(parts *part.Partitions) error {
+func RestoreAsserions() error {
 
 	if _, err := os.Stat(ASSERTION_BACKUP_DIR); err == nil {
 		// mount writable to restore
-		err := os.MkdirAll(WRITABLE_MNT_DIR, 0755)
-		if err != nil {
-			return err
-		}
-		err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
-		if err != nil {
-			return err
-		}
-		defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
-
 		log.Println("Restore gpg key and serial")
 		return rplib.CopyTree(ASSERTION_BACKUP_DIR, filepath.Join(WRITABLE_MNT_DIR, ASSERTION_DIR))
 	}
@@ -460,6 +450,15 @@ func main() {
 	log.Println("[rebuild the partitions]")
 	RestoreParts(parts, configs.Configs.Bootloader, configs.Configs.PartitionType)
 
+	//Mount writable for logger and restore data
+	if _, err = os.Stat(WRITABLE_MNT_DIR); err != nil {
+		err := os.MkdirAll(WRITABLE_MNT_DIR, 0755)
+		rplib.Checkerr(err)
+	}
+	err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
+	rplib.Checkerr(err)
+	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
+
 	// stream log to stdout and writable partition
 	enableLogger(parts)
 	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
@@ -489,7 +488,7 @@ func main() {
 	case rplib.FACTORY_RESTORE:
 		log.Println("[User restores system]")
 		// restore assertion if ever signed
-		RestoreAsserions(parts)
+		RestoreAsserions()
 	}
 
 	//Darren works here
