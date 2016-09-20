@@ -40,7 +40,7 @@ done
 [ -n "$recoverytype" ] || exit 0 # nothing to do in non-recovery mode
 
 #get recovery_label
-recoverylabel=$(tr " " "\n" </proc/cmdline | grep "root=LABEL=" | sed -e 's/root=LABEL=\(.*\)/\1/')
+recoverylabel=$(tr " " "\n" </proc/cmdline | grep "recovery=LABEL=" | sed -e 's/recovery=LABEL=\(.*\)/\1/')
 
 BASE=/run/initramfs/recovery
 mkdir -p $BASE
