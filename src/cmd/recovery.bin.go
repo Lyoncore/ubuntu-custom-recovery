@@ -36,8 +36,6 @@ import (
 
 	"github.com/Lyoncore/arm-config/src/part"
 	recoverydirs "github.com/Lyoncore/ubuntu-recovery-rplib/dirs/recovery"
-	"github.com/mvo5/uboot-go/uenv"
-	"github.com/snapcore/snapd/logger"
 
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 )
@@ -67,7 +65,11 @@ const (
 	SYSTEMD_SYSTEM_DIR       = "/lib/systemd/system/"
 	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
 
-	UBOOT_ENV = SYSBOOT_MNT_DIR + "uboot.env"
+	UBOOT_ENV              = SYSBOOT_MNT_DIR + "uboot.env"
+	UBOOT_ENV_IN           = SYSBOOT_MNT_DIR + "uboot.env.in"
+	RECOVERY_PARTITION_DIR = "/recovery_partition/"
+	UBOOT_ENV_SRC          = RECOVERY_PARTITION_DIR + "uboot.env"
+	UBOOT_ENV_IN_SRC       = RECOVERY_PARTITION_DIR + "uboot.env.in"
 )
 
 func mib2Blocks(size int) int {
@@ -189,71 +191,15 @@ menuentry "%s" {
 	f.Close()
 }
 
-func updateUbootEnv(parts *part.Partitions) error {
-	// mount system-boot to update uboot.env
-	_, err := os.Stat(SYSBOOT_MNT_DIR)
-	if err != nil {
-		err = os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
-		if err != nil {
-			return err
-		}
-	}
-	err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Sysboot_nr), SYSBOOT_MNT_DIR, "vfat", 0, "")
+func UpdateUbootEnv() error {
+	err := rplib.FileCopy(UBOOT_ENV_SRC, UBOOT_ENV)
 	if err != nil {
 		return err
 	}
-	defer syscall.Unmount(SYSBOOT_MNT_DIR, 0)
-
-	// update uboot.env
-	env, err := uenv.Open(UBOOT_ENV)
+	err = rplib.FileCopy(UBOOT_ENV_IN_SRC, UBOOT_ENV_IN)
 	if err != nil {
 		return err
 	}
-
-	var name, value string
-	//update env
-	//1. mmcreco=1
-	name = "mmcreco"
-	value = "1"
-	env.Set(name, value)
-	err = env.Save()
-	if err != nil {
-		return err
-	}
-
-	//2. mmcpart=2
-	name = "mmcpart"
-	value = "2"
-	env.Set(name, value)
-	err = env.Save()
-	if err != nil {
-		return err
-	}
-
-	//3. snappy_boot
-	name = "snappy_boot"
-	value = "if test \"${snap_mode}\" = \"try\"; then setenv snap_mode \"trying\"; saveenv; if test \"${snap_try_core}\" != \"\"; then setenv snap_core \"${snap_try_core}\"; fi; if test \"${snap_try_kernel}\" != \"\"; then setenv snap_kernel \"${snap_try_kernel}\"; fi; elif test \"${snap_mode}\" = \"trying\"; then setenv snap_mode \"\"; saveenv; elif test \"${snap_mode}\" = \"recovery\"; then setenv loadinitrd \"load mmc ${mmcdev}:${mmcreco} ${initrd_addr} ${initrd_file}; setenv initrd_size ${filesize}\"; setenv loadkernel \"load mmc ${mmcdev}:${mmcreco} ${loadaddr} ${kernel_file}\"; setenv factory_recovery \"run loadfiles; setenv mmcroot \"/dev/disk/by-label/writable ${snappy_cmdline} snap_core=${snap_core} snap_kernel=${snap_kernel} recoverytype=factory_restore\"; run mmcargs; bootz ${loadaddr} ${initrd_addr}:${initrd_size} 0x02000000\"; echo \"RECOVERY\"; run factory_recovery; fi; run loadfiles; setenv mmcroot \"/dev/disk/by-label/writable ${snappy_cmdline} snap_core=${snap_core} snap_kernel=${snap_kernel}\"; run mmcargs; bootz ${loadaddr} ${initrd_addr}:${initrd_size} 0x02000000"
-	env.Set(name, value)
-	err = env.Save()
-	if err != nil {
-		return err
-	}
-
-	//4. loadbootenv (load uboot.env from system-boot, because snapd always update uboot.env in system-boot while os/kernel snap updated)
-	name = "loadbootenv"
-	value = "load ${devtype} ${devnum}:${mmcpart} ${loadaddr} ${bootenv}"
-	env.Set(name, value)
-	err = env.Save()
-	if err != nil {
-		return err
-	}
-
-	//5. bootenv (for system-boot/uboot.env)
-	name = "bootenv"
-	value = "uboot.env"
-	env.Set(name, value)
-	err = env.Save()
-
 	return err
 }
 
@@ -444,23 +390,23 @@ func serialVaultService() error {
 
 func main() {
 	//setup logger
-	logger.SimpleSetup()
+	//logger.SimpleSetup()
 
 	if "" == version {
 		version = Version
 	}
 
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
-	logger.Noticef("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
+	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
 
 	flag.Parse()
 	if len(flag.Args()) != 2 {
-		logger.Noticef(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] and [RECOVERY_LABEL]. Current arguments: %v", flag.Args()))
+		log.Panicf(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] and [RECOVERY_LABEL]. Current arguments: %v", flag.Args()))
 	}
 	// TODO: use enum to represent RECOVERY_TYPE
 	var RecoveryType, RecoveryLabel = flag.Arg(0), flag.Arg(1)
-	logger.Debugf("RECOVERY_TYPE: ", RecoveryType)
-	logger.Debugf("RECOVERY_LABEL: ", RecoveryLabel)
+	log.Printf("RECOVERY_TYPE: ", RecoveryType)
+	log.Printf("RECOVERY_LABEL: ", RecoveryLabel)
 
 	// Load config.yaml
 	err := configs.Load(CONFIG_YAML)
@@ -470,7 +416,7 @@ func main() {
 	// Find boot device, all other partiitons info
 	parts, err := part.GetPartitions(RecoveryLabel)
 	if err != nil {
-		logger.Panicf("Boot device not found, error: %s\n", err)
+		log.Panicf("Boot device not found, error: %s\n", err)
 	}
 
 	// TODO: verify the image
@@ -496,6 +442,14 @@ func main() {
 	err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
 	rplib.Checkerr(err)
 	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
+	//Mount system-boot for logger and restore data
+	if _, err = os.Stat(SYSBOOT_MNT_DIR); err != nil {
+		err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
+		rplib.Checkerr(err)
+	}
+	err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Sysboot_nr), SYSBOOT_MNT_DIR, "vfat", 0, "")
+	rplib.Checkerr(err)
+	defer syscall.Unmount(SYSBOOT_MNT_DIR, 0)
 
 	// stream log to stdout and writable partition
 	err = EnableLogger()
@@ -537,6 +491,6 @@ func main() {
 	log.Println("Update uboot env(ESP/system-boot)")
 	//fsck needs ignore error code
 	log.Println("[set next recoverytype to factory_restore]")
-	err = updateUbootEnv(parts)
+	err = UpdateUbootEnv()
 	rplib.Checkerr(err)
 }

@@ -418,3 +418,32 @@ func (s *MainTestSuite) TestAddFirstBootService(c *C) {
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)
 	os.RemoveAll("/recovery")
 }
+
+func (s *MainTestSuite) TestUpdateUbootEnv(c *C) {
+	//Create testing files
+	err := os.MkdirAll(reco.SYSBOOT_MNT_DIR, 0755)
+	c.Assert(err, IsNil)
+	err = os.MkdirAll(reco.RECOVERY_PARTITION_DIR, 0755)
+	c.Assert(err, IsNil)
+
+	err = rplib.FileCopy("tests/uboot.env", reco.RECOVERY_PARTITION_DIR)
+	c.Assert(err, IsNil)
+
+	err = rplib.FileCopy("tests/uboot.env.in", reco.RECOVERY_PARTITION_DIR)
+	c.Assert(err, IsNil)
+
+	err = reco.UpdateUbootEnv()
+	c.Assert(err, IsNil)
+
+	// Verify
+	// Verify SYSBOOT_MNT_DIR/uboot.env should be exist
+	_, err = os.Stat(filepath.Join(reco.SYSBOOT_MNT_DIR, "uboot.env"))
+	c.Check(err, IsNil)
+
+	// Verify SYSBOOT_MNT_DIR/uboot.env.in should be exist
+	_, err = os.Stat(filepath.Join(reco.SYSBOOT_MNT_DIR, "uboot.env.in"))
+	c.Check(err, IsNil)
+
+	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
+	os.RemoveAll(reco.RECOVERY_PARTITION_DIR)
+}
