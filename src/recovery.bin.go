@@ -34,7 +34,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Lyoncore/arm-config/src/part"
 	recoverydirs "github.com/Lyoncore/ubuntu-recovery-rplib/dirs/recovery"
 
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
@@ -91,7 +90,7 @@ func fmtPartPath(devPath string, nr int) string {
 }
 
 // TODO: bootloader if need to support grub
-func RestoreParts(parts *part.Partitions, bootloader string, partType string) error {
+func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	var dev_path string = strings.Replace(parts.DevPath, "mapper/", "", -1)
 	if partType == "gpt" {
 		rplib.Shellexec("sgdisk", dev_path, "--randomize-guids", "--move-second-header")
@@ -105,7 +104,7 @@ func RestoreParts(parts *part.Partitions, bootloader string, partType string) er
 		return fmt.Errorf("Oops, We lose system-boot")
 	}
 	sysboot_path := fmtPartPath(parts.DevPath, parts.Sysboot_nr)
-	cmd := exec.Command("mkfs.vfat", "-F", "32", "-n", part.SysbootLabel, sysboot_path)
+	cmd := exec.Command("mkfs.vfat", "-F", "32", "-n", SysbootLabel, sysboot_path)
 	cmd.Run()
 	err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
 	if err != nil {
@@ -137,7 +136,7 @@ func RestoreParts(parts *part.Partitions, bootloader string, partType string) er
 	}
 
 	if partType == "gpt" {
-		cmd = exec.Command("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "ext4", writable_start, "-1M", "name", writable_nr, part.WritableLabel)
+		cmd = exec.Command("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "ext4", writable_start, "-1M", "name", writable_nr, WritableLabel)
 		cmd.Run()
 	} else { //mbr
 		cmd = exec.Command("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "fat32", writable_start, "-1M")
@@ -147,7 +146,7 @@ func RestoreParts(parts *part.Partitions, bootloader string, partType string) er
 	cmd = exec.Command("udevadm", "settle")
 	cmd.Run()
 
-	cmd = exec.Command("mkfs.ext4", "-F", "-L", part.WritableLabel, writable_path)
+	cmd = exec.Command("mkfs.ext4", "-F", "-L", WritableLabel, writable_path)
 	cmd.Run()
 	err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
 	rplib.Checkerr(err)
@@ -225,7 +224,7 @@ func ConfirmRecovry(in *os.File) bool {
 	return true
 }
 
-func BackupAssertions(parts *part.Partitions) error {
+func BackupAssertions(parts *Partitions) error {
 	// back up serial assertion
 	err := os.MkdirAll(WRITABLE_MNT_DIR, 0755)
 	if err != nil {
@@ -414,7 +413,7 @@ func main() {
 	log.Println(configs)
 
 	// Find boot device, all other partiitons info
-	parts, err := part.GetPartitions(RecoveryLabel)
+	parts, err := GetPartitions(RecoveryLabel)
 	if err != nil {
 		log.Panicf("Boot device not found, error: %s\n", err)
 	}

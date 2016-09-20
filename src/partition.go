@@ -15,7 +15,7 @@
  *
  */
 
-package part
+package main
 
 import (
 	"bufio"

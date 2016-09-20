@@ -17,7 +17,7 @@
  *
  */
 
-package part_test
+package main_test
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/Lyoncore/arm-config/src/part"
+	reco "github.com/Lyoncore/arm-config/src"
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 	"github.com/snapcore/snapd/logger"
 	. "gopkg.in/check.v1"
@@ -134,7 +134,7 @@ func (s *GetPartSuite) TearDownSuite(c *C) {
 }
 
 func getPartsConds(c *C, Label string, Loop string, passCase bool, recoCase bool, sysbootCase bool, writableCase bool) {
-	parts, err := part.GetPartitions(Label)
+	parts, err := reco.GetPartitions(Label)
 	if passCase == false {
 		c.Check(err, NotNil)
 		c.Check(parts, IsNil)
@@ -238,7 +238,7 @@ func (s *GetPartSuite) TestgetPartitions(c *C) {
 func (s *GetPartSuite) TestFindPart(c *C) {
 
 	MountTestImg(MBRimage, "")
-	DevNode, DevPath, PartNr, err := part.FindPart(RecoveryLabel)
+	DevNode, DevPath, PartNr, err := reco.FindPart(RecoveryLabel)
 	c.Check(err, IsNil)
 	c.Check(DevNode, Equals, mbrLoop)
 	c.Check(DevPath, Equals, fmt.Sprintf("/dev/mapper/%s", DevNode))
@@ -247,7 +247,7 @@ func (s *GetPartSuite) TestFindPart(c *C) {
 	c.Check(PartNr, Equals, nr)
 
 	MountTestImg(GPTimage, mbrLoop)
-	DevNode, DevPath, PartNr, err = part.FindPart(RecoveryLabel)
+	DevNode, DevPath, PartNr, err = reco.FindPart(RecoveryLabel)
 	c.Check(err, IsNil)
 	c.Check(DevNode, Equals, gptLoop)
 	c.Check(DevPath, Equals, fmt.Sprintf("/dev/mapper/%s", DevNode))
@@ -256,7 +256,7 @@ func (s *GetPartSuite) TestFindPart(c *C) {
 	c.Check(PartNr, Equals, nr)
 	MountTestImg("", gptLoop)
 
-	DevNode, DevPath, PartNr, err = part.FindPart("WrongLabel")
+	DevNode, DevPath, PartNr, err = reco.FindPart("WrongLabel")
 	c.Check(err, NotNil)
 	c.Check(DevNode, Equals, "")
 	c.Check(DevPath, Equals, "")

@@ -30,10 +30,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"testing"
 
-	reco "github.com/Lyoncore/arm-config/src/cmd"
-	part "github.com/Lyoncore/arm-config/src/part"
+	reco "github.com/Lyoncore/arm-config/src"
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 	"github.com/snapcore/snapd/logger"
 	. "gopkg.in/check.v1"
@@ -41,25 +39,9 @@ import (
 
 const gptMnt = "/tmp/gptmnt"
 
-func Test(t *testing.T) { TestingT(t) }
-
 type MainTestSuite struct{}
 
 var _ = Suite(&MainTestSuite{})
-
-const (
-	MBRimage      = "/tmp/mbr.img"
-	GPTimage      = "/tmp/gpt.img"
-	SysbootLabel  = "system-boot"
-	WritableLabel = "writable"
-	RecoveryLabel = "recovery"
-	RecoveryPart  = "6" // /dev/mapper/loopXp6
-	SysbootPart   = "5" // /dev/mapper/loopXp5
-	WritablePart  = "7" // /dev/mapper/loopXp7
-)
-
-var mbrLoop, gptLoop string
-var part_size int64 = 600 * 1024 * 1024
 
 func LoopUnloopImg(mntImg string, umntLoop string) {
 	if umntLoop != "" {
@@ -200,7 +182,7 @@ func (s *MainTestSuite) TestBackupAssertions(c *C) {
 	syscall.Unmount(gptMnt, 0)
 
 	// Find boot device, all other partiitons info
-	parts, err := part.GetPartitions(RecoveryLabel)
+	parts, err := reco.GetPartitions(RecoveryLabel)
 	c.Assert(err, IsNil)
 	err = reco.BackupAssertions(parts)
 	c.Assert(err, IsNil)
@@ -277,7 +259,7 @@ func (s *MainTestSuite) TestRestoreParts(c *C) {
 	// GPT case
 	// Find boot device, all other partiitons info
 	LoopUnloopImg(GPTimage, "")
-	parts, err := part.GetPartitions(RecoveryLabel)
+	parts, err := reco.GetPartitions(RecoveryLabel)
 	c.Assert(err, IsNil)
 	err = reco.RestoreParts(parts, "u-boot", "gpt")
 	c.Check(err, IsNil)
@@ -414,7 +396,7 @@ func (s *MainTestSuite) TestAddFirstBootService(c *C) {
 	cmp := bytes.Compare(rdata, wdata)
 	c.Assert(cmp, Equals, 0)
 
-	os.RemoveAll(EtcPath)
+	os.RemoveAll("./etc")
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)
 	os.RemoveAll("/recovery")
 }
