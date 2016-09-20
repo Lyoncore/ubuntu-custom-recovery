@@ -103,6 +103,11 @@ func FindPart(Label string) (devNode string, devPath string, partNr int, err err
 		if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
 			devPath = devPath[:len(devPath)-1]
 		} else if devPath[len(devPath)-1] == 'p' {
+			part_nr := strings.Trim(fullPath, devPath)
+			if partNr, err = strconv.Atoi(part_nr); err != nil {
+				err = errors.New("Unknown error while FindPart")
+				return "", "", -1, err
+			}
 			devPath = devPath[:len(devPath)-1]
 			break
 		} else {
@@ -112,12 +117,6 @@ func FindPart(Label string) (devNode string, devPath string, partNr int, err err
 
 	field := strings.Split(devPath, "/")
 	devNode = field[len(field)-1]
-
-	part_nr := strings.Trim(fullPath, devPath)
-	if partNr, err = strconv.Atoi(part_nr); err != nil {
-		err = errors.New("Unknown error while FindPart")
-		return "", "", -1, err
-	}
 
 	return
 }
