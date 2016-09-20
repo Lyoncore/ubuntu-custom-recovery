@@ -14,8 +14,7 @@ For arm
 GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc go run build.go build
 
 For arm64
-GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc go run build.go build
-GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc go build -o local-includes/recovery/bin/recovery.bin src/recovery.bin.go src/version.go
+GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc go build -o local-includes/recovery/bin/recovery.bin ./src/
 ```
 
 ## generate image with ubuntu-recovery-image
