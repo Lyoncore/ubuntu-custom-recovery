@@ -1,0 +1,15 @@
+[Unit]
+Description=Run devmode firstboot setup
+After=snapd.firstboot.service snapd.service snapd.boot-ok.service snapd.socket getty.target
+DefaultDependencies=false
+# NOTE: this is hardcoded in `devmode-firstboot.sh`; keep in sync
+ConditionPathExists=!/writable/system-data/var/lib/devmode-firstboot/devmode-firstboot.stamp
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c "/bin/bash /writable/system-data/var/lib/devmode-firstboot/devmode-firstboot.sh > /dev/console"
+RemainAfterExit=yes
+Environment=TERM=xterm
+
+[Install]
+WantedBy=multi-user.target
