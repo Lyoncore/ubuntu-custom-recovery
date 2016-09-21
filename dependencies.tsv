@@ -1,4 +1,5 @@
-github.com/Lyoncore/ubuntu-recovery-rplib	git	bbeeb9a5851d6a9a67b9036802e7f55a0bab5b11	2016-08-29T09:36:10Z
+github.com/Lyoncore/ubuntu-recovery-rplib	git	4eb6bea3a1fbaf9cc1f548ce12a0a1957fefa698	2016-09-18T09:24:56Z
 github.com/snapcore/snapd	git	6d68d201f92e8faaeb00fb00f85281d8c51022c2	2016-08-15T13:25:52Z
 golang.org/x/crypto	git	60052bd85f2d91293457e8811b0cf26b773de469	2015-06-22T23:34:07Z
+gopkg.in/check.v1	git	64131543e7896d5bcc6bd5a76287eb75ea96c673	2014-10-24T13:38:53Z
 gopkg.in/yaml.v2	git	49c95bdc21843256fb6c4e0d370a05f24a0bf213	2015-02-24T22:57:58Z
