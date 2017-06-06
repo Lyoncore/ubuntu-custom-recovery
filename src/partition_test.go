@@ -187,21 +187,21 @@ func (s *GetPartSuite) TestgetPartitions(c *C) {
 	//Case 2, only recovery, system-boot partition exist
 	cmd := exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", mbrLoop, WritablePart))
 	cmd.Run()
-	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", mbrLoop))
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprintf("/dev/%s", mbrLoop))
 	cmd.Run()
 	getPartsConds(c, RecoveryLabel, mbrLoop, true, true, true, false)
 
 	//Case 3, only recovery partition exist
 	cmd = exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", mbrLoop, SysbootPart))
 	cmd.Run()
-	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", mbrLoop))
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprintf("/dev/%s", mbrLoop))
 	cmd.Run()
 	getPartsConds(c, RecoveryLabel, mbrLoop, true, true, false, false)
 
 	//Case 4, all, not exist
 	cmd = exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
 	cmd.Run()
-	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", mbrLoop))
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprintf("/dev/%s", mbrLoop))
 	cmd.Run()
 	getPartsConds(c, RecoveryLabel, mbrLoop, false, false, false, false)
 
@@ -214,21 +214,21 @@ func (s *GetPartSuite) TestgetPartitions(c *C) {
 	//Case 2, only recovery, system-boot partition exist
 	cmd = exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", gptLoop, WritablePart))
 	cmd.Run()
-	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", gptLoop))
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprintf("/dev/%s", gptLoop))
 	cmd.Run()
 	getPartsConds(c, RecoveryLabel, gptLoop, true, true, true, false)
 
 	//Case 3, only recovery partition exist
 	cmd = exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", gptLoop, SysbootPart))
 	cmd.Run()
-	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", gptLoop))
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprintf("/dev/%s", gptLoop))
 	cmd.Run()
 	getPartsConds(c, RecoveryLabel, gptLoop, true, true, false, false)
 
 	//Case 4, all, not exist
 	cmd = exec.Command("sudo", "dd", "if=/dev/zero", fmt.Sprintf("of=/dev/mapper/%sp%s", gptLoop, RecoveryPart))
 	cmd.Run()
-	cmd = exec.Command("sudo", "partprobe", fmt.Sprint("/dev/%s", gptLoop))
+	cmd = exec.Command("sudo", "partprobe", fmt.Sprintf("/dev/%s", gptLoop))
 	cmd.Run()
 	getPartsConds(c, RecoveryLabel, gptLoop, false, false, false, false)
 
