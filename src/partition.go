@@ -21,9 +21,13 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
+
+	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 )
 
 /*            The partiion layout
@@ -195,4 +199,74 @@ func GetPartitions(recoveryLabel string) (*Partitions, error) {
 		return nil, err
 	}
 	return &parts, nil
+}
+
+// TODO: bootloader if need to support grub
+func RestoreParts(parts *Partitions, bootloader string, partType string) error {
+	var dev_path string = strings.Replace(parts.DevPath, "mapper/", "", -1)
+	if partType == "gpt" {
+		rplib.Shellexec("sgdisk", dev_path, "--randomize-guids", "--move-second-header")
+	}
+
+	// Keep system-boot partition, and only mkfs
+	if parts.Sysboot_nr == -1 {
+		// oops, don't known the location of system-boot.
+		// In the u-boot, system-boot would be in fron of recovery partition
+		// If we lose system-boot, and we cannot know the proper location
+		return fmt.Errorf("Oops, We lose system-boot")
+	}
+	sysboot_path := fmtPartPath(parts.DevPath, parts.Sysboot_nr)
+	cmd := exec.Command("mkfs.vfat", "-F", "32", "-n", SysbootLabel, sysboot_path)
+	cmd.Run()
+	err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
+	if err != nil {
+		return err
+	}
+	err = syscall.Mount(sysboot_path, SYSBOOT_MNT_DIR, "vfat", 0, "")
+	if err != nil {
+		return err
+	}
+	defer syscall.Unmount(SYSBOOT_MNT_DIR, 0)
+	cmd = exec.Command("tar", "--xattrs", "-xJvpf", SYSBOOT_TARBALL, "-C", SYSBOOT_MNT_DIR)
+	cmd.Run()
+	cmd = exec.Command("parted", "-ms", dev_path, "set", strconv.Itoa(parts.Sysboot_nr), "boot", "on")
+	cmd.Run()
+
+	// Remove partitions after recovery which include writable partition
+	// And do mkfs in writable (For ensure the writable is enlarged)
+	parts.Writable_start = parts.Recovery_end + 1
+	var writable_start string = fmt.Sprintf("%vB", parts.Writable_start)
+	parts.Writable_nr = parts.Recovery_nr + 1 //writable is one after recovery
+	var writable_nr string = strconv.Itoa(parts.Writable_nr)
+	writable_path := fmtPartPath(parts.DevPath, parts.Writable_nr)
+
+	part_nr := parts.Recovery_nr + 1
+	for part_nr <= parts.Last_part_nr {
+		cmd = exec.Command("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))
+		cmd.Run()
+		part_nr++
+	}
+
+	if partType == "gpt" {
+		cmd = exec.Command("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "ext4", writable_start, "-1M", "name", writable_nr, WritableLabel)
+		cmd.Run()
+	} else { //mbr
+		cmd = exec.Command("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "fat32", writable_start, "-1M")
+		cmd.Run()
+	}
+
+	cmd = exec.Command("udevadm", "settle")
+	cmd.Run()
+
+	cmd = exec.Command("mkfs.ext4", "-F", "-L", WritableLabel, writable_path)
+	cmd.Run()
+	err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
+	rplib.Checkerr(err)
+	err = syscall.Mount(writable_path, WRITABLE_MNT_DIR, "ext4", 0, "")
+	rplib.Checkerr(err)
+	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
+	cmd = exec.Command("tar", "--xattrs", "-xJvpf", WRITABLE_TARBALL, "-C", WRITABLE_MNT_DIR)
+	cmd.Run()
+
+	return nil
 }

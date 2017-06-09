@@ -1,10 +1,10 @@
 project: pi3
 snaps:
   kernel: pi2-kernel
-  os: ubuntu-core
+  os: core
   gadget: pi3
 configs:
-  arch: armhf
+  arch: arm
   baseimage: base.img
   recoverytype: recovery
   recoverysize: 768

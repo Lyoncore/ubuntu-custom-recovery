@@ -20,9 +20,12 @@
 package main_test
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -69,7 +72,7 @@ func MountTestImg(mntImg string, umntLoop string) {
 	}
 }
 
-func (s *GetPartSuite) SetUpSuite(c *C) {
+func (s *GetPartSuite) SetUpTest(c *C) {
 	logger.SimpleSetup()
 	//Create a MBR image
 	mbr_img, _ := os.Create(MBRimage)
@@ -128,7 +131,7 @@ func (s *GetPartSuite) SetUpSuite(c *C) {
 
 }
 
-func (s *GetPartSuite) TearDownSuite(c *C) {
+func (s *GetPartSuite) TearDownTest(c *C) {
 	os.Remove(MBRimage)
 	os.Remove(GPTimage)
 }
@@ -261,4 +264,67 @@ func (s *GetPartSuite) TestFindPart(c *C) {
 	c.Check(DevNode, Equals, "")
 	c.Check(DevPath, Equals, "")
 	c.Check(PartNr, Equals, -1)
+}
+
+func (s *GetPartSuite) TestRestoreParts(c *C) {
+	const (
+		SYS_TAR     = "tests/system-boot.tar.xz"
+		WR_TAR      = "tests/writable.tar.xz"
+		RECO_PATH   = "/recovery/"
+		TAR_PATH    = RECO_PATH + "factory/"
+		SYS_TAR_TMP = "/tmp/systar"
+		WR_TAR_TMP  = "/tmp/wrtar"
+	)
+
+	os.MkdirAll(TAR_PATH, 0755)
+	rplib.FileCopy(SYS_TAR, TAR_PATH)
+	rplib.FileCopy(WR_TAR, TAR_PATH)
+	defer os.RemoveAll(RECO_PATH)
+
+	// GPT case
+	// Find boot device, all other partiitons info
+	LoopUnloopImg(GPTimage, "")
+	parts, err := reco.GetPartitions(RecoveryLabel)
+	c.Assert(err, IsNil)
+	err = reco.RestoreParts(parts, "u-boot", "gpt")
+	c.Check(err, IsNil)
+
+	err = os.MkdirAll(gptMnt, 0755)
+	c.Assert(err, IsNil)
+	defer os.Remove(gptMnt)
+
+	//Check extrat data
+	err = syscall.Mount(fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, SysbootPart), gptMnt, "vfat", 0, "")
+	c.Assert(err, IsNil)
+	rdata, err := ioutil.ReadFile(filepath.Join(gptMnt, "system-boot"))
+	c.Assert(err, IsNil)
+	err = os.MkdirAll(SYS_TAR_TMP, 0755)
+	c.Assert(err, IsNil)
+	defer os.RemoveAll(SYS_TAR_TMP)
+	cmd := exec.Command("tar", "--xattrs", "-xJvpf", SYS_TAR, "-C", SYS_TAR_TMP)
+	cmd.Run()
+	wdata, err := ioutil.ReadFile(filepath.Join(SYS_TAR_TMP, "system-boot"))
+	cmp := bytes.Compare(rdata, wdata)
+	c.Assert(cmp, Equals, 0)
+	syscall.Unmount(gptMnt, 0)
+
+	//Check extrat data
+	err = syscall.Mount(fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart), gptMnt, "ext4", 0, "")
+	c.Assert(err, IsNil)
+	rdata, err = ioutil.ReadFile(filepath.Join(gptMnt, "writable"))
+	c.Assert(err, IsNil)
+	err = os.MkdirAll(WR_TAR_TMP, 0755)
+	c.Assert(err, IsNil)
+	defer os.RemoveAll(WR_TAR_TMP)
+	cmd = exec.Command("tar", "--xattrs", "-xJvpf", WR_TAR, "-C", WR_TAR_TMP)
+	cmd.Run()
+	wdata, err = ioutil.ReadFile(filepath.Join(WR_TAR_TMP, "writable"))
+	cmp = bytes.Compare(rdata, wdata)
+	c.Assert(cmp, Equals, 0)
+	syscall.Unmount(gptMnt, 0)
+
+	LoopUnloopImg("", gptLoop)
+
+	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
+	os.RemoveAll(reco.WRITABLE_MNT_DIR)
 }
