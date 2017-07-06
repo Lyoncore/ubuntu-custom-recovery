@@ -67,7 +67,14 @@ var configs rplib.ConfigRecovery
 var RecoveryType string
 var RecoveryLabel string
 
-func parseConfigs() {
+func parseConfigs(configFilePath string) {
+	var configPath string
+	if "" == configFilePath {
+		configPath = CONFIG_YAML
+	} else {
+		configPath = configFilePath
+	}
+
 	if "" == version {
 		version = Version
 	}
@@ -85,7 +92,7 @@ func parseConfigs() {
 	log.Printf("RECOVERY_LABEL: %s", RecoveryLabel)
 
 	// Load config.yaml
-	err := configs.Load(CONFIG_YAML)
+	err := configs.Load(configPath)
 	rplib.Checkerr(err)
 	log.Println(configs)
 }
@@ -199,7 +206,7 @@ func main() {
 	//setup logger
 	//logger.SimpleSetup()
 
-	parseConfigs()
+	parseConfigs(CONFIG_YAML)
 	preparePartitions()
 	recoverProcess()
 	cleanupPartitions()

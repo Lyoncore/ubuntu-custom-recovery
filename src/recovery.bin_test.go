@@ -34,55 +34,58 @@ type MainTestSuite struct{}
 
 var _ = Suite(&MainTestSuite{})
 
-// configPath is hardcoded, need a more generic one
-var configPath = "../pi3/config.yaml"
+const configName = "config.yaml"
+const configSrcPath = "tests/" + configName
 
 func (s *MainTestSuite) TestparseConfigs(c *C) {
-	recoveryDir := filepath.Join(filepath.Dir(RECO_FACTORY_DIR), "..")
+	recoveryDir := filepath.Join("/tmp", filepath.Dir(RECO_FACTORY_DIR), "..")
 	err := os.MkdirAll(recoveryDir, 0755)
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(recoveryDir)
 
-	err = rplib.FileCopy(configPath, recoveryDir)
+	err = rplib.FileCopy(configSrcPath, recoveryDir)
 	c.Assert(err, IsNil)
 
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
 
 	os.Args = []string{"TestparseConfigs", "factory_restor", "ESD"}
-	parseConfigs()
+	configFile := filepath.Join(recoveryDir, configName)
+	parseConfigs(configFile)
 
 	c.Assert(RecoveryType, Equals, "factory_restor")
 	c.Assert(RecoveryLabel, Equals, "ESD")
 }
 
 func (s *MainTestSuite) TestparseConfigsNoArgs(c *C) {
-	recoveryDir := filepath.Join(filepath.Dir(RECO_FACTORY_DIR), "..")
+	recoveryDir := filepath.Join("/tmp", filepath.Dir(RECO_FACTORY_DIR), "..")
 	err := os.MkdirAll(recoveryDir, 0755)
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(recoveryDir)
 
-	err = rplib.FileCopy(configPath, recoveryDir)
+	err = rplib.FileCopy(configSrcPath, recoveryDir)
 	c.Assert(err, IsNil)
 
+	configFile := filepath.Join(recoveryDir, configName)
 	// should panic with no args
-	c.Assert(func() { parseConfigs() }, PanicMatches, "Need two arguments.*")
+	c.Assert(func() { parseConfigs(configFile) }, PanicMatches, "Need two arguments.*")
 }
 
 func (s *MainTestSuite) TestpreparePartitions(c *C) {
-	recoveryDir := filepath.Join(filepath.Dir(RECO_FACTORY_DIR), "..")
+	recoveryDir := filepath.Join("/tmp", filepath.Dir(RECO_FACTORY_DIR), "..")
 	err := os.MkdirAll(recoveryDir, 0755)
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(recoveryDir)
 
-	err = rplib.FileCopy(configPath, recoveryDir)
+	err = rplib.FileCopy(configSrcPath, recoveryDir)
 	c.Assert(err, IsNil)
 
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
 
 	os.Args = []string{"TestpreparePartitions", "recovery", "recovery"}
-	parseConfigs()
+	configFile := filepath.Join(recoveryDir, configName)
+	parseConfigs(configFile)
 
 	// in order to test whether dir will be created
 	os.RemoveAll(WRITABLE_MNT_DIR)
