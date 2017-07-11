@@ -16,4 +16,4 @@ install:
 
 
 script:
-    - ./travis-test.sh || travis_terminate 1
+    - ./travis-test.sh
