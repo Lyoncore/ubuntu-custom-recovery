@@ -46,15 +46,19 @@ var _ = Suite(&BuilderSuite{})
 
 func LoopUnloopImg(mntImg string, umntLoop string) {
 	if umntLoop != "" {
-		cmd := exec.Command("sudo", "kpartx", "-ds", filepath.Join("/dev/", umntLoop))
+		cmd := exec.Command("kpartx", "-ds", filepath.Join("/dev/", umntLoop))
 		cmd.Run()
-		cmd = exec.Command("sudo", "losetup", "-d", filepath.Join("/dev/", umntLoop))
+		cmd = exec.Command("losetup", "-d", filepath.Join("/dev/", umntLoop))
 		cmd.Run()
 	}
 
-	if mntImg != "" {
-		mbrLoop = rplib.Shellcmdoutput(fmt.Sprintf("sudo losetup --find --show %s | xargs basename", mntImg))
-		cmd := exec.Command("sudo", "kpartx", "-avs", filepath.Join("/dev/", mbrLoop))
+	if mntImg == MBRimage {
+		mbrLoop = rplib.Shellcmdoutput(fmt.Sprintf("losetup --find --show %s | xargs basename", mntImg))
+		cmd := exec.Command("kpartx", "-avs", filepath.Join("/dev/", mbrLoop))
+		cmd.Run()
+	} else {
+		gptLoop = rplib.Shellcmdoutput(fmt.Sprintf("losetup --find --show %s | xargs basename", mntImg))
+		cmd := exec.Command("kpartx", "-avs", filepath.Join("/dev/", gptLoop))
 		cmd.Run()
 	}
 }
@@ -62,59 +66,33 @@ func LoopUnloopImg(mntImg string, umntLoop string) {
 func (s *BuilderSuite) SetUpSuite(c *C) {
 	logger.SimpleSetup()
 	//Create a MBR image
-	mbr_img, _ := os.Create(MBRimage)
-	defer mbr_img.Close()
-	syscall.Fallocate(int(mbr_img.Fd()), 0, 0, part_size)
+	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s",MBRimage), fmt.Sprintf("bs=%d",part_size), "count=1")
 
-	cmd1 := exec.Command("cat", "tests/mbr.part")
-	cmd2 := exec.Command("sfdisk", MBRimage)
-	cmd2.Stdin, _ = cmd1.StdoutPipe()
-	cmd2.Start()
-	cmd1.Run()
-	cmd2.Wait()
+	rplib.Shellexec("sgdisk", "--load-backup=tests/mbr.part", MBRimage)
 
-	mbrLoop = rplib.Shellcmdoutput(fmt.Sprintf("sudo losetup --find --show %s | xargs basename", MBRimage))
-	cmd := exec.Command("sudo", "kpartx", "-avs", filepath.Join("/dev/", mbrLoop))
-	cmd.Run()
-	cmd = exec.Command("sudo", "mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
-	cmd.Run()
-	cmd = exec.Command("sudo", "mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, SysbootPart))
-	cmd.Run()
-	cmd = exec.Command("sudo", "mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, WritablePart))
-	cmd.Run()
-	cmd = exec.Command("sudo", "partprobe")
+	mbrLoop = rplib.Shellcmdoutput(fmt.Sprintf("losetup --find --show %s | xargs basename", MBRimage))
+	rplib.Shellexec("kpartx", "-avs", filepath.Join("/dev/", mbrLoop))
+	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, SysbootPart))
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, WritablePart))
+	cmd := exec.Command("partprobe")
 	cmd.Run()
 
-	cmd = exec.Command("sudo", "kpartx", "-ds", filepath.Join("/dev/", mbrLoop))
-	cmd.Run()
-	cmd = exec.Command("sudo", "losetup", "-d", filepath.Join("/dev/", mbrLoop))
-	cmd.Run()
+	rplib.Shellexec("kpartx", "-ds", filepath.Join("/dev/", mbrLoop))
+	rplib.Shellexec("losetup", "-d", filepath.Join("/dev/", mbrLoop))
 
 	//Create a GPT image
-	gpt_img, _ := os.Create(GPTimage)
-	defer gpt_img.Close()
-	syscall.Fallocate(int(gpt_img.Fd()), 0, 0, part_size)
+	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s",GPTimage), fmt.Sprintf("bs=%d",part_size), "count=1")
 
-	cmd1 = exec.Command("cat", "tests/gpt.part")
-	cmd2 = exec.Command("sfdisk", GPTimage)
-	cmd2.Stdin, _ = cmd1.StdoutPipe()
-	cmd2.Start()
-	cmd1.Run()
-	cmd2.Wait()
+	rplib.Shellexec("sgdisk", "--load-backup=tests/gpt.part", GPTimage)
 
-	gptLoop = rplib.Shellcmdoutput(fmt.Sprintf("sudo losetup --find --show %s | xargs basename", GPTimage))
-	cmd = exec.Command("sudo", "kpartx", "-avs", filepath.Join("/dev/", gptLoop))
-	cmd.Run()
-	cmd = exec.Command("sudo", "mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, RecoveryPart))
-	cmd.Run()
-	cmd = exec.Command("sudo", "mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, SysbootPart))
-	cmd.Run()
-	cmd = exec.Command("sudo", "mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart))
-	cmd.Run()
-	cmd = exec.Command("sudo", "kpartx", "-ds", filepath.Join("/dev/", mbrLoop))
-	cmd.Run()
-	cmd = exec.Command("sudo", "losetup", "-d", filepath.Join("/dev/", mbrLoop))
-	cmd.Run()
+	gptLoop = rplib.Shellcmdoutput(fmt.Sprintf("losetup --find --show %s | xargs basename", GPTimage))
+	rplib.Shellexec("kpartx", "-avs", filepath.Join("/dev/", gptLoop))
+	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, RecoveryPart))
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, SysbootPart))
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart))
+	rplib.Shellexec("kpartx", "-ds", filepath.Join("/dev/", gptLoop))
+	rplib.Shellexec("losetup", "-d", filepath.Join("/dev/", gptLoop))
 
 }
 
@@ -166,6 +144,7 @@ func (s *BuilderSuite) TestBackupAssertions(c *C) {
 	err := os.MkdirAll(gptMnt, 0755)
 	c.Assert(err, IsNil)
 	defer os.Remove(gptMnt)
+
 	err = syscall.Mount(fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart), gptMnt, "ext4", 0, "")
 	c.Assert(err, IsNil)
 
