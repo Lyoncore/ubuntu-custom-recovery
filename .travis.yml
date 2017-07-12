@@ -1,0 +1,23 @@
+sudo: required
+dist: trusty
+language: go
+go:
+  - 1.6
+
+git:
+    quiet: true
+
+before_install:
+    - RepoName=`basename $PWD`; SrcDir=`dirname $PWD`; DestDir="`dirname $SrcDir`/Lyoncore"
+    - if [[ "$SrcDir" != "$DestDir" ]]; then mv "$SrcDir" "$DestDir"; cd ../../Lyoncore/$RepoName; export TRAVIS_BUILD_DIR=`dirname $TRAVIS_BUILD_DIR`/$RepoName; fi
+
+install:
+    - sudo apt-get update -qq
+    - sudo apt-get install -qq kpartx parted
+    - sudo apt-get install -qq squashfs-tools
+    - sudo apt-get -y install python3-pip drbd8-utils
+    - sudo pip3 install git+https://github.com/g2p/vido.git@for-travis
+
+
+script:
+    - ./travis-test.sh

@@ -1,0 +1,35 @@
+project: pi2
+snaps:
+  kernel: pi2-kernel
+  os: ubuntu-core
+  gadget: pi2
+configs:
+  arch: armhf
+  baseimage: base.img
+  recoverytype: recovery
+  recoverysize: 768
+  release: 16
+  channel: edge
+  size: 4
+  packages:
+    - snapweb
+  partition-type: mbr
+  bootloader: u-boot
+udf:
+  binary: ./ubuntu-device-flash
+  command: core
+debug:
+  devmode: on
+  ssh: on
+  xz: off
+recovery:
+  type: factory_install
+  filesystem-label: ESP
+  boot-partition:
+  systemboot-partition:
+  writable-partition:
+  boot-image:
+  systemboot-image:
+  writable-image:
+  sign-serial: on
+  sign-api-key: U2VyaWFsIFZhdWx0Cg
