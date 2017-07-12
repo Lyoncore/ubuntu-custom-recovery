@@ -8,11 +8,8 @@ git:
     quiet: true
 
 before_install:
-    - RepoName=basename $PWD
-    - SrcDir=dirname $PWD
-    - DestDir="dirname $SrcDir/Lyoncore"
-    - mv $SrcDir $DestDir
-    - cd ../../cloudfoundry/$RepoName
+    - RepoName=`basename $PWD`; SrcDir=`dirname $PWD`; DestDir="`dirname $SrcDir`/Lyoncore"
+    - if [[ "$SrcDir" != "$DestDir" ]]; then mv "$SrcDir" "$DestDir"; cd ../../Lyoncore/$RepoName; export TRAVIS_BUILD_DIR=`dirname $TRAVIS_BUILD_DIR`/$RepoName; fi
 
 install:
     - sudo apt-get update -qq
