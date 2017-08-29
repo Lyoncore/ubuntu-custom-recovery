@@ -277,7 +277,7 @@ func (s *BuilderSuite) TestCopySnapsAsserts(c *C) {
 	cmp = bytes.Compare(rdevSnap, wdevSnap)
 	c.Assert(cmp, Equals, 0)
 
-	rassert, err := ioutil.ReadFile(filepath.Join(reco.SNAPS_DST_PATH, TEST_ASSERT))
+	rassert, err := ioutil.ReadFile(filepath.Join(reco.ASSERT_DST_PATH, TEST_ASSERT))
 	c.Assert(err, IsNil)
 	cmp = bytes.Compare(rassert, wassert)
 	c.Assert(cmp, Equals, 0)
