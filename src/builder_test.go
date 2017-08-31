@@ -66,7 +66,7 @@ func LoopUnloopImg(mntImg string, umntLoop string) {
 func (s *BuilderSuite) SetUpSuite(c *C) {
 	logger.SimpleSetup()
 	//Create a MBR image
-	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s",MBRimage), fmt.Sprintf("bs=%d",part_size), "count=1")
+	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s", MBRimage), fmt.Sprintf("bs=%d", part_size), "count=1")
 
 	rplib.Shellexec("sgdisk", "--load-backup=tests/mbr.part", MBRimage)
 
@@ -82,7 +82,7 @@ func (s *BuilderSuite) SetUpSuite(c *C) {
 	rplib.Shellexec("losetup", "-d", filepath.Join("/dev/", mbrLoop))
 
 	//Create a GPT image
-	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s",GPTimage), fmt.Sprintf("bs=%d",part_size), "count=1")
+	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s", GPTimage), fmt.Sprintf("bs=%d", part_size), "count=1")
 
 	rplib.Shellexec("sgdisk", "--load-backup=tests/gpt.part", GPTimage)
 
@@ -239,10 +239,11 @@ func (s *BuilderSuite) TestEnableLogger(c *C) {
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)
 }
 
-func (s *BuilderSuite) TestCopySnaps(c *C) {
+func (s *BuilderSuite) TestCopySnapsAsserts(c *C) {
 	//Create testing files
 	const TEST_SNAP = "test.snap"
 	const TEST_DEV_SNAP = "test_dev.snap"
+	const TEST_ASSERT = "test.assert"
 
 	err := os.MkdirAll(reco.SNAPS_SRC_PATH, 0755)
 	c.Assert(err, IsNil)
@@ -256,18 +257,29 @@ func (s *BuilderSuite) TestCopySnaps(c *C) {
 	err = ioutil.WriteFile(filepath.Join(reco.DEV_SNAPS_SRC_PATH, TEST_DEV_SNAP), wdevSnap, 0644)
 	c.Assert(err, IsNil)
 
-	err = reco.CopySnaps()
+	err = os.MkdirAll(reco.ASSERT_PRE_SRC_PATH, 0755)
+	c.Assert(err, IsNil)
+	wassert := []byte("hello assert\n")
+	err = ioutil.WriteFile(filepath.Join(reco.ASSERT_PRE_SRC_PATH, TEST_ASSERT), wassert, 0644)
+	c.Assert(err, IsNil)
+
+	err = reco.CopySnapsAsserts()
 	c.Assert(err, IsNil)
 
 	// Verify
-	rsnap, err := ioutil.ReadFile(filepath.Join(reco.OEM_SNAPS_PATH, TEST_SNAP))
+	rsnap, err := ioutil.ReadFile(filepath.Join(reco.SNAPS_DST_PATH, TEST_SNAP))
 	c.Assert(err, IsNil)
 	cmp := bytes.Compare(rsnap, wsnap)
 	c.Assert(cmp, Equals, 0)
 
-	rdevSnap, err := ioutil.ReadFile(filepath.Join(reco.OEM_SNAPS_PATH, TEST_DEV_SNAP))
+	rdevSnap, err := ioutil.ReadFile(filepath.Join(reco.SNAPS_DST_PATH, TEST_DEV_SNAP))
 	c.Assert(err, IsNil)
 	cmp = bytes.Compare(rdevSnap, wdevSnap)
+	c.Assert(cmp, Equals, 0)
+
+	rassert, err := ioutil.ReadFile(filepath.Join(reco.ASSERT_DST_PATH, TEST_ASSERT))
+	c.Assert(err, IsNil)
+	cmp = bytes.Compare(rassert, wassert)
 	c.Assert(cmp, Equals, 0)
 
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)

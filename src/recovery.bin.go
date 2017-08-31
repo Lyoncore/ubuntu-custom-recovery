@@ -52,7 +52,9 @@ const (
 	SYSTEM_DATA_PATH         = WRITABLE_MNT_DIR + "system-data/"
 	SNAPS_SRC_PATH           = RECO_FACTORY_DIR + "snaps/"
 	DEV_SNAPS_SRC_PATH       = RECO_FACTORY_DIR + "snaps-devmode/"
-	OEM_SNAPS_PATH           = SYSTEM_DATA_PATH + "/var/lib/oem/"
+	ASSERT_PRE_SRC_PATH      = RECO_FACTORY_DIR + "assertions-preinstall/"
+	SNAPS_DST_PATH           = SYSTEM_DATA_PATH + "var/lib/snapd/seed/snaps/"
+	ASSERT_DST_PATH          = SYSTEM_DATA_PATH + "var/lib/snapd/seed/assertions/"
 	SYSTEMD_SYSTEM_DIR       = "/lib/systemd/system/"
 	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
 
@@ -143,7 +145,7 @@ func preparePartitions() {
 
 // easier for function mocking
 var enableLogger = EnableLogger
-var copySnaps = CopySnaps
+var copySnapsAsserts = CopySnapsAsserts
 var addFirstBootService = AddFirstBootService
 var restoreAsserions = RestoreAsserions
 var updateUbootEnv = UpdateUbootEnv
@@ -157,8 +159,8 @@ func recoverProcess() {
 	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
 
 	// Copy snaps
-	log.Println("[Add snaps for oem]")
-	err = copySnaps()
+	log.Println("[Add additional snaps/asserts]")
+	err = copySnapsAsserts()
 	rplib.Checkerr(err)
 
 	// add firstboot service

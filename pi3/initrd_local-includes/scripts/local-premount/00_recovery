@@ -34,6 +34,8 @@ for t in $(cat /proc/cmdline); do
     elif [ "$t" = "recoverytype=custom" ]; then
         recoverytype=custom
         break
+    elif [ "$t" = "fixrtc" ];then
+        FIXRTC=ture
     fi
 done
 
@@ -56,6 +58,12 @@ echo "[mount the recovery partition]"
 mkdir -p $BASE/recovery
 mount -o defaults,ro "$recovery_part" $BASE/recovery
 ls $BASE/recovery # XXX: debug
+
+# fixrtc
+# set to last modify time, the partition create time will be not be very old time
+if [ -n $FIXRTC ]; then
+    date "+%Y-%m-%d %T" --set="$(stat -c %y $BASE/recovery/recovery/factory/writable.tar.xz )"
+fi
 
 # mount os snap on chroot
 modprobe squashfs

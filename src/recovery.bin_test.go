@@ -132,9 +132,9 @@ func (s *MainTestSuite) TestrecoverProcess(c *C) {
 	enableLogger = func() error { return nil }
 	defer func() { enableLogger = origEnableLogger }()
 
-	origCopySnaps := copySnaps
-	copySnaps = func() error { return nil }
-	defer func() { copySnaps = origCopySnaps }()
+	origCopySnaps := copySnapsAsserts
+	copySnapsAsserts = func() error { return nil }
+	defer func() { copySnapsAsserts = origCopySnaps }()
 
 	origAddFirstBootService := addFirstBootService
 	addFirstBootService = func(recoType, recoLabel string) error {

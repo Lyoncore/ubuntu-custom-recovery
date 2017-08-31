@@ -1,0 +1,25 @@
+type: system-user
+authority-id: 8mldAERWtJx3jwN9iShT77id0d0nTTdb
+brand-id: 8mldAERWtJx3jwN9iShT77id0d0nTTdb
+email: root@localhost
+models:
+  - pi3
+name: Default Admin User
+password: $6$u3D2ASefkgoH9zSc$Xo1FzymNgaD5BZeqazmBJn8TzOh8yBe/rqtIGg3pc47Nscq.EyzT46Fhmn2IJ7UV.6YM13KtOidqfJkXcBOXs0
+series:
+  - 16
+since: 2017-06-30T07:12:10+00:00
+until: 2099-10-24T07:12:10+00:00
+username: admin
+sign-key-sha3-384: 9sWbrvIWieGixK73D_tcSkRG6v4PinH9DmTxXq9nnlmI4CZJo5vtcRHkkCHhTxjI
+
+AcLBXAQAAQoABgUCWaU2JAAKCRANbjalwjlWQV76D/wJYDNTxbcJ6OFO8syd3oK+UwkuBQuQthbI
+hPMjT5A8ZxkLxkN+WU30JJWe3POxmqV+Dgi+F5hFC1+JmXvYgtKM3feat9lXqaxv6zwlSRccznjO
+2qCcdsO/Bj5KAxshdmPa7yeAUyMxI+qMvDbTxDITQ3iwiOEUG1toP6eMtn0cW5y9DYSVatIjJaFy
+B0RO1fJd8iRTXbT2lQsC20N8r4SEVAsyJrMSALaxH7aah/zsGSkW+T6af1jyeyDH/Pl379i4Ar1W
+S5G3IBIw04dcUwpDLLunjjJhabumWVcYykdf3pV01LFyP4WV839OWewvKzXzev8u5iVvpYs6l8NF
+j0uIG2qF327IL4MzjaiD0aK5d47ZFPmWHuQBK50jqfmi71LSI0e5dLlZdzFX6sMvrNCYhX46eKUv
+c2x5CFkauPesJFK0kuQ2Bf8EHdl/F6r2Qfq/25CYCKDwObwzMO0Byvjh9FOeIyujK5K48KjkEQvg
+Lumucx9p7z/OMlDddQeujtCbfuQBUQ2dUB7iD7kgMU+jkI5/a9nf9lTwcY2Pxx069rvNwUtPPXL8
+41ghiqeoFvGr9Qcfz99p/69A6agdvHhnlvdEyBfsUwt5wP4mvyBNZiwcMrofA4c3ZI9SKrflGKVS
+aPlY4cdRY/PV5LHSHff6bDq21xHz1c3cptYVSpD5xg==

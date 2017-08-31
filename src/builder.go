@@ -202,23 +202,30 @@ func EnableLogger() error {
 	return nil
 }
 
-func CopySnaps() error {
-	if _, err := os.Stat(OEM_SNAPS_PATH); err != nil {
-		err = os.MkdirAll(OEM_SNAPS_PATH, 0755)
+func CopySnapsAsserts() error {
+	if _, err := os.Stat(SNAPS_DST_PATH); err != nil {
+		err = os.MkdirAll(SNAPS_DST_PATH, 0755)
 		if err != nil {
 			return err
 		}
 	}
 
 	if _, err := os.Stat(SNAPS_SRC_PATH); err == nil {
-		err = rplib.CopyTree(SNAPS_SRC_PATH, OEM_SNAPS_PATH)
+		err = rplib.CopyTree(SNAPS_SRC_PATH, SNAPS_DST_PATH)
 		if err != nil {
 			return err
 		}
 	}
 
 	if _, err := os.Stat(DEV_SNAPS_SRC_PATH); err == nil {
-		err = rplib.CopyTree(DEV_SNAPS_SRC_PATH, OEM_SNAPS_PATH)
+		err = rplib.CopyTree(DEV_SNAPS_SRC_PATH, SNAPS_DST_PATH)
+		if err != nil {
+			return err
+		}
+	}
+
+	if _, err := os.Stat(ASSERT_PRE_SRC_PATH); err == nil {
+		err = rplib.CopyTree(ASSERT_PRE_SRC_PATH, ASSERT_DST_PATH)
 		if err != nil {
 			return err
 		}
