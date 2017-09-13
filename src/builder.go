@@ -32,6 +32,7 @@ import (
 	"syscall"
 
 	recoverydirs "github.com/Lyoncore/ubuntu-recovery-rplib/dirs/recovery"
+	uenv "github.com/mvo5/uboot-go/uenv"
 
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 )
@@ -68,12 +69,22 @@ menuentry "%s" {
 }
 
 func UpdateUbootEnv() error {
-	err := rplib.FileCopy(UBOOT_ENV_SRC, UBOOT_ENV)
+	// update uboot.env in recovery partition after first install
+	env, err := uenv.Open(UBOOT_ENV)
 	if err != nil {
+		log.Println("Open %s failed", UBOOT_ENV)
 		return err
 	}
-	err = rplib.FileCopy(UBOOT_ENV_IN_SRC, UBOOT_ENV_IN)
-	if err != nil {
+
+	env.Set("snap_mode", "")
+	if err = env.Save(); err != nil {
+		log.Println("Write %s failed", UBOOT_ENV)
+		return err
+	}
+
+	env.Set("recovery_type", "factory_restore")
+	if err = env.Save(); err != nil {
+		log.Println("Write %s failed", UBOOT_ENV)
 		return err
 	}
 	return err

@@ -59,10 +59,8 @@ const (
 	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
 
 	UBOOT_ENV              = SYSBOOT_MNT_DIR + "uboot.env"
-	UBOOT_ENV_IN           = SYSBOOT_MNT_DIR + "uboot.env.in"
 	RECOVERY_PARTITION_DIR = "/recovery_partition/"
 	UBOOT_ENV_SRC          = RECOVERY_PARTITION_DIR + "uboot.env"
-	UBOOT_ENV_IN_SRC       = RECOVERY_PARTITION_DIR + "uboot.env.in"
 )
 
 var configs rplib.ConfigRecovery
@@ -171,17 +169,13 @@ func recoverProcess() {
 	switch RecoveryType {
 	case rplib.FACTORY_INSTALL:
 		log.Println("[EXECUTE FACTORY INSTALL]")
-		// TODO: read assertion information from gadget snap
-		if !configs.Recovery.SignSerial {
-			log.Println("[Start serial vault]")
-			err = startupNetwork()
-			rplib.Checkerr(err)
-			err = serialVaultService()
-			rplib.Checkerr(err)
-			//release dhclient
-			err = releaseDhcp()
-			rplib.Checkerr(err)
-		}
+		// update uboot env
+		log.Println("Update uboot env(ESP/system-boot)")
+		//fsck needs ignore error code
+		log.Println("[set next recoverytype to factory_restore]")
+		err = updateUbootEnv()
+		rplib.Checkerr(err)
+
 	case rplib.FACTORY_RESTORE:
 		log.Println("[User restores system]")
 		// restore assertion if ever signed
@@ -189,12 +183,6 @@ func recoverProcess() {
 	}
 
 	//Darren works here
-	// update uboot env
-	log.Println("Update uboot env(ESP/system-boot)")
-	//fsck needs ignore error code
-	log.Println("[set next recoverytype to factory_restore]")
-	err = updateUbootEnv()
-	rplib.Checkerr(err)
 }
 
 var syscallUnMount = syscall.Unmount

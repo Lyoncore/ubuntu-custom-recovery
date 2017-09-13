@@ -33,6 +33,7 @@ import (
 
 	reco "github.com/Lyoncore/arm-config/src"
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	uenv "github.com/mvo5/uboot-go/uenv"
 	"github.com/snapcore/snapd/logger"
 
 	. "gopkg.in/check.v1"
@@ -334,27 +335,18 @@ func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
 	//Create testing files
 	err := os.MkdirAll(reco.SYSBOOT_MNT_DIR, 0755)
 	c.Assert(err, IsNil)
-	err = os.MkdirAll(reco.RECOVERY_PARTITION_DIR, 0755)
-	c.Assert(err, IsNil)
 
-	err = rplib.FileCopy("tests/uboot.env", reco.RECOVERY_PARTITION_DIR)
-	c.Assert(err, IsNil)
-
-	err = rplib.FileCopy("tests/uboot.env.in", reco.RECOVERY_PARTITION_DIR)
+	err = rplib.FileCopy("tests/uboot.env", reco.SYSBOOT_MNT_DIR)
 	c.Assert(err, IsNil)
 
 	err = reco.UpdateUbootEnv()
 	c.Assert(err, IsNil)
 
 	// Verify
-	// Verify SYSBOOT_MNT_DIR/uboot.env should be exist
-	_, err = os.Stat(filepath.Join(reco.SYSBOOT_MNT_DIR, "uboot.env"))
-	c.Check(err, IsNil)
-
-	// Verify SYSBOOT_MNT_DIR/uboot.env.in should be exist
-	_, err = os.Stat(filepath.Join(reco.SYSBOOT_MNT_DIR, "uboot.env.in"))
-	c.Check(err, IsNil)
+	env, err = uenv.Open(UBOOT_ENV)
+	c.Assert(err, IsNil)
+	c.Check(env.Get("snap_mode"), Equals, "")
+	c.Check(env.Get("recovery_type"), Equals, "factory_restore")
 
 	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
-	os.RemoveAll(reco.RECOVERY_PARTITION_DIR)
 }
