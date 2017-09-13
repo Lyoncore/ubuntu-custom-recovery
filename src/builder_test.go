@@ -343,7 +343,7 @@ func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
 	c.Assert(err, IsNil)
 
 	// Verify
-	env, err = uenv.Open(UBOOT_ENV)
+	env, err := uenv.Open(filepath.Join(reco.SYSBOOT_MNT_DIR, "uboot.env"))
 	c.Assert(err, IsNil)
 	c.Check(env.Get("snap_mode"), Equals, "")
 	c.Check(env.Get("recovery_type"), Equals, "factory_restore")
