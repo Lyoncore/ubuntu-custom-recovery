@@ -87,6 +87,18 @@ func UpdateUbootEnv() error {
 		log.Println("Write %s failed", UBOOT_ENV)
 		return err
 	}
+
+	env.Set("recovery_core", env.Get("snap_core"))
+	if err = env.Save(); err != nil {
+		log.Println("Write %s failed", UBOOT_ENV)
+		return err
+	}
+
+	env.Set("recovery_kernel", env.Get("snap_kernel"))
+	if err = env.Save(); err != nil {
+		log.Println("Write %s failed", UBOOT_ENV)
+		return err
+	}
 	return err
 }
 
