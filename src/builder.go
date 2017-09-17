@@ -91,7 +91,7 @@ func UpdateUbootEnv() error {
 	var core, kernel string
 	core_s, _ := filepath.Glob(BACKUP_SNAP_PATH + "*core*.snap")
 	if cap(core_s) == 1 {
-		core = strings.Join(core_s, "")
+		core = filepath.Base(strings.Join(core_s, ""))
 	} else {
 		log.Println("Error!, no file or too many files found")
 		return err
@@ -104,7 +104,7 @@ func UpdateUbootEnv() error {
 
 	kernel_s, _ := filepath.Glob(BACKUP_SNAP_PATH + "*kernel*.snap")
 	if cap(kernel_s) == 1 {
-		kernel = strings.Join(kernel_s, "")
+		kernel = filepath.Base(strings.Join(kernel_s, ""))
 	} else {
 		log.Println("Error!, no file or too many files found")
 		return err
