@@ -348,7 +348,7 @@ func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
 	c.Check(env.Get("snap_mode"), Equals, "")
 	c.Check(env.Get("recovery_type"), Equals, "factory_restore")
 	c.Check(env.Get("recovery_core"), Equals, "core_9999.snap")
-	c.Check(env.Get("recovery_kernel"), Equals, "xx-kernel_99.snap"
+	c.Check(env.Get("recovery_kernel"), Equals, "xx-kernel_99.snap")
 
 	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
 }
