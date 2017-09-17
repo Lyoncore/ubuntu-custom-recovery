@@ -345,11 +345,11 @@ func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
 	c.Assert(err, IsNil)
 
 	csnap := []byte("core snap\n")
-	err = ioutil.WriteFile(filepath.Join(reco.SNAPS_SRC_PATH, CORE_SNAP), csnap, 0644)
+	err = ioutil.WriteFile(filepath.Join(reco.BACKUP_SNAP_PATH, CORE_SNAP), csnap, 0644)
 	c.Assert(err, IsNil)
 
 	ksnap := []byte("core snap\n")
-	err = ioutil.WriteFile(filepath.Join(reco.SNAPS_SRC_PATH, KERNEL_SNAP), ksnap, 0644)
+	err = ioutil.WriteFile(filepath.Join(reco.BACKUP_SNAP_PATH, KERNEL_SNAP), ksnap, 0644)
 	c.Assert(err, IsNil)
 
 	err = reco.UpdateUbootEnv()
