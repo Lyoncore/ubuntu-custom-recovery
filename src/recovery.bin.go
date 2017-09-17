@@ -170,7 +170,7 @@ func recoverProcess() {
 	case rplib.FACTORY_INSTALL:
 		log.Println("[EXECUTE FACTORY INSTALL]")
 		// update uboot env
-		log.Println("Update uboot env(ESP/system-boot)")
+		log.Println("Update uboot env")
 		//fsck needs ignore error code
 		log.Println("[set next recoverytype to factory_restore]")
 		err = updateUbootEnv()
