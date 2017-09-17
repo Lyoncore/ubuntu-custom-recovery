@@ -58,9 +58,8 @@ const (
 	SYSTEMD_SYSTEM_DIR       = "/lib/systemd/system/"
 	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
 
-	UBOOT_ENV              = SYSBOOT_MNT_DIR + "uboot.env"
-	RECOVERY_PARTITION_DIR = "/recovery_partition/"
-	UBOOT_ENV_SRC          = RECOVERY_PARTITION_DIR + "uboot.env"
+	UBOOT_ENV        = SYSBOOT_MNT_DIR + "uboot.env"
+	BACKUP_SNAP_PATH = "/recovery/backup_snaps/"
 )
 
 var configs rplib.ConfigRecovery
@@ -169,12 +168,6 @@ func recoverProcess() {
 	switch RecoveryType {
 	case rplib.FACTORY_INSTALL:
 		log.Println("[EXECUTE FACTORY INSTALL]")
-		// update uboot env
-		log.Println("Update uboot env")
-		//fsck needs ignore error code
-		log.Println("[set next recoverytype to factory_restore]")
-		err = updateUbootEnv()
-		rplib.Checkerr(err)
 
 	case rplib.FACTORY_RESTORE:
 		log.Println("[User restores system]")
@@ -182,7 +175,12 @@ func recoverProcess() {
 		restoreAsserions()
 	}
 
-	//Darren works here
+	// update uboot env
+	log.Println("Update uboot env")
+	//fsck needs ignore error code
+	log.Println("[set next recoverytype to factory_restore]")
+	err = updateUbootEnv()
+	rplib.Checkerr(err)
 }
 
 var syscallUnMount = syscall.Unmount

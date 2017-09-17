@@ -332,11 +332,24 @@ func (s *BuilderSuite) TestAddFirstBootService(c *C) {
 }
 
 func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
+	const CORE_SNAP = "core_9999.snap"
+	const KERNEL_SNAP = "pi2-kernel_88.snap"
 	//Create testing files
 	err := os.MkdirAll(reco.SYSBOOT_MNT_DIR, 0755)
 	c.Assert(err, IsNil)
 
 	err = rplib.FileCopy("tests/uboot.env", reco.SYSBOOT_MNT_DIR)
+	c.Assert(err, IsNil)
+
+	err = os.MkdirAll(reco.BACKUP_SNAP_PATH, 0755)
+	c.Assert(err, IsNil)
+
+	csnap := []byte("core snap\n")
+	err = ioutil.WriteFile(filepath.Join(reco.SNAPS_SRC_PATH, CORE_SNAP), csnap, 0644)
+	c.Assert(err, IsNil)
+
+	ksnap := []byte("core snap\n")
+	err = ioutil.WriteFile(filepath.Join(reco.SNAPS_SRC_PATH, KERNEL_SNAP), ksnap, 0644)
 	c.Assert(err, IsNil)
 
 	err = reco.UpdateUbootEnv()
@@ -347,8 +360,8 @@ func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(env.Get("snap_mode"), Equals, "")
 	c.Check(env.Get("recovery_type"), Equals, "factory_restore")
-	c.Check(env.Get("recovery_core"), Equals, "core_9999.snap")
-	c.Check(env.Get("recovery_kernel"), Equals, "xx-kernel_99.snap")
+	c.Check(env.Get("recovery_core"), Equals, CORE_SNAP)
+	c.Check(env.Get("recovery_kernel"), Equals, KERNEL_SNAP)
 
 	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
 }

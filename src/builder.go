@@ -88,13 +88,28 @@ func UpdateUbootEnv() error {
 		return err
 	}
 
-	env.Set("recovery_core", env.Get("snap_core"))
+	var core, kernel string
+	core_s, _ := filepath.Glob(BACKUP_SNAP_PATH + "*core*.snap")
+	if cap(core_s) == 1 {
+		core = strings.Join(core_s, "")
+	} else {
+		log.Println("Error!, no file or too many files found")
+		return err
+	}
+	env.Set("recovery_core", core)
 	if err = env.Save(); err != nil {
 		log.Println("Write %s failed", UBOOT_ENV)
 		return err
 	}
 
-	env.Set("recovery_kernel", env.Get("snap_kernel"))
+	kernel_s, _ := filepath.Glob(BACKUP_SNAP_PATH + "*kernel*.snap")
+	if cap(kernel_s) == 1 {
+		kernel = strings.Join(kernel_s, "")
+	} else {
+		log.Println("Error!, no file or too many files found")
+		return err
+	}
+	env.Set("recovery_kernel", kernel)
 	if err = env.Save(); err != nil {
 		log.Println("Write %s failed", UBOOT_ENV)
 		return err
