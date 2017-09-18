@@ -59,7 +59,7 @@ const (
 	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
 
 	UBOOT_ENV        = SYSBOOT_MNT_DIR + "uboot.env"
-	BACKUP_SNAP_PATH = "/recovery/backup_snaps/"
+	BACKUP_SNAP_PATH = "/backup_snaps/"
 )
 
 var configs rplib.ConfigRecovery
