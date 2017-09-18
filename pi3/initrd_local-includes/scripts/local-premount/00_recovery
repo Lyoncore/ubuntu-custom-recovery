@@ -3,6 +3,7 @@
 
 #redirect output to serial console, since the HDMI output not enabled
 exec </dev/ttyS0 >/dev/ttyS0 2>&1
+console="/dev/ttyS0"
 
 PREREQ=""
 
@@ -14,7 +15,7 @@ prereqs()
 
 debugshell()
 {
-    PS1='debugshell> ' /bin/sh -i </dev/console >/dev/console 2>&1 # XXX: debug
+    PS1='debugshell> ' /bin/sh -i <$console >$console 2>&1 # XXX: debug
 }
 
 case "$1" in
@@ -83,7 +84,7 @@ for dir in /bin /lib /lib64 /etc /var/ /usr /sbin; do
     	mount --bind  $osrootfs/$dir/ $newroot/$dir/
     fi
 done
-for dir in /run /dev /tmp /sys /srv /proc /mnt /root /recovery /recovery_partition; do
+for dir in /run /dev /tmp /sys /srv /proc /mnt /root /recovery /backup_snaps; do
     mkdir -p $newroot/$dir/
 done
 
@@ -104,7 +105,7 @@ for d in modules firmware; do
 done
 
 mount --bind $BASE/recovery/recovery/ $newroot/recovery/
-mount -o defaults,ro "$recovery_part" $newroot/recovery_partition
+mount --bind $BASE/recovery/backup_snaps $newroot/backup_snaps/
 
 echo "[switch_root to newroot]"
 mount --bind /sys /$newroot/sys
@@ -117,7 +118,10 @@ echo "[chroot execute recovery.bin]"
 set +e
 /bin/chroot /$newroot /recovery/bin/recovery.bin $recoverytype "$recoverylabel"
 ret=$?
-set -e
+
+if [ $ret != 0 ];then
+    debugshell
+fi
 
 sync
 
