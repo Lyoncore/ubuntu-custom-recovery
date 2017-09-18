@@ -94,7 +94,7 @@ func UpdateUbootEnv() error {
 		core = filepath.Base(strings.Join(core_s, ""))
 	} else {
 		log.Println("Error! no core snap or too many found:", core_s)
-		return err
+		return fmt.Errorf("Finding core snap error in %s", BACKUP_SNAP_PATH)
 	}
 	env.Set("recovery_core", core)
 	if err = env.Save(); err != nil {
@@ -107,7 +107,7 @@ func UpdateUbootEnv() error {
 		kernel = filepath.Base(strings.Join(kernel_s, ""))
 	} else {
 		log.Println("Error! no kernel snap or too many found:", kernel_s)
-		return err
+		return fmt.Errorf("Finding kernel snap error in %s", BACKUP_SNAP_PATH)
 	}
 	env.Set("recovery_kernel", kernel)
 	if err = env.Save(); err != nil {
