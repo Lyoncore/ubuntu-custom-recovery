@@ -93,7 +93,7 @@ func UpdateUbootEnv() error {
 	if cap(core_s) == 1 {
 		core = filepath.Base(strings.Join(core_s, ""))
 	} else {
-		log.Println("Error!, no file or too many files found")
+		log.Println("Error! no core snap or too many found:", core_s)
 		return err
 	}
 	env.Set("recovery_core", core)
@@ -106,7 +106,7 @@ func UpdateUbootEnv() error {
 	if cap(kernel_s) == 1 {
 		kernel = filepath.Base(strings.Join(kernel_s, ""))
 	} else {
-		log.Println("Error!, no file or too many files found")
+		log.Println("Error! no kernel snap or too many found:", kernel_s)
 		return err
 	}
 	env.Set("recovery_kernel", kernel)
