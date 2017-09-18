@@ -68,11 +68,12 @@ if [ -n $FIXRTC ]; then
     date "+%Y-%m-%d %T" --set="$(stat -c %y $BASE/recovery/recovery/factory/writable.tar.xz )"
 fi
 
-# mount os snap on chroot
+# mount core snap on chroot
+core_snap=$(tr " " "\n" < /proc/cmdline | grep 'snap_core=' | sed -e 's/snap_core=//')
 modprobe squashfs
 osrootfs=$BASE/ossnap/
 mkdir -p $osrootfs
-mount $BASE/recovery/os.snap $osrootfs
+mount $BASE/recovery/backup_snaps/$core_snap $osrootfs
 
 newroot=$BASE/chroot/
 mkdir -p $newroot
@@ -86,9 +87,10 @@ for dir in /run /dev /tmp /sys /srv /proc /mnt /root /recovery /recovery_partiti
     mkdir -p $newroot/$dir/
 done
 
+kernel_snap=$(tr " " "\n" < /proc/cmdline | grep 'snap_kernel=' | sed -e 's/snap_kernel=//')
 kernelfs=$BASE/kerelsnap/
 mkdir -p $kernelfs
-mount $BASE/recovery/kernel.snap $kernelfs
+mount $BASE/recovery/backup_snaps/$kernel_snap $kernelfs
 # mount lib/modules/, lib/firmware/
 for d in modules firmware; do
     # old deprecated
