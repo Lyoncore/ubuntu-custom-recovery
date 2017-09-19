@@ -31,7 +31,6 @@ import (
 	"strings"
 	"syscall"
 
-	recoverydirs "github.com/Lyoncore/ubuntu-recovery-rplib/dirs/recovery"
 	uenv "github.com/mvo5/uboot-go/uenv"
 
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
@@ -292,8 +291,8 @@ func AddFirstBootService(RecoveryType, RecoveryLabel string) error {
 		return err
 	}
 
-	// unpack writable_local-include
-	cmd := exec.Command("unsquashfs", "-f", "-d", WRITABLE_MNT_DIR, recoverydirs.WritableLocalIncludeSquashfs)
+	// unpack writable-includes
+	cmd := exec.Command("unsquashfs", "-f", "-d", WRITABLE_MNT_DIR, WRITABLE_INCLUDES_SQUASHFS)
 	err := cmd.Run()
 	if err != nil {
 		return err

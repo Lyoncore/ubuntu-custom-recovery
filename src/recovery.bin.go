@@ -60,6 +60,8 @@ const (
 
 	UBOOT_ENV        = SYSBOOT_MNT_DIR + "uboot.env"
 	BACKUP_SNAP_PATH = "/backup_snaps/"
+
+	WRITABLE_INCLUDES_SQUASHFS = "/recovery/writable-includes.squashfs"
 )
 
 var configs rplib.ConfigRecovery

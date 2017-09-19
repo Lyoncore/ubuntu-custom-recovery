@@ -304,7 +304,7 @@ func (s *BuilderSuite) TestAddFirstBootService(c *C) {
 	err = rplib.FileCopy("tests/syslog.service", EtcPath)
 	c.Assert(err, IsNil)
 
-	err = rplib.FileCopy("tests/writable_local-include.squashfs", "/recovery/")
+	err = rplib.FileCopy("tests/writable-includes.squashfs", "/recovery/")
 	c.Assert(err, IsNil)
 
 	err = reco.AddFirstBootService(RecoveryType, RecoveryLabel)
@@ -315,7 +315,7 @@ func (s *BuilderSuite) TestAddFirstBootService(c *C) {
 	_, err = os.Stat(filepath.Join(reco.SYSTEM_DATA_PATH, "/etc/systemd/system/syslog.service"))
 	c.Check(err, IsNil)
 
-	// Verify writable_local-include/system-data/etc/systemd/system/devmode-firstboot.service should be exist
+	// Verify writable-includes/system-data/etc/systemd/system/devmode-firstboot.service should be exist
 	_, err = os.Stat(filepath.Join(reco.WRITABLE_MNT_DIR, "system-data/etc/systemd/system/devmode-firstboot.service"))
 	c.Check(err, IsNil)
 
