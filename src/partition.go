@@ -209,7 +209,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	} else if partType == "mbr" {
 		//mbr is supported, but nothing to do
 	} else {
-		return fmt.Errorf("Oops, unkown partition type:%s\n", partType)
+		return fmt.Errorf("Oops, unknown partition type:%s", partType)
 	}
 
 	// Keep system-boot partition, and only mkfs

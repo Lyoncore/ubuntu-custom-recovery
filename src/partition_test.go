@@ -299,7 +299,7 @@ func (s *GetPartSuite) TestRestoreParts(c *C) {
 
 	//Unsupported partition type
 	err = reco.RestoreParts(parts, "u-boot", "OthersPartType")
-	c.Check(err, Equals, "Oops, unkown partition type:OthersPartType\n")
+	c.Check(err.Error(), Equals, "Oops, unknown partition type:OthersPartType")
 
 	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)
