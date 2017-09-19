@@ -206,6 +206,10 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	var dev_path string = strings.Replace(parts.DevPath, "mapper/", "", -1)
 	if partType == "gpt" {
 		rplib.Shellexec("sgdisk", dev_path, "--randomize-guids", "--move-second-header")
+	} else if partType == "mbr" {
+		//mbr is supported, but nothing to do
+	} else {
+		return fmt.Errorf("Oops, unkown partition type:%s\n", partType)
 	}
 
 	// Keep system-boot partition, and only mkfs
@@ -250,7 +254,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	if partType == "gpt" {
 		cmd = exec.Command("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "ext4", writable_start, "-1M", "name", writable_nr, WritableLabel)
 		cmd.Run()
-	} else { //mbr
+	} else if partType == "mbr" {
 		cmd = exec.Command("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "fat32", writable_start, "-1M")
 		cmd.Run()
 	}
