@@ -1,0 +1,150 @@
+#!/bin/bash
+
+exec > >(tee -i /tmp/post-populate-rootfs.log)
+exec 2>&1
+
+set -ex
+
+UNPACK_GADGET=$PWD/$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/gadget
+UNPACK_BOOT=$PWD/$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/image/boot/
+
+backup_writable () {
+    echo "backup writable.tar.xz"
+    mkdir $UNPACK_GADGET/recovery-assets/recovery/factory/ || true
+    tar --xattrs -Jcpf $UNPACK_GADGET/recovery-assets/recovery/factory/writable.tar.xz -C $PWD/$UBUNTU_IMAGE_HOOK_ROOTFS .
+}
+
+backup_bootfs () {
+    echo "backup bootfs to system-boot.tar.xz"
+    TMPDIR=$(mktemp -d)
+    cp -r $UNPACK_GADGET/boot-assets/* $TMPDIR
+    if [ -d $UNPACK_BOOT/uboot/ ]; then
+        cp -r $UNPACK_BOOT/uboot/* $TMPDIR
+    elif [ -d $UNPACK_BOOT/grub/ ]; then
+        cp -r $UNPACK_BOOT/grub/* $TMPDIR
+    fi
+
+    mkdir $UNPACK_GADGET/recovery-assets/recovery/factory/ || true
+    tar --xattrs -Jcpf $UNPACK_GADGET/recovery-assets/recovery/factory/system-boot.tar.xz -C $TMPDIR .
+
+    rm -rf $TMPDIR
+}
+
+populate_recovery_initrd () {
+    echo "populate recovery initrd"
+    KERNEL=$(find $UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/ -name '*kernel_*.snap' | xargs basename)
+    mkdir $UNPACK_GADGET/recovery-assets/$KERNEL || true
+    cdir=$PWD
+    TMPDIR=$(mktemp -d)
+    cd $TMPDIR
+    if file $UNPACK_BOOT/uboot/*.snap/initrd.img | grep 'LZMA \| XZ'; then
+        unxz < $UNPACK_BOOT/uboot/*.snap/initrd.img | cpio -i
+        cp $UNPACK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
+        sed -i '1i/scripts/local-premount/00_recovery \"$@\"' scripts/local-premount/ORDER
+        find | cpio --quiet -o -H newc | xz -c9 --check=crc32 > $UNPACK_GADGET/recovery-assets/$KERNEL/initrd.img
+    elif file $UNPACK_BOOT/uboot/*.snap/initrd.img | grep gzip; then
+        gunzip < $UNPACK_BOOT/uboot/*.snap/initrd.img | cpio -i
+        cp $UNPACK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
+        sed -i '1i/scripts/local-premount/00_recovery \"$@\"' scripts/local-premount/ORDER
+        find | cpio --quiet -o -H newc | gzip -9 > $UNPACK_GADGET/recovery-assets/$KERNEL/initrd.img
+    fi
+
+    cd $cdir
+    rm -rf $TMPDIR
+
+}
+
+backup_kernel() {
+    echo "backup kernel"
+    KERNEL=$(find $UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/ -name '*kernel_*.snap' | xargs basename)
+    mkdir $UNPACK_GADGET/recovery-assets/$KERNEL || true
+    cp $UNPACK_BOOT/uboot/*.snap/kernel.img $UNPACK_GADGET/recovery-assets/$KERNEL
+}
+
+backup_snaps() {
+    echo "backup snaps"
+    CORE=$(find $UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/ -name 'core_*.snap')
+    KERNEL=$(find $UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/ -name '*kernel_*.snap')
+
+    mkdir $UNPACK_GADGET/recovery-assets/backup_snaps
+    cp $CORE $UNPACK_GADGET/recovery-assets/backup_snaps/$(basename $CORE)
+    cp $KERNEL $UNPACK_GADGET/recovery-assets/backup_snaps/$(basename $KERNEL)
+}
+
+prepare_writable_squashfs() {
+    echo "prepare writable squashfs"
+    mksquashfs $UNPACK_GADGET/writable-includes $UNPACK_GADGET/recovery-assets/recovery/writable-includes.squashfs -all-root
+    rm -rf $UNPACK_GADGET/writable-includes
+}
+
+_parse_yaml() {
+    # $1: the yaml file path
+    # $2: the first key header
+    # $3: the second key header
+    local file=$1
+    local head1=$2 head2=$3
+    local s='[[:space:]]*' w='[a-zA-Z0-9_-]*' fs=$(echo @|tr @ '\034')
+    sed -ne "s|^\($s\):|\1|" \
+        -e "s|^\($s\)\($w\)$s:$s[\"']\(.*\)[\"']$s\$|\1$fs\2$fs\3|p" \
+        -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  $file |
+    awk -F$fs '{
+      indent = length($1)/2;
+      vname[indent] = $2;
+      for (i in vname) {if (i > indent) {delete vname[i]}}
+      if (length($3) > 0) {
+         vn=""; for (i=0; i<indent; i++) {vn=(vn)(vname[i])}
+         if (vn == "'$head1'" && $2 == "'$head2'" )
+            printf("%s", $3);
+      }
+    }'
+}
+
+_check_u-boot-tools() {
+    if [ ! -f /usr/bin/fw_setenv ];then
+        echo "ERROR: Cannot find fw_setenv, please install u-boot-tools"
+        exit 1
+    fi
+}
+
+_gen_u-boot_cfg () {
+    TMP=$1
+    path=$2
+    cat << EOF > $TMP
+$path 0x0000 0x20000
+$path 0x0000 0x20000
+EOF
+
+}
+
+update_bootloader_cfg() {
+    echo "update_bootloader_cfg"
+    recovery_type=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml recovery type)
+    bootloader=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml configs bootloader)
+    if [ $bootloader == 'u-boot' ];then
+        _check_u-boot-tools
+        TMP=$(mktemp)
+        REL_PATH=$(realpath --relative-to=$PWD $UNPACK_BOOT/uboot/uboot.env)
+        _gen_u-boot_cfg $TMP $REL_PATH
+
+        if [ $recovery_type == "factory_install" ];then
+            fw_setenv -c $TMP snap_mode recovery
+
+            RECOVERY_CORE=$(fw_printenv -c $TMP snap_core | cut -d '=' -f 2)
+            RECOVERY_KERNEL=$(fw_printenv -c $TMP snap_kernel | cut -d '=' -f 2)
+            fw_setenv -c $TMP recovery_core $RECOVERY_CORE
+            fw_setenv -c $TMP recovery_kernel $RECOVERY_KERNEL
+        fi
+        rm $TMP
+    else #TODO: To support grub
+        echo "Unkonw bootloader:$bootloader"
+        exit 1
+    fi
+}
+
+backup_writable
+backup_bootfs
+populate_recovery_initrd
+backup_kernel
+backup_snaps
+prepare_writable_squashfs
+update_bootloader_cfg
