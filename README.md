@@ -7,8 +7,8 @@
 
 ## Build image
 ``` bash
-git clone https://github.com/Lyoncore/arm-config.git
-cd arm-config/
+git clone https://github.com/Lyoncore/ubuntu-recovery.git
+cd ubuntu-recovery/
 go get launchpad.net/godeps
 godeps -t -u dependencies.tsv
 ```
@@ -17,8 +17,7 @@ godeps -t -u dependencies.tsv
 
 Build recovery.bin
 ``` bash
-cd pi3
-GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc go run ../build.go build
+GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc go run build.go build
 ```
 Build base image
 ``` bash

@@ -57,7 +57,7 @@ func main() {
 
 		case "build":
 			clean()
-			build("local-includes/recovery/bin/recovery.bin", "../src/", []string{})
+			build("recovery-includes/recovery/bin/recovery.bin", "./src/", []string{})
 
 		case "clean":
 			clean()
