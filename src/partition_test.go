@@ -31,8 +31,8 @@ import (
 	"syscall"
 	"testing"
 
-	reco "github.com/Lyoncore/arm-config/src"
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	reco "github.com/Lyoncore/ubuntu-recovery/src"
 	"github.com/snapcore/snapd/logger"
 	. "gopkg.in/check.v1"
 )
@@ -55,7 +55,7 @@ const (
 )
 
 var mbrLoop, gptLoop string
-var part_size int64 = 90 * 1024 *1024
+var part_size int64 = 90 * 1024 * 1024
 
 func MountTestImg(mntImg string, umntLoop string) {
 	if umntLoop != "" {
@@ -76,21 +76,21 @@ func MountTestImg(mntImg string, umntLoop string) {
 	}
 
 	cmd := exec.Command("partprobe")
-        cmd.Run()
+	cmd.Run()
 }
 
 func (s *GetPartSuite) SetUpTest(c *C) {
-        logger.SimpleSetup()
-        //Create a MBR image
-        rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s",MBRimage), fmt.Sprintf("bs=%d",part_size), "count=1")
-        rplib.Shellexec("sgdisk", "--load-backup=tests/mbr.part", MBRimage)
+	logger.SimpleSetup()
+	//Create a MBR image
+	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s", MBRimage), fmt.Sprintf("bs=%d", part_size), "count=1")
+	rplib.Shellexec("sgdisk", "--load-backup=tests/mbr.part", MBRimage)
 
-        //Create a GPT image
-        rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s",GPTimage), fmt.Sprintf("bs=%d",part_size), "count=1")
-        rplib.Shellexec("sgdisk", "--load-backup=tests/gpt.part", GPTimage)
+	//Create a GPT image
+	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s", GPTimage), fmt.Sprintf("bs=%d", part_size), "count=1")
+	rplib.Shellexec("sgdisk", "--load-backup=tests/gpt.part", GPTimage)
 
 	cmd := exec.Command("partprobe")
-        cmd.Run()
+	cmd.Run()
 }
 
 func (s *GetPartSuite) TearDownTest(c *C) {
@@ -148,23 +148,23 @@ func (s *GetPartSuite) TestgetPartitions(c *C) {
 
 	//Case 1, all, not exist
 	getPartsConds(c, RecoveryLabel, mbrLoop, false, false, false, false)
-	
+
 	//Case 2, only recovery partition exist
-        rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
-        cmd := exec.Command("partprobe")
-        cmd.Run()
+	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
+	cmd := exec.Command("partprobe")
+	cmd.Run()
 	getPartsConds(c, RecoveryLabel, mbrLoop, true, true, false, false)
 
 	//Case 3, only recovery, system-boot partition exist
-        rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, SysbootPart))
-        cmd = exec.Command("partprobe")
-        cmd.Run()
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, SysbootPart))
+	cmd = exec.Command("partprobe")
+	cmd.Run()
 	getPartsConds(c, RecoveryLabel, mbrLoop, true, true, true, false)
 
 	//Case4 : recovery, writable, system-boot exist
-        rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, WritablePart))
-        cmd = exec.Command("partprobe")
-        cmd.Run()
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, WritablePart))
+	cmd = exec.Command("partprobe")
+	cmd.Run()
 	getPartsConds(c, RecoveryLabel, mbrLoop, true, true, true, true)
 
 	//GPT case
@@ -174,21 +174,21 @@ func (s *GetPartSuite) TestgetPartitions(c *C) {
 	getPartsConds(c, RecoveryLabel, gptLoop, false, false, false, false)
 
 	//Case 2, only recovery partition exist
-        rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, RecoveryPart))
-        cmd = exec.Command("partprobe")
-        cmd.Run()
+	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, RecoveryPart))
+	cmd = exec.Command("partprobe")
+	cmd.Run()
 	getPartsConds(c, RecoveryLabel, gptLoop, true, true, false, false)
 
 	//Case 3, only recovery, system-boot partition exist
-        rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, SysbootPart))
-        cmd = exec.Command("partprobe")
-        cmd.Run()
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, SysbootPart))
+	cmd = exec.Command("partprobe")
+	cmd.Run()
 	getPartsConds(c, RecoveryLabel, gptLoop, true, true, true, false)
 
 	//Case4 : recovery, writable, system-boot exist
-        rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart))
-        cmd = exec.Command("partprobe")
-        cmd.Run()
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart))
+	cmd = exec.Command("partprobe")
+	cmd.Run()
 	getPartsConds(c, RecoveryLabel, gptLoop, true, true, true, true)
 
 	MountTestImg("", gptLoop)
@@ -197,11 +197,11 @@ func (s *GetPartSuite) TestgetPartitions(c *C) {
 func (s *GetPartSuite) TestFindPart(c *C) {
 
 	MountTestImg(MBRimage, "")
-        rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
-        rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, SysbootPart))
-        rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, WritablePart))
-        cmd := exec.Command("partprobe")
-        cmd.Run()
+	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, SysbootPart))
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, WritablePart))
+	cmd := exec.Command("partprobe")
+	cmd.Run()
 
 	DevNode, DevPath, PartNr, err := reco.FindPart(RecoveryLabel)
 	c.Check(err, IsNil)
@@ -212,11 +212,11 @@ func (s *GetPartSuite) TestFindPart(c *C) {
 	c.Check(PartNr, Equals, nr)
 
 	MountTestImg(GPTimage, mbrLoop)
-        rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
-        rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, SysbootPart))
-        rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, WritablePart))
-        cmd = exec.Command("partprobe")
-        cmd.Run()
+	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, SysbootPart))
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, WritablePart))
+	cmd = exec.Command("partprobe")
+	cmd.Run()
 	DevNode, DevPath, PartNr, err = reco.FindPart(RecoveryLabel)
 	c.Check(err, IsNil)
 	c.Check(DevNode, Equals, mbrLoop)
@@ -251,11 +251,11 @@ func (s *GetPartSuite) TestRestoreParts(c *C) {
 	// GPT case
 	// Find boot device, all other partiitons info
 	LoopUnloopImg(GPTimage, "")
-        rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, RecoveryPart))
-        rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, SysbootPart))
-        rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart))
-        cmd := exec.Command("partprobe")
-        cmd.Run()
+	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, RecoveryPart))
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, SysbootPart))
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart))
+	cmd := exec.Command("partprobe")
+	cmd.Run()
 	parts, err := reco.GetPartitions(RecoveryLabel)
 	c.Assert(err, IsNil)
 	err = reco.RestoreParts(parts, "u-boot", "gpt")

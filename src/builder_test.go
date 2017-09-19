@@ -31,8 +31,8 @@ import (
 	"strings"
 	"syscall"
 
-	reco "github.com/Lyoncore/arm-config/src"
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	reco "github.com/Lyoncore/ubuntu-recovery/src"
 	uenv "github.com/mvo5/uboot-go/uenv"
 	"github.com/snapcore/snapd/logger"
 
