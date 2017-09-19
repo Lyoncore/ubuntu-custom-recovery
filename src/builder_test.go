@@ -57,7 +57,7 @@ func LoopUnloopImg(mntImg string, umntLoop string) {
 		mbrLoop = rplib.Shellcmdoutput(fmt.Sprintf("losetup --find --show %s | xargs basename", mntImg))
 		cmd := exec.Command("kpartx", "-avs", filepath.Join("/dev/", mbrLoop))
 		cmd.Run()
-	} else {
+	} else if mntImg == GPTimage {
 		gptLoop = rplib.Shellcmdoutput(fmt.Sprintf("losetup --find --show %s | xargs basename", mntImg))
 		cmd := exec.Command("kpartx", "-avs", filepath.Join("/dev/", gptLoop))
 		cmd.Run()
