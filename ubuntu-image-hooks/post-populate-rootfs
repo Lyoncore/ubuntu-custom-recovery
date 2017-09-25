@@ -116,6 +116,13 @@ EOF
 
 }
 
+_check_grub-common() {
+    if [ ! -f /usr/bin/grub-editenv ];then
+        echo "ERROR: Cannot find grub-editenv, please install grub-common"
+        exit 1
+    fi
+}
+
 update_bootloader_cfg() {
     echo "update_bootloader_cfg"
     recovery_type=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml recovery type)
@@ -126,6 +133,7 @@ update_bootloader_cfg() {
         REL_PATH=$(realpath --relative-to=$PWD $UNPACK_BOOT/uboot/uboot.env)
         _gen_u-boot_cfg $TMP $REL_PATH
 
+        #TODO: Add support when recovery_type is factory_restore
         if [ $recovery_type == "factory_install" ];then
             fw_setenv -c $TMP snap_mode recovery
 
@@ -135,7 +143,19 @@ update_bootloader_cfg() {
             fw_setenv -c $TMP recovery_kernel $RECOVERY_KERNEL
         fi
         rm $TMP
-    else #TODO: To support grub
+    elif [ $bootloader == 'grub' ]; then
+        _check_grub-common
+
+        if [ $recovery_mode == "factory_install" ];then
+            RECOVERY_CORE=$(grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv list | grep snap_core | cut -d '=' -f 2)
+            RECOVERY_KERNEL=$(grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv list | grep snap_kernel | cut -d '=' -f 2)
+            grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv recovery_core $RECOVERY_CORE
+            grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv recovery_kernel $RECOVERY_KERNEL
+        elif [ $recovery_mode == "headless_installer" ];then
+
+        elif [ $recovery_mode == "factory_restore" ];then
+        fi
+    else
         echo "Unkonw bootloader:$bootloader"
         exit 1
     fi

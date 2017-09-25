@@ -36,30 +36,32 @@ import (
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 )
 
-func hack_grub_cfg(recovery_type_cfg string, recovery_type_label string, recovery_part_label string, grub_cfg string) {
-	// add cloud-init disabled option
+func UpdateGrubCfg(recovery_part_label string, grub_cfg string) error {
 	// sed -i "s/^set cmdline="\(.*\)"$/set cmdline="\1 $cloud_init_disabled"/g"
 	rplib.Shellexec("sed", "-i", "s/^set cmdline=\"\\(.*\\)\"$/set cmdline=\"\\1 $cloud_init_disabled\"/g", grub_cfg)
 
 	// add recovery grub menuentry
 	f, err := os.OpenFile(grub_cfg, os.O_APPEND|os.O_WRONLY, 0600)
-	rplib.Checkerr(err)
+	if err != nil {
+		log.Println("Open %s failed", grub_cfg)
+		return err
+	}
 
 	text := fmt.Sprintf(`
-menuentry "%s" {
+menuentry "Factory Restore" {
         # load recovery system
-        echo "[grub.cfg] load %s system"
+        echo "[grub.cfg] load factory_restore system"
         search --no-floppy --set --label "%s"
         echo "[grub.cfg] root: ${root}"
-        set cmdline="root=LABEL=%s ro init=/lib/systemd/systemd console=ttyS0 console=tty1 panic=-1 -- recoverytype=%s"
+        set cmdline="root=LABEL=%s ro init=/lib/systemd/systemd console=ttyS0 console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore"
         echo "[grub.cfg] loading kernel..."
         loopback loop0 /kernel.snap
-        linux (loop0)/vmlinuz $cmdline
+        linux (loop0)/kernel.img $cmdline
         echo "[grub.cfg] loading initrd..."
         initrd /initrd.img
         echo "[grub.cfg] boot..."
         boot
-}`, recovery_type_label, recovery_type_cfg, recovery_part_label, recovery_part_label, recovery_type_cfg)
+}`, recovery_part_label, recovery_part_label)
 	if _, err = f.WriteString(text); err != nil {
 		panic(err)
 	}
