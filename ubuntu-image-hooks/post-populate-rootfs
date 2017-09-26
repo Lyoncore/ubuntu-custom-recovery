@@ -126,6 +126,7 @@ update_bootloader_cfg() {
         REL_PATH=$(realpath --relative-to=$PWD $UNPACK_BOOT/uboot/uboot.env)
         _gen_u-boot_cfg $TMP $REL_PATH
 
+        #TODO: Add support when recovery_type is factory_restore
         if [ $recovery_type == "factory_install" ];then
             fw_setenv -c $TMP snap_mode recovery
 
