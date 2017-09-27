@@ -7,4 +7,3 @@ cp -r initrd-hooks $SNAPCRAFT_PART_INSTALL/recovery-assets/
 cp ../../recovery-configs/src/config.yaml $SNAPCRAFT_PART_INSTALL/recovery-assets/recovery/
 cp -r writable-includes $SNAPCRAFT_PART_INSTALL/
 cp -r ubuntu-image-hooks $SNAPCRAFT_PART_INSTALL/
-mkenvimage -r -s 131072 -o $SNAPCRAFT_PART_INSTALL/uboot.env recovery-includes/uboot.env.in
