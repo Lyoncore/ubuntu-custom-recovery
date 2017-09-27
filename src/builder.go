@@ -69,7 +69,7 @@ menuentry "Factory Restore" {
 	f.Close()
 }
 
-func UpdateUbootEnv() error {
+func UpdateUbootEnv(RecoveryLabel string) error {
 	// update uboot.env in recovery partition after first install
 	env, err := uenv.Open(UBOOT_ENV)
 	if err != nil {
@@ -111,6 +111,12 @@ func UpdateUbootEnv() error {
 		return fmt.Errorf("Finding kernel snap error in %s", BACKUP_SNAP_PATH)
 	}
 	env.Set("recovery_kernel", kernel)
+	if err = env.Save(); err != nil {
+		log.Println("Write %s failed", UBOOT_ENV)
+		return err
+	}
+
+	env.Set("recovery_label", fmt.Sprintf("LABEL=%s", RecoveryLabel))
 	if err = env.Save(); err != nil {
 		log.Println("Write %s failed", UBOOT_ENV)
 		return err

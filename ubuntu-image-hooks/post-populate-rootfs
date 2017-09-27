@@ -21,7 +21,9 @@ backup_bootfs () {
     if [ -d $UNPACK_BOOT/uboot/ ]; then
         cp -r $UNPACK_BOOT/uboot/* $TMPDIR
     elif [ -d $UNPACK_BOOT/grub/ ]; then
-        cp -r $UNPACK_BOOT/grub/* $TMPDIR
+        mkdir -p $TMPDIR/EFI/ubuntu/
+        cp -r $UNPACK_BOOT/grub/* $TMPDIR/EFI/ubuntu/
+        mkdir -p $TMPDIR/EFI/boot/
     fi
 
     mkdir $UNPACK_GADGET/recovery-assets/recovery/factory/ || true
@@ -148,15 +150,17 @@ update_bootloader_cfg() {
     elif [ $bootloader == 'grub' ]; then
         _check_grub-common
 
-        if [ $recovery_mode == "factory_install" ];then
-            RECOVERY_CORE=$(grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv list | grep snap_core | cut -d '=' -f 2)
-            RECOVERY_KERNEL=$(grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv list | grep snap_kernel | cut -d '=' -f 2)
-            grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv recovery_core $RECOVERY_CORE
-            grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv recovery_kernel $RECOVERY_KERNEL
-        elif [ $recovery_mode == "headless_installer" ];then
+        if [ $recovery_type == "factory_install" ];then
+        elif [ $recovery_type == "headless_installer" ];then
 
-        elif [ $recovery_mode == "factory_restore" ];then
+        elif [ $recovery_type == "factory_restore" ];then
         fi
+
+        RECOVERY_CORE=$(grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv list | grep snap_core | cut -d '=' -f 2)
+        RECOVERY_KERNEL=$(grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv list | grep snap_kernel | cut -d '=' -f 2)
+        grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv recovery_core $RECOVERY_CORE
+        grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv recovery_kernel $RECOVERY_KERNEL
+        grub-editenv $UNPACK_GADGET/image/boot/grub/grubenv recovery_label $recovery_label
     else
         echo "Unkonw bootloader:$bootloader"
         exit 1

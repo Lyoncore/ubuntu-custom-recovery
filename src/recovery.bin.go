@@ -181,7 +181,7 @@ func recoverProcess() {
 	log.Println("Update uboot env")
 	//fsck needs ignore error code
 	log.Println("[set next recoverytype to factory_restore]")
-	err = updateUbootEnv()
+	err = updateUbootEnv(RecoveryLabel)
 	rplib.Checkerr(err)
 }
 

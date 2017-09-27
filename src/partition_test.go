@@ -121,7 +121,6 @@ func getPartsConds(c *C, Label string, Loop string, passCase bool, recoCase bool
 		ret = strings.Compare(parts.DevPath, fmt.Sprintf("/dev/mapper/%s", Loop))
 		c.Assert(ret, Equals, 0)
 	}
-
 	if recoCase {
 		nr, err := strconv.Atoi(RecoveryPart)
 		c.Assert(err, IsNil)

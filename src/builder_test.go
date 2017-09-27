@@ -311,6 +311,7 @@ func (s *BuilderSuite) TestAddFirstBootService(c *C) {
 }
 
 func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
+	var configs rplib.ConfigRecovery
 	const CORE_SNAP = "core_9999.snap"
 	const KERNEL_SNAP = "pi2-kernel_88.snap"
 	//Create testing files
@@ -327,11 +328,14 @@ func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
 	err = ioutil.WriteFile(filepath.Join(reco.BACKUP_SNAP_PATH, CORE_SNAP), csnap, 0644)
 	c.Assert(err, IsNil)
 
-	ksnap := []byte("core snap\n")
+	ksnap := []byte("kernel snap\n")
 	err = ioutil.WriteFile(filepath.Join(reco.BACKUP_SNAP_PATH, KERNEL_SNAP), ksnap, 0644)
 	c.Assert(err, IsNil)
 
-	err = reco.UpdateUbootEnv()
+	err = configs.Load("tests/config.yaml")
+	c.Assert(err, IsNil)
+
+	err = reco.UpdateUbootEnv(configs.Recovery.FsLabel)
 	c.Assert(err, IsNil)
 
 	// Verify
@@ -341,6 +345,7 @@ func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
 	c.Check(env.Get("recovery_type"), Equals, "factory_restore")
 	c.Check(env.Get("recovery_core"), Equals, CORE_SNAP)
 	c.Check(env.Get("recovery_kernel"), Equals, KERNEL_SNAP)
+	c.Check(env.Get("recovery_label"), Equals, fmt.Sprintf("LABEL=%s", configs.Recovery.FsLabel))
 
 	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
 }
