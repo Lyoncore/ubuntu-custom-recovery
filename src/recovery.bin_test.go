@@ -157,7 +157,7 @@ func (s *MainTestSuite) TestrecoverProcess(c *C) {
 	}()
 
 	origUpdateUbootEnv := updateUbootEnv
-	updateUbootEnv = func() error { return nil }
+	updateUbootEnv = func(recoverylabel string) error { return nil }
 	defer func() { updateUbootEnv = origUpdateUbootEnv }()
 
 	recoverProcess()
