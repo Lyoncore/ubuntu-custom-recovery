@@ -39,30 +39,9 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-const gptMnt = "/tmp/gptmnt"
-
 type BuilderSuite struct{}
 
 var _ = Suite(&BuilderSuite{})
-
-func LoopUnloopImg(mntImg string, umntLoop string) {
-	if umntLoop != "" {
-		cmd := exec.Command("kpartx", "-ds", filepath.Join("/dev/", umntLoop))
-		cmd.Run()
-		cmd = exec.Command("losetup", "-d", filepath.Join("/dev/", umntLoop))
-		cmd.Run()
-	}
-
-	if mntImg == MBRimage {
-		mbrLoop = rplib.Shellcmdoutput(fmt.Sprintf("losetup --find --show %s | xargs basename", mntImg))
-		cmd := exec.Command("kpartx", "-avs", filepath.Join("/dev/", mbrLoop))
-		cmd.Run()
-	} else {
-		gptLoop = rplib.Shellcmdoutput(fmt.Sprintf("losetup --find --show %s | xargs basename", mntImg))
-		cmd := exec.Command("kpartx", "-avs", filepath.Join("/dev/", gptLoop))
-		cmd.Run()
-	}
-}
 
 func (s *BuilderSuite) SetUpSuite(c *C) {
 	logger.SimpleSetup()
@@ -76,8 +55,6 @@ func (s *BuilderSuite) SetUpSuite(c *C) {
 	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", RecoveryLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, RecoveryPart))
 	rplib.Shellexec("mkfs.ext4", "-F", "-L", SysbootLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, SysbootPart))
 	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, WritablePart))
-	cmd := exec.Command("partprobe")
-	cmd.Run()
 
 	rplib.Shellexec("kpartx", "-ds", filepath.Join("/dev/", mbrLoop))
 	rplib.Shellexec("losetup", "-d", filepath.Join("/dev/", mbrLoop))
@@ -95,11 +72,13 @@ func (s *BuilderSuite) SetUpSuite(c *C) {
 	rplib.Shellexec("kpartx", "-ds", filepath.Join("/dev/", gptLoop))
 	rplib.Shellexec("losetup", "-d", filepath.Join("/dev/", gptLoop))
 
+	cmd := exec.Command("partprobe")
+	cmd.Run()
 }
 
 func (s *BuilderSuite) TearDownSuite(c *C) {
-	LoopUnloopImg("", gptLoop)
-	LoopUnloopImg("", mbrLoop)
+	MountTestImg("", gptLoop)
+	MountTestImg("", mbrLoop)
 	os.Remove(MBRimage)
 	os.Remove(GPTimage)
 }
@@ -141,7 +120,7 @@ func (s *BuilderSuite) TestConfirmRecovery(c *C) {
 }
 
 func (s *BuilderSuite) TestBackupAssertions(c *C) {
-	LoopUnloopImg(GPTimage, "")
+	MountTestImg(GPTimage, "")
 	err := os.MkdirAll(gptMnt, 0755)
 	c.Assert(err, IsNil)
 	defer os.Remove(gptMnt)
@@ -183,7 +162,7 @@ func (s *BuilderSuite) TestBackupAssertions(c *C) {
 	c.Assert(islink, Equals, true)
 	syscall.Unmount(gptMnt, 0)
 
-	LoopUnloopImg("", gptLoop)
+	MountTestImg("", gptLoop)
 	os.RemoveAll(reco.ASSERTION_BACKUP_DIR)
 	os.RemoveAll(reco.WRITABLE_MNT_DIR)
 }
@@ -332,6 +311,7 @@ func (s *BuilderSuite) TestAddFirstBootService(c *C) {
 }
 
 func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
+	var configs rplib.ConfigRecovery
 	const CORE_SNAP = "core_9999.snap"
 	const KERNEL_SNAP = "pi2-kernel_88.snap"
 	//Create testing files
@@ -348,11 +328,14 @@ func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
 	err = ioutil.WriteFile(filepath.Join(reco.BACKUP_SNAP_PATH, CORE_SNAP), csnap, 0644)
 	c.Assert(err, IsNil)
 
-	ksnap := []byte("core snap\n")
+	ksnap := []byte("kernel snap\n")
 	err = ioutil.WriteFile(filepath.Join(reco.BACKUP_SNAP_PATH, KERNEL_SNAP), ksnap, 0644)
 	c.Assert(err, IsNil)
 
-	err = reco.UpdateUbootEnv()
+	err = configs.Load("tests/config.yaml")
+	c.Assert(err, IsNil)
+
+	err = reco.UpdateUbootEnv(configs.Recovery.FsLabel)
 	c.Assert(err, IsNil)
 
 	// Verify
@@ -362,6 +345,7 @@ func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
 	c.Check(env.Get("recovery_type"), Equals, "factory_restore")
 	c.Check(env.Get("recovery_core"), Equals, CORE_SNAP)
 	c.Check(env.Get("recovery_kernel"), Equals, KERNEL_SNAP)
+	c.Check(env.Get("recovery_label"), Equals, fmt.Sprintf("LABEL=%s", configs.Recovery.FsLabel))
 
 	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
 }

@@ -125,10 +125,12 @@ func FindPart(Label string) (devNode string, devPath string, partNr int, err err
 	return
 }
 
+var parts Partitions
+
 func GetPartitions(recoveryLabel string) (*Partitions, error) {
 	var err error
 	const OLD_PARTITION = "/tmp/old-partition.txt"
-	parts := Partitions{"", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+	parts = Partitions{"", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 
 	//Get boot device
 	//The boot device must has a recovery partition
@@ -201,11 +203,19 @@ func GetPartitions(recoveryLabel string) (*Partitions, error) {
 	return &parts, nil
 }
 
-// TODO: bootloader if need to support grub
 func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	var dev_path string = strings.Replace(parts.DevPath, "mapper/", "", -1)
-	if partType == "gpt" {
-		rplib.Shellexec("sgdisk", dev_path, "--randomize-guids", "--move-second-header")
+	var part_nr int
+	if bootloader == "u-boot" {
+		parts.Writable_start = parts.Recovery_end + 1
+		parts.Writable_nr = parts.Recovery_nr + 1 //writable is one after recovery
+		part_nr = parts.Recovery_nr + 1
+	} else if bootloader == "grub" {
+		parts.Writable_start = parts.Sysboot_end + 1
+		parts.Writable_nr = parts.Sysboot_nr + 1 //writable is one after system-boot
+		part_nr = parts.Recovery_nr + 1
+	} else {
+		return fmt.Errorf("Oops, unknown bootloader:%s", bootloader)
 	}
 
 	// Keep system-boot partition, and only mkfs
@@ -215,6 +225,14 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 		// If we lose system-boot, and we cannot know the proper location
 		return fmt.Errorf("Oops, We lose system-boot")
 	}
+	if partType == "gpt" {
+		rplib.Shellexec("sgdisk", dev_path, "--randomize-guids", "--move-second-header")
+	} else if partType == "mbr" {
+		//nothing to do here
+	} else {
+		return fmt.Errorf("Oops, unknown partition type:%s", partType)
+	}
+
 	sysboot_path := fmtPartPath(parts.DevPath, parts.Sysboot_nr)
 	cmd := exec.Command("mkfs.vfat", "-F", "32", "-n", SysbootLabel, sysboot_path)
 	cmd.Run()
@@ -234,13 +252,10 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 
 	// Remove partitions after recovery which include writable partition
 	// And do mkfs in writable (For ensure the writable is enlarged)
-	parts.Writable_start = parts.Recovery_end + 1
 	var writable_start string = fmt.Sprintf("%vB", parts.Writable_start)
-	parts.Writable_nr = parts.Recovery_nr + 1 //writable is one after recovery
 	var writable_nr string = strconv.Itoa(parts.Writable_nr)
 	writable_path := fmtPartPath(parts.DevPath, parts.Writable_nr)
 
-	part_nr := parts.Recovery_nr + 1
 	for part_nr <= parts.Last_part_nr {
 		cmd = exec.Command("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))
 		cmd.Run()
@@ -250,7 +265,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	if partType == "gpt" {
 		cmd = exec.Command("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "ext4", writable_start, "-1M", "name", writable_nr, WritableLabel)
 		cmd.Run()
-	} else { //mbr
+	} else if partType == "mbr" {
 		cmd = exec.Command("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "fat32", writable_start, "-1M")
 		cmd.Run()
 	}
