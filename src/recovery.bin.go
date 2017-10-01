@@ -59,6 +59,8 @@ const (
 	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
 
 	UBOOT_ENV        = SYSBOOT_MNT_DIR + "uboot.env"
+	GRUB_ENV         = SYSBOOT_MNT_DIR + "efi/ubuntu/grubenv"
+	GRUB_CFG         = SYSBOOT_MNT_DIR + "efi/ubuntu/grub.cfg"
 	BACKUP_SNAP_PATH = "/backup_snaps/"
 
 	WRITABLE_INCLUDES_SQUASHFS = "/recovery/writable-includes.squashfs"
@@ -148,6 +150,7 @@ var copySnapsAsserts = CopySnapsAsserts
 var addFirstBootService = AddFirstBootService
 var restoreAsserions = RestoreAsserions
 var updateUbootEnv = UpdateUbootEnv
+var updateGrubCfg = UpdateGrubCfg
 
 func recoverProcess() {
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
@@ -177,12 +180,17 @@ func recoverProcess() {
 		restoreAsserions()
 	}
 
-	// update uboot env
-	log.Println("Update uboot env")
-	//fsck needs ignore error code
-	log.Println("[set next recoverytype to factory_restore]")
-	err = updateUbootEnv(RecoveryLabel)
-	rplib.Checkerr(err)
+	if configs.Configs.Bootloader == "u-boot" {
+		// update uboot env
+		log.Println("Update uboot env")
+		err = updateUbootEnv(RecoveryLabel)
+		rplib.Checkerr(err)
+	} else if configs.Configs.Bootloader == "grub" {
+		// update uboot env
+		log.Println("Update grub cfg/env")
+		err = updateGrubCfg(RecoveryLabel, GRUB_CFG, GRUB_ENV)
+		rplib.Checkerr(err)
+	}
 }
 
 var syscallUnMount = syscall.Unmount

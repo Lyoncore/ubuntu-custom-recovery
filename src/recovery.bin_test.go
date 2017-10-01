@@ -157,8 +157,34 @@ func (s *MainTestSuite) TestrecoverProcess(c *C) {
 	}()
 
 	origUpdateUbootEnv := updateUbootEnv
-	updateUbootEnv = func(recoverylabel string) error { return nil }
-	defer func() { updateUbootEnv = origUpdateUbootEnv }()
+	var updateUbootEnvCalled = false
+	updateUbootEnv = func(recoverylabel string) error {
+		updateUbootEnvCalled = true
+		return nil
+	}
+	defer func() {
+		// The test config.yaml is u-boot sample
+		c.Assert(updateUbootEnvCalled, Equals, true)
+		updateUbootEnv = origUpdateUbootEnv
+	}()
+
+	origUpdateGrubCfg := updateGrubCfg
+	var updateGrubCfgCalled = false
+	updateGrubCfg = func(recoverylabe string, grub_cfg string, grub_env string) error {
+		updateGrubCfgCalled = true
+		return nil
+	}
+	defer func() {
+		// The test config.yaml is u-boot sample, it should not be called
+		c.Assert(updateGrubCfgCalled, Equals, false)
+		updateGrubCfg = origUpdateGrubCfg
+	}()
+
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	os.Args = []string{"TestparseConfigs", "factory_restore", "recovery"}
+	parseConfigs(configSrcPath)
 
 	recoverProcess()
 }
