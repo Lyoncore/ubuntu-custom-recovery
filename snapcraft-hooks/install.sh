@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # This is the hook for snapcraft install of recovery part
 
 mkdir -p $SNAPCRAFT_PART_INSTALL/recovery-assets
