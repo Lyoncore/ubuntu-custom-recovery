@@ -20,6 +20,7 @@
 package main_test
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -346,6 +347,56 @@ func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
 	c.Check(env.Get("recovery_core"), Equals, CORE_SNAP)
 	c.Check(env.Get("recovery_kernel"), Equals, KERNEL_SNAP)
 	c.Check(env.Get("recovery_label"), Equals, fmt.Sprintf("LABEL=%s", configs.Recovery.FsLabel))
+
+	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
+}
+
+func (s *BuilderSuite) TestUpdateGrubCfg(c *C) {
+	var configs rplib.ConfigRecovery
+	//Create testing files
+	err := os.MkdirAll(reco.SYSBOOT_MNT_DIR, 0755)
+	c.Assert(err, IsNil)
+
+	err = rplib.FileCopy("tests/grub.cfg", reco.SYSBOOT_MNT_DIR)
+	c.Assert(err, IsNil)
+
+	err = rplib.FileCopy("tests/grubenv", reco.SYSBOOT_MNT_DIR)
+	c.Assert(err, IsNil)
+
+	err = configs.Load("tests/config.yaml")
+	c.Assert(err, IsNil)
+
+	err = reco.UpdateGrubCfg(configs.Recovery.FsLabel, filepath.Join(reco.SYSBOOT_MNT_DIR, "grub.cfg"), filepath.Join(reco.SYSBOOT_MNT_DIR, "grubenv"))
+	c.Assert(err, IsNil)
+
+	// Verify
+	f, err := os.Open(filepath.Join(reco.SYSBOOT_MNT_DIR, "grubenv"))
+	c.Assert(err, IsNil)
+
+	scanner := bufio.NewScanner(f)
+	var foundKeyWd = false
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "recoverytype=factory_restore") {
+			foundKeyWd = true
+			break
+		}
+	}
+	c.Check(foundKeyWd, Equals, true)
+	f.Close()
+
+	f, err = os.Open(filepath.Join(reco.SYSBOOT_MNT_DIR, "grub.cfg"))
+	c.Assert(err, IsNil)
+
+	scanner = bufio.NewScanner(f)
+	foundKeyWd = false
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "Factory Restore") {
+			foundKeyWd = true
+			break
+		}
+	}
+	c.Check(foundKeyWd, Equals, true)
+	f.Close()
 
 	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
 }

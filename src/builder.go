@@ -36,7 +36,7 @@ import (
 	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 )
 
-func UpdateGrubCfg(recovery_part_label string, grub_cfg string) error {
+func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string) error {
 	// sed -i "s/^set cmdline="\(.*\)"$/set cmdline="\1 $cloud_init_disabled"/g"
 	rplib.Shellexec("sed", "-i", "s/^set cmdline=\"\\(.*\\)\"$/set cmdline=\"\\1 $cloud_init_disabled\"/g", grub_cfg)
 
@@ -46,6 +46,7 @@ func UpdateGrubCfg(recovery_part_label string, grub_cfg string) error {
 		log.Println("Open %s failed", grub_cfg)
 		return err
 	}
+	defer f.Close()
 
 	text := fmt.Sprintf(`
 menuentry "Factory Restore" {
@@ -66,7 +67,13 @@ menuentry "Factory Restore" {
 		panic(err)
 	}
 
-	f.Close()
+	cmd := exec.Command("grub-editenv", grub_env, "set", "recoverytype=factory_restore")
+	err = cmd.Run()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func UpdateUbootEnv(RecoveryLabel string) error {
