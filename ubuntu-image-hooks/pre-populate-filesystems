@@ -25,23 +25,23 @@ populate_recovery_initrd_kernel () {
     TMPDIR=$(mktemp -d)
     SQUASH_TMPDIR=$(mktemp -d)
     cd $SQUASH_TMPDIR
-    unsquashfs $($UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/$KERNEL)
-    INITRD=$SQUASH_TMPDIR/squashfs-root/initrd.img
-	KERNEL_IMG=$SQUASH_TMPDIR/squashfs-root/kernel.img
+    unsquashfs $($cdir/$UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/$KERNEL)
+    INITRD=$cdir/$SQUASH_TMPDIR/squashfs-root/initrd.img
+	KERNEL_IMG=$cdir/$SQUASH_TMPDIR/squashfs-root/kernel.img
     cd $TMPDIR
     if file $INITRD | grep 'LZMA \| XZ'; then
         unxz < $INITRD | cpio -i
-        cp $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
+        cp $cdir/$UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
         sed -i '1i/scripts/local-premount/00_recovery \"$@\"' scripts/local-premount/ORDER
-        find | cpio --quiet -o -H newc | xz -c9 --check=crc32 > $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/$KERNEL/initrd.img
+        find | cpio --quiet -o -H newc | xz -c9 --check=crc32 > $cdir/$UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/$KERNEL/initrd.img
     elif file $INITRD | grep gzip; then
         gunzip < $INITRD | cpio -i
-        cp $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
+        cp $cdir/$UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
         sed -i '1i/scripts/local-premount/00_recovery \"$@\"' scripts/local-premount/ORDER
-        find | cpio --quiet -o -H newc | gzip -9 > $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/$KERNEL/initrd.img
+        find | cpio --quiet -o -H newc | gzip -9 > $cdir/$UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/$KERNEL/initrd.img
     fi
 
-	cp $KERNEL_IMG $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/$KERNEL/
+	cp $KERNEL_IMG $cdir/$UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/$KERNEL/
 
     cd $cdir
     rm -rf $TMPDIR $SQUASH_TMPDIR
