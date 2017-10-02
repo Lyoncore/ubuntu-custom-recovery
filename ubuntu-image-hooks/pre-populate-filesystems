@@ -26,8 +26,8 @@ populate_recovery_initrd_kernel () {
     SQUASH_TMPDIR=$(mktemp -d)
     cd $SQUASH_TMPDIR
     unsquashfs $cdir/$UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/$KERNEL
-    INITRD=$cdir/$SQUASH_TMPDIR/squashfs-root/initrd.img
-	KERNEL_IMG=$cdir/$SQUASH_TMPDIR/squashfs-root/kernel.img
+    INITRD=$SQUASH_TMPDIR/squashfs-root/initrd.img
+	KERNEL_IMG=$SQUASH_TMPDIR/squashfs-root/kernel.img
     cd $TMPDIR
     if file $INITRD | grep 'LZMA \| XZ'; then
         unxz < $INITRD | cpio -i
