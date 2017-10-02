@@ -136,6 +136,9 @@ update_bootloader_cfg() {
 
         RECOVERY_CORE=$(grub-editenv $UBUNTU_IMAGE_HOOK_BOOTFS/EFI/ubuntu/grubenv list | grep snap_core | cut -d '=' -f 2)
         RECOVERY_KERNEL=$(grub-editenv $UBUNTU_IMAGE_HOOK_BOOTFS/EFI/ubuntu/grubenv list | grep snap_kernel | cut -d '=' -f 2)
+        if [ ! -d $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/efi/ubuntu/ ]; then
+            mkdir -p $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/efi/ubuntu/
+        fi
         grub-editenv $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/efi/ubuntu/grubenv set recovery_core=$RECOVERY_CORE
         grub-editenv $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/efi/ubuntu/grubenv set recovery_kernel=$RECOVERY_KERNEL
         grub-editenv $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/efi/ubuntu/grubenv set recovery_label=$recovery_label
