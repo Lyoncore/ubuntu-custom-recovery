@@ -1,6 +1,6 @@
 #!/bin/bash
 
-exec > >(tee -i /tmp/post-populate-rootfs.log)
+exec > >(tee -i /tmp/pre-populate-filesystem.log)
 exec 2>&1
 
 set -ex
@@ -25,7 +25,7 @@ populate_recovery_initrd_kernel () {
     TMPDIR=$(mktemp -d)
     SQUASH_TMPDIR=$(mktemp -d)
     cd $SQUASH_TMPDIR
-    unsquashfs $(find $UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/$KERNEL)
+    unsquashfs $($UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/$KERNEL)
     INITRD=$SQUASH_TMPDIR/squashfs-root/initrd.img
 	KERNEL_IMG=$SQUASH_TMPDIR/squashfs-root/kernel.img
     cd $TMPDIR
