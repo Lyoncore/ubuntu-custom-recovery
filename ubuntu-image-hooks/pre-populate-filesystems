@@ -114,6 +114,8 @@ update_bootloader_cfg() {
     recovery_type=$(_parse_yaml $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/recovery/config.yaml recovery type | grep -o '^[^#]*')
     recovery_label=$(_parse_yaml $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/recovery/config.yaml recovery filesystem-label | grep -o '^[^#]*')
     bootloader=$(_parse_yaml $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/recovery/config.yaml configs bootloader | grep -o '^[^#]*')
+    installerfslabel=$(_parse_yaml $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/recovery/config.yaml recovery installerfslabel | grep -o '^[^#]*')
+    
     if [ $bootloader == 'u-boot' ];then
         _check_u-boot-tools
         TMP=$(mktemp)
@@ -143,6 +145,7 @@ update_bootloader_cfg() {
         grub-editenv $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/EFI/ubuntu/grubenv set recovery_kernel=$RECOVERY_KERNEL
         grub-editenv $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/EFI/ubuntu/grubenv set recovery_label=$recovery_label
         grub-editenv $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/EFI/ubuntu/grubenv set recovery_type=$recovery_type
+        grub-editenv $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/EFI/ubuntu/grubenv set installerfslabel=$installerfslabel
         if [ $recovery_type == "headless_installer" ];then
             installer_label=$(_parse_yaml $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/recovery/config.yaml recovery installerfslabel | grep -o '^[^#]*')
             grub-editenv $UBUNTU_IMAGE_HOOK_GADGET/recovery-assets/EFI/ubuntu/grubenv set installerfslabel=$installer_label
