@@ -1,6 +1,6 @@
 #!/bin/bash
 
-exec > >(tee -i /tmp/pre-populate-filesystem.log)
+exec > >(tee -i /tmp/post-populate-rootfs.log)
 exec 2>&1
 
 set -ex
@@ -37,17 +37,17 @@ populate_recovery_initrd_kernel () {
     cd $TMPDIR
     if file $INITRD | grep 'LZMA \| XZ'; then
         unxz < $INITRD | cpio -i
-        cp $cdir/$UNPACK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
+        cp $UNPACK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
         sed -i '1i/scripts/local-premount/00_recovery \"$@\"' scripts/local-premount/ORDER
-        find | cpio --quiet -o -H newc | xz -c9 --check=crc32 > $cdir/$UNPACK_GADGET/recovery-assets/$KERNEL/initrd.img
+        find | cpio --quiet -o -H newc | xz -c9 --check=crc32 > $UNPACK_GADGET/recovery-assets/$KERNEL/initrd.img
     elif file $INITRD | grep gzip; then
         gunzip < $INITRD | cpio -i
-        cp $cdir/$UNPACK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
+        cp $UNPACK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
         sed -i '1i/scripts/local-premount/00_recovery \"$@\"' scripts/local-premount/ORDER
-        find | cpio --quiet -o -H newc | gzip -9 > $cdir/$UNPACK_GADGET/recovery-assets/$KERNEL/initrd.img
+        find | cpio --quiet -o -H newc | gzip -9 > $UNPACK_GADGET/recovery-assets/$KERNEL/initrd.img
     fi
 
-	cp $KERNEL_IMG $cdir/$UNPACK_GADGET/recovery-assets/$KERNEL/
+	cp $KERNEL_IMG $UNPACK_GADGET/recovery-assets/$KERNEL/
 
     cd $cdir
     rm -rf $TMPDIR $SQUASH_TMPDIR
