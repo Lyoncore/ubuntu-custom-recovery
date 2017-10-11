@@ -13,3 +13,10 @@ else
     echo "unknown arch"
     return -1
 fi
+
+# build make_bootfs
+C_PATH=$(pwd)
+cd ubuntu-image-hooks/src
+GOPATH=$SNAPCRAFT_PART_INSTALL/../go $SNAPCRAFT_PART_INSTALL/../go/bin/godeps -t -u dependencies.tsv
+GOPATH=$SNAPCRAFT_PART_INSTALL/../go go build -o make_bootfs ./
+cd $C_PATH
