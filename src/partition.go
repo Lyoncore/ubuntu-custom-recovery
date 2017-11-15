@@ -106,15 +106,15 @@ func FindPart(Label string) (devNode string, devPath string, partNr int, err err
 	for {
 		if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
 			devPath = devPath[:len(devPath)-1]
-		} else if devPath[len(devPath)-1] == 'p' {
+		} else {
 			part_nr := strings.Trim(fullPath, devPath)
 			if partNr, err = strconv.Atoi(part_nr); err != nil {
 				err = errors.New("Unknown error while FindPart")
 				return "", "", -1, err
 			}
-			devPath = devPath[:len(devPath)-1]
-			break
-		} else {
+			if devPath[len(devPath)-1] == 'p' {
+				devPath = devPath[:len(devPath)-1]
+			}
 			break
 		}
 	}
@@ -149,6 +149,7 @@ func GetPartitions(recoveryLabel string) (*Partitions, error) {
 
 	//writable-boot partition info
 	_, _, parts.Writable_nr, err = FindPart(WritableLabel)
+	fmt.Println("darren 0~~~", parts.Writable_nr)
 	if err != nil {
 		//Partition not found, keep value in '-1'
 		parts.Writable_nr = -1
