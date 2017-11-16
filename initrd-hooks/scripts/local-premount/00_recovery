@@ -1,7 +1,8 @@
 #! /bin/sh -e
 # initramfs local-premount script for repartition
 
-#redirect output to serial console, since the HDMI output not enabled
+# redirect output to serial console, since the HDMI output not enabled
+# FIXME, the output console should be selectable
 exec </dev/ttyS0 >/dev/ttyS0 2>&1
 console="/dev/ttyS0"
 
@@ -27,6 +28,7 @@ esac
 
 set -x
 
+# Check the recovery type
 recoverytype=
 for t in $(cat /proc/cmdline); do
     if [ "$t" = "recoverytype=factory_restore" ]; then
@@ -34,6 +36,9 @@ for t in $(cat /proc/cmdline); do
         break
     elif [ "$t" = "recoverytype=factory_install" ]; then
         recoverytype=factory_install
+        break
+    elif [ "$t" = "recoverytype=headless_installer" ]; then
+        recoverytype=headless_installer
         break
     elif [ "$t" = "recoverytype=custom" ]; then
         recoverytype=custom
@@ -48,20 +53,18 @@ done
 #get recovery_label
 recoverylabel=$(tr " " "\n" </proc/cmdline | grep "recovery=LABEL=" | sed -e 's/recovery=LABEL=\(.*\)/\1/')
 
-BASE=/run/initramfs/recovery
-mkdir -p $BASE
-
 wait-for-root "LABEL=$recoverylabel" "${ROOTDELAY:-180}" >/dev/null || true
 recovery_part="$(findfs LABEL="$recoverylabel")"
 [ -n "$recovery_part" ] || exit 1 # recovery partition not found
 
-syspath="$(dirname "$(realpath /sys/class/block/"$(basename "$recovery_part")")")"
-device="$(realpath /dev/block/"$(cat "$syspath/dev")")"
 
 echo "[mount the recovery partition]"
+BASE=/run/initramfs/recovery
+mkdir -p $BASE
 mkdir -p $BASE/recovery
 mount -o defaults,ro "$recovery_part" $BASE/recovery
-ls $BASE/recovery # XXX: debug
+
+# TODO: Add prehook before recovery.bin
 
 # fixrtc
 # set to last modify time, the partition create time will be not be very old time
@@ -122,6 +125,8 @@ ret=$?
 if [ $ret != 0 ];then
     debugshell
 fi
+
+# TODO: Add post hook after recovery.bin
 
 sync
 
