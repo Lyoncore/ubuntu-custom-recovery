@@ -149,7 +149,6 @@ func GetPartitions(recoveryLabel string) (*Partitions, error) {
 
 	//writable-boot partition info
 	_, _, parts.Writable_nr, err = FindPart(WritableLabel)
-	fmt.Println("darren 0~~~", parts.Writable_nr)
 	if err != nil {
 		//Partition not found, keep value in '-1'
 		parts.Writable_nr = -1
