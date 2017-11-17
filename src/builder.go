@@ -54,15 +54,15 @@ menuentry "Factory Restore" {
         echo "[grub.cfg] load factory_restore system"
         search --no-floppy --set --label "%s"
         echo "[grub.cfg] root: ${root}"
-        set cmdline="root=LABEL=%s ro init=/lib/systemd/systemd console=ttyS0 console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore"
+		load_env -f (${root})/EFI/ubuntu/grubenv
+        set cmdline="recovery=LABEL=%s ro init=/lib/systemd/systemd console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=%s snap_core=${recovery_core} snap_kernel=${recovery_kernel}"
         echo "[grub.cfg] loading kernel..."
-        loopback loop0 /kernel.snap
-        linux (loop0)/kernel.img $cmdline
+        linuxefi ($root)/$recovery_kernel/kernel.img $cmdline
         echo "[grub.cfg] loading initrd..."
-        initrd /initrd.img
+        initrdefi ($root)/$recovery_kernel/initrd.img
         echo "[grub.cfg] boot..."
         boot
-}`, recovery_part_label, recovery_part_label)
+}`, recovery_part_label, recovery_part_label, recovery_part_label)
 	if _, err = f.WriteString(text); err != nil {
 		panic(err)
 	}
