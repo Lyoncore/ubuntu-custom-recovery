@@ -85,15 +85,6 @@ func parseConfigs(configFilePath string) {
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
 	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
 
-	flag.Parse()
-	if len(flag.Args()) != 2 {
-		log.Panicf(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] and [RECOVERY_LABEL]. Current arguments: %v", flag.Args()))
-	}
-	// TODO: use enum to represent RECOVERY_TYPE
-	RecoveryType, RecoveryLabel = flag.Arg(0), flag.Arg(1)
-	log.Printf("RECOVERY_TYPE: %s", RecoveryType)
-	log.Printf("RECOVERY_LABEL: %s", RecoveryLabel)
-
 	// Load config.yaml
 	err := configs.Load(configPath)
 	rplib.Checkerr(err)
@@ -105,13 +96,7 @@ var getPartitions = GetPartitions
 var restoreParts = RestoreParts
 var syscallMount = syscall.Mount
 
-func preparePartitions() {
-	// Find boot device, all other partiitons info
-	parts, err := getPartitions(RecoveryLabel)
-	if err != nil {
-		log.Panicf("Boot device not found, error: %s\n", err)
-	}
-
+func preparePartitions(parts *Partitions) {
 	// TODO: verify the image
 	// If this is user triggered factory restore (first time is in factory and should happen automatically), ask user for confirm.
 	if rplib.FACTORY_RESTORE == RecoveryType {
@@ -128,11 +113,11 @@ func preparePartitions() {
 	restoreParts(parts, configs.Configs.Bootloader, configs.Configs.PartitionType)
 
 	//Mount writable for logger and restore data
-	if _, err = os.Stat(WRITABLE_MNT_DIR); err != nil {
+	if _, err := os.Stat(WRITABLE_MNT_DIR); err != nil {
 		err := os.MkdirAll(WRITABLE_MNT_DIR, 0755)
 		rplib.Checkerr(err)
 	}
-	err = syscallMount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
+	err := syscallMount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
 	rplib.Checkerr(err)
 
 	//Mount system-boot for logger and restore data
@@ -151,8 +136,9 @@ var addFirstBootService = AddFirstBootService
 var restoreAsserions = RestoreAsserions
 var updateUbootEnv = UpdateUbootEnv
 var updateGrubCfg = UpdateGrubCfg
+var updateBootEntries = UpdateBootEntries
 
-func recoverProcess() {
+func recoverProcess(parts *Partitions) {
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
 
 	// stream log to stdout and writable partition
@@ -190,6 +176,10 @@ func recoverProcess() {
 		log.Println("Update grub cfg/env")
 		err = updateGrubCfg(RecoveryLabel, GRUB_CFG, GRUB_ENV)
 		rplib.Checkerr(err)
+
+		// update efi Boot Entries
+		log.Println("Update boot entries")
+		updateBootEntries(parts)
 	}
 }
 
@@ -204,8 +194,33 @@ func main() {
 	//setup logger
 	//logger.SimpleSetup()
 
+	flag.Parse()
+	if len(flag.Args()) != 2 {
+		log.Panicf(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] and [RECOVERY_LABEL]. Current arguments: %v", flag.Args()))
+	}
+	// TODO: use enum to represent RECOVERY_TYPE
+	RecoveryType, RecoveryLabel = flag.Arg(0), flag.Arg(1)
+	log.Printf("RECOVERY_TYPE: %s", RecoveryType)
+	log.Printf("RECOVERY_LABEL: %s", RecoveryLabel)
+
+	// Find boot device, all other partiitons info
+	parts, err := getPartitions(RecoveryLabel)
+	if err != nil {
+		log.Panicf("Boot device not found, error: %s\n", err)
+	}
+
+	// Check boot entries if corrupted and in recovery mode.
+	// Currently only support amd64
+	if configs.Configs.Arch == "amd64" {
+		if err := RestoreBootEntries(parts, RecoveryType); err != nil {
+			// When error return which means the boot entries fixed
+			fmt.Println(err)
+			os.Exit(0)
+		}
+	}
+
 	parseConfigs(CONFIG_YAML)
-	preparePartitions()
-	recoverProcess()
+	preparePartitions(parts)
+	recoverProcess(parts)
 	cleanupPartitions()
 }
