@@ -376,7 +376,7 @@ func (s *BuilderSuite) TestUpdateGrubCfg(c *C) {
 	scanner := bufio.NewScanner(f)
 	var foundKeyWd = false
 	for scanner.Scan() {
-		if strings.Contains(scanner.Text(), "recoverytype=factory_restore") {
+		if strings.Contains(scanner.Text(), "recovery_type=factory_restore") {
 			foundKeyWd = true
 			break
 		}
