@@ -45,6 +45,7 @@ const (
 	WRITABLE_MNT_DIR     = "/tmp/writableMnt/"
 	SYSBOOT_MNT_DIR      = "/tmp/system-boot/"
 	RECO_FACTORY_DIR     = "/recovery/factory/"
+	RECO_ROOT_DIR        = "/run/initramfs/recovery/recovery/"
 	SYSBOOT_TARBALL      = RECO_FACTORY_DIR + "system-boot.tar.xz"
 	WRITABLE_TARBALL     = RECO_FACTORY_DIR + "writable.tar.xz"
 	LOG_PATH             = WRITABLE_MNT_DIR + "system-data/var/log/recovery/log.txt"
@@ -58,10 +59,12 @@ const (
 	SYSTEMD_SYSTEM_DIR       = "/lib/systemd/system/"
 	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
 
-	UBOOT_ENV        = SYSBOOT_MNT_DIR + "uboot.env"
-	GRUB_ENV         = SYSBOOT_MNT_DIR + "efi/ubuntu/grubenv"
-	GRUB_CFG         = SYSBOOT_MNT_DIR + "efi/ubuntu/grub.cfg"
-	BACKUP_SNAP_PATH = "/backup_snaps/"
+	SYSBOOT_UBOOT_ENV  = SYSBOOT_MNT_DIR + "uboot.env"
+	SYSBOOT_GRUB_ENV   = SYSBOOT_MNT_DIR + "efi/ubuntu/grubenv"
+	SYSBOOT_GRUB_CFG   = SYSBOOT_MNT_DIR + "efi/ubuntu/grub.cfg"
+	RECO_PART_GRUB_ENV = RECO_ROOT_DIR + "EFI/ubuntu/grubenv"
+	RECO_PART_GRUB_CFG = RECO_ROOT_DIR + "EFI/ubuntu/grub.cfg"
+	BACKUP_SNAP_PATH   = "/backup_snaps/"
 
 	WRITABLE_INCLUDES_SQUASHFS = "/recovery/writable-includes.squashfs"
 )
@@ -174,7 +177,10 @@ func recoverProcess(parts *Partitions) {
 	} else if configs.Configs.Bootloader == "grub" {
 		// update uboot env
 		log.Println("Update grub cfg/env")
-		err = updateGrubCfg(RecoveryLabel, GRUB_CFG, GRUB_ENV)
+		// mount as writable before editing
+		rplib.Shellexec("mount", "-o", "rw,remount", RECO_ROOT_DIR)
+		err = updateGrubCfg(RecoveryLabel, SYSBOOT_GRUB_CFG, RECO_PART_GRUB_ENV)
+		rplib.Shellexec("mount", "-o", "ro,remount", RECO_ROOT_DIR)
 		rplib.Checkerr(err)
 
 		// update efi Boot Entries

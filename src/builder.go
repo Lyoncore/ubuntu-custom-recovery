@@ -67,7 +67,7 @@ menuentry "Factory Restore" {
 		panic(err)
 	}
 
-	cmd := exec.Command("grub-editenv", grub_env, "set", "recoverytype=factory_restore")
+	cmd := exec.Command("grub-editenv", grub_env, "set", "recovery_type=factory_restore")
 	err = cmd.Run()
 	if err != nil {
 		return err
@@ -78,21 +78,21 @@ menuentry "Factory Restore" {
 
 func UpdateUbootEnv(RecoveryLabel string) error {
 	// update uboot.env in recovery partition after first install
-	env, err := uenv.Open(UBOOT_ENV)
+	env, err := uenv.Open(SYSBOOT_UBOOT_ENV)
 	if err != nil {
-		log.Println("Open %s failed", UBOOT_ENV)
+		log.Println("Open %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
 	env.Set("snap_mode", "")
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", UBOOT_ENV)
+		log.Println("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
 	env.Set("recovery_type", "factory_restore")
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", UBOOT_ENV)
+		log.Println("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
@@ -106,7 +106,7 @@ func UpdateUbootEnv(RecoveryLabel string) error {
 	}
 	env.Set("recovery_core", core)
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", UBOOT_ENV)
+		log.Println("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
@@ -119,13 +119,13 @@ func UpdateUbootEnv(RecoveryLabel string) error {
 	}
 	env.Set("recovery_kernel", kernel)
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", UBOOT_ENV)
+		log.Println("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
 	env.Set("recovery_label", fmt.Sprintf("LABEL=%s", RecoveryLabel))
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", UBOOT_ENV)
+		log.Println("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 	return err

@@ -115,6 +115,7 @@ mount --bind /sys /$newroot/sys
 mount --bind /proc /$newroot/proc
 mount --bind /dev /$newroot/dev
 mount --bind /run /$newroot/run
+mount --bind $BASE/recovery /$newroot/$BASE/recovery
 
 echo "[chroot execute recovery.bin]"
 
@@ -124,6 +125,9 @@ ret=$?
 
 if [ $ret != 0 ];then
     debugshell
+elif [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
+    debugshell
+    poweroff
 fi
 
 # TODO: Add post hook after recovery.bin
