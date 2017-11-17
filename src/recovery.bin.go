@@ -215,17 +215,17 @@ func main() {
 		log.Panicf("Boot device not found, error: %s\n", err)
 	}
 
+	parseConfigs(CONFIG_YAML)
 	// Check boot entries if corrupted and in recovery mode.
 	// Currently only support amd64
 	if configs.Configs.Arch == "amd64" {
 		if err := RestoreBootEntries(parts, RecoveryType); err != nil {
 			// When error return which means the boot entries fixed
 			fmt.Println(err)
-			os.Exit(0)
+			os.Exit(0x55) //ERESTART
 		}
 	}
 
-	parseConfigs(CONFIG_YAML)
 	preparePartitions(parts)
 	recoverProcess(parts)
 	cleanupPartitions()

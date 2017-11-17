@@ -123,10 +123,12 @@ set +e
 /bin/chroot /$newroot /recovery/bin/recovery.bin $recoverytype "$recoverylabel"
 ret=$?
 
-if [ $ret != 0 ];then
+# ERESTART is errno 85 which restart system requirest from recovery.bin
+if [ $ret == 85 ]; then
+    reboot
+elif [ $ret != 0 ]; then
     debugshell
 elif [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
-    debugshell
     poweroff
 fi
 
