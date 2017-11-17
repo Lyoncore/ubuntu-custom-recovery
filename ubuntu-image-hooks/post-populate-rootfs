@@ -19,6 +19,7 @@ backup_bootfs () {
     mkdir $UNPACK_GADGET/recovery-assets/recovery/factory/ || true
     TMPDIR=$(mktemp -d)
     $UNPACK_GADGET/ubuntu-image-hooks/bin/make_bootfs -gadget_yaml_path $UNPACK_GADGET/meta/gadget.yaml -gadget_unpack_path $UNPACK_GADGET -tmp_bootfs_path $TMPDIR
+    cp $UNPACK_BOOT/grub/grubenv $TMPDIR/EFI/ubuntu/
     tar --xattrs -Jcpf $UNPACK_GADGET/recovery-assets/recovery/factory/system-boot.tar.xz -C $TMPDIR .
     rm -rf $TMPDIR
 }
