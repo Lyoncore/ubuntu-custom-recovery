@@ -143,7 +143,7 @@ func (s *BuilderSuite) TestBackupAssertions(c *C) {
 	syscall.Unmount(gptMnt, 0)
 
 	// Find boot device, all other partiitons info
-	parts, err := reco.GetPartitions(RecoveryLabel)
+	parts, err := reco.GetPartitions(RecoveryLabel, rplib.FACTORY_RESTORE)
 	c.Assert(err, IsNil)
 	err = reco.BackupAssertions(parts)
 	c.Assert(err, IsNil)
@@ -269,7 +269,7 @@ func (s *BuilderSuite) TestCopySnapsAsserts(c *C) {
 
 func (s *BuilderSuite) TestAddFirstBootService(c *C) {
 	//Create testing files
-	var RecoveryType = "recovery"
+	var RecoveryType = rplib.FACTORY_RESTORE
 	var RecoveryLabel = "recovery"
 	var EtcPath = "etc/systemd/system"
 	err := os.MkdirAll(reco.RECO_FACTORY_DIR, 0755)

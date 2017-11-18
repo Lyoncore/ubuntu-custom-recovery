@@ -43,7 +43,7 @@ func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string)
 	// add recovery grub menuentry
 	f, err := os.OpenFile(grub_cfg, os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
-		log.Println("Open %s failed", grub_cfg)
+		log.Printf("Open %s failed", grub_cfg)
 		return err
 	}
 	defer f.Close()
@@ -64,12 +64,13 @@ menuentry "Factory Restore" {
         boot
 }`, recovery_part_label, recovery_part_label, recovery_part_label)
 	if _, err = f.WriteString(text); err != nil {
-		panic(err)
+		return err
 	}
 
 	cmd := exec.Command("grub-editenv", grub_env, "set", "recovery_type=factory_restore")
 	err = cmd.Run()
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -80,19 +81,19 @@ func UpdateUbootEnv(RecoveryLabel string) error {
 	// update uboot.env in recovery partition after first install
 	env, err := uenv.Open(SYSBOOT_UBOOT_ENV)
 	if err != nil {
-		log.Println("Open %s failed", SYSBOOT_UBOOT_ENV)
+		log.Printf("Open %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
 	env.Set("snap_mode", "")
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", SYSBOOT_UBOOT_ENV)
+		log.Printf("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
 	env.Set("recovery_type", "factory_restore")
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", SYSBOOT_UBOOT_ENV)
+		log.Printf("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
@@ -106,7 +107,7 @@ func UpdateUbootEnv(RecoveryLabel string) error {
 	}
 	env.Set("recovery_core", core)
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", SYSBOOT_UBOOT_ENV)
+		log.Printf("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
@@ -119,13 +120,13 @@ func UpdateUbootEnv(RecoveryLabel string) error {
 	}
 	env.Set("recovery_kernel", kernel)
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", SYSBOOT_UBOOT_ENV)
+		log.Printf("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
 	env.Set("recovery_label", fmt.Sprintf("LABEL=%s", RecoveryLabel))
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", SYSBOOT_UBOOT_ENV)
+		log.Printf("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 	return err
@@ -181,17 +182,21 @@ func ConfirmRecovry(in *os.File) bool {
 	if in == nil {
 		in = os.Stdin
 	}
+
+	// TODO: Add user confirmation pre-hook
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 
-	fmt.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
+	log.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
 	var input string
 	fmt.Fscanf(in, "%s\n", &input)
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("4 4 1 7"), 0644)
 
 	if "y" != input && "Y" != input {
+		// TODO: Add user confirmation post-yes-hook
 		return false
 	}
 
+	// TODO: Add user confirmation post-no-hook
 	return true
 }
 
@@ -201,7 +206,7 @@ func BackupAssertions(parts *Partitions) error {
 	if err != nil {
 		return err
 	}
-	err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
+	err = syscall.Mount(fmtPartPath(parts.TargetDevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
 	if err != nil {
 		return err
 	}
@@ -218,7 +223,7 @@ func BackupAssertions(parts *Partitions) error {
 
 		err = rplib.CopyTree(src, dst)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			return err
 		}
 	}

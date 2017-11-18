@@ -21,8 +21,10 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -73,8 +75,10 @@ import (
  */
 
 type Partitions struct {
-	//DevNode: sda (W/O partiiton number),  DevPath: /dev/sda (W/O partition number)
-	DevNode, DevPath                                   string
+	// XxxDevNode: sda (W/O partiiton number)
+	// XxxDevPath: /dev/sda (W/O partition number)
+	SourceDevNode, SourceDevPath                       string
+	TargetDevNode, TargetDevPath                       string
 	Recovery_nr, Sysboot_nr, Writable_nr, Last_part_nr int
 	Recovery_start, Recovery_end                       int64
 	Sysboot_start, Sysboot_end                         int64
@@ -125,18 +129,91 @@ func FindPart(Label string) (devNode string, devPath string, partNr int, err err
 	return
 }
 
+func FindTargetParts(parts *Partitions, recoveryType string) error {
+	var devPath string
+	if parts.SourceDevNode == "" || parts.SourceDevPath == "" || parts.Recovery_nr == -1 {
+		return fmt.Errorf("Missing source recovery data")
+	}
+
+	if recoveryType == rplib.HEADLESS_INSTALLER {
+		// target disk might be emmc
+		blockArray, _ := filepath.Glob("/sys/block/mmcblk*")
+		for _, block := range blockArray {
+			dat := []byte("")
+			dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
+			if err != nil {
+				return err
+			}
+			dat_str := strings.TrimSpace(string(dat))
+			blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
+			if blockDevice != parts.SourceDevPath {
+				devPath = blockDevice
+				break
+			}
+		}
+
+		// target disk might be scsi disk
+		if devPath == "" {
+			blockArray, _ := filepath.Glob("/sys/block/sd*")
+			for _, block := range blockArray {
+				dat := []byte("")
+				dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
+				if err != nil {
+					return err
+				}
+				dat_str := strings.TrimSpace(string(dat))
+				blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
+
+				if blockDevice != parts.SourceDevPath {
+					devPath = blockDevice
+					break
+				}
+			}
+		}
+
+		if devPath != "" {
+			// The devPath is with partiion /dev/sdX1 or /dev/mmcblkXp1
+			// Here to remove the partition information
+			for {
+				if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
+					devPath = devPath[:len(devPath)-1]
+				} else {
+					if devPath[len(devPath)-1] == 'p' {
+						devPath = devPath[:len(devPath)-1]
+					}
+					parts.TargetDevPath = devPath
+					parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
+					break
+				}
+			}
+		} else {
+			return fmt.Errorf("No target disk found")
+		}
+	} else {
+		parts.TargetDevNode = parts.SourceDevNode
+		parts.TargetDevPath = parts.SourceDevPath
+	}
+	return nil
+}
+
 var parts Partitions
 
-func GetPartitions(recoveryLabel string) (*Partitions, error) {
+func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, error) {
 	var err error
 	const OLD_PARTITION = "/tmp/old-partition.txt"
-	parts = Partitions{"", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+	parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 
-	//Get boot device
-	//The boot device must has a recovery partition
-	parts.DevNode, parts.DevPath, parts.Recovery_nr, err = FindPart(recoveryLabel)
+	//The Sourec device which must has a recovery partition
+	parts.SourceDevNode, parts.SourceDevPath, parts.Recovery_nr, err = FindPart(recoveryLabel)
 	if err != nil {
 		err = errors.New(fmt.Sprintf("Recovery partition (LABEL=%s) not found", recoveryLabel))
+		return nil, err
+	}
+
+	err = FindTargetParts(&parts, recoveryType)
+	if err != nil {
+		err = errors.New(fmt.Sprintf("Target install partition not found"))
+		parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 		return nil, err
 	}
 
@@ -160,7 +237,7 @@ func GetPartitions(recoveryLabel string) (*Partitions, error) {
 	}
 
 	// find out detail information of each partition
-	cmd := exec.Command("parted", "-ms", fmt.Sprintf("/dev/%s", parts.DevNode), "unit", "B", "print")
+	cmd := exec.Command("parted", "-ms", fmt.Sprintf("/dev/%s", parts.SourceDevNode), "unit", "B", "print")
 	stdout, _ := cmd.StdoutPipe()
 	cmd.Start()
 	scanner := bufio.NewScanner(stdout)
@@ -204,7 +281,7 @@ func GetPartitions(recoveryLabel string) (*Partitions, error) {
 }
 
 func RestoreParts(parts *Partitions, bootloader string, partType string) error {
-	var dev_path string = strings.Replace(parts.DevPath, "mapper/", "", -1)
+	var dev_path string = strings.Replace(parts.SourceDevPath, "mapper/", "", -1)
 	var part_nr int
 	if bootloader == "u-boot" {
 		parts.Writable_start = parts.Recovery_end + 1
@@ -233,7 +310,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 		return fmt.Errorf("Oops, unknown partition type:%s", partType)
 	}
 
-	sysboot_path := fmtPartPath(parts.DevPath, parts.Sysboot_nr)
+	sysboot_path := fmtPartPath(parts.SourceDevPath, parts.Sysboot_nr)
 	cmd := exec.Command("mkfs.vfat", "-F", "32", "-n", SysbootLabel, sysboot_path)
 	cmd.Run()
 	err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
@@ -254,7 +331,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	// And do mkfs in writable (For ensure the writable is enlarged)
 	var writable_start string = fmt.Sprintf("%vB", parts.Writable_start)
 	var writable_nr string = strconv.Itoa(parts.Writable_nr)
-	writable_path := fmtPartPath(parts.DevPath, parts.Writable_nr)
+	writable_path := fmtPartPath(parts.SourceDevPath, parts.Writable_nr)
 
 	for part_nr <= parts.Last_part_nr {
 		cmd = exec.Command("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))

@@ -13,7 +13,7 @@ const LOADER = "\\EFI\\BOOT\\BOOTX64.EFI"
 func RestoreBootEntries(parts *Partitions, recoveryType string) error {
 	// Detect uefi entry needs to be rebuilt if corructed (only when facotry restore)
 	if rplib.FACTORY_RESTORE == recoveryType {
-		fmt.Println("[Restoring efi boot entries]")
+		log.Println("[Restoring efi boot entries]")
 		recov_entry := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
 		snappy_entry := rplib.GetBootEntries(rplib.BOOT_ENTRY_SNAPPY)
 		if len(recov_entry) < 1 || len(snappy_entry) < 1 {
@@ -29,10 +29,10 @@ func RestoreBootEntries(parts *Partitions, recoveryType string) error {
 
 			// add new uefi entry
 			log.Println("[add new uefi entry]")
-			rplib.CreateBootEntry(parts.DevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
+			rplib.CreateBootEntry(parts.TargetDevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
 
 			log.Println("[add system-boot entry]")
-			rplib.CreateBootEntry(parts.DevPath, parts.Sysboot_nr, LOADER, rplib.BOOT_ENTRY_SNAPPY)
+			rplib.CreateBootEntry(parts.TargetDevPath, parts.Sysboot_nr, LOADER, rplib.BOOT_ENTRY_SNAPPY)
 
 			return fmt.Errorf("Boot entries corrupted has been fixed, reboot system")
 		}
@@ -53,6 +53,6 @@ func UpdateBootEntries(parts *Partitions) {
 	}
 
 	log.Println("[add new uefi entry]")
-	rplib.CreateBootEntry(parts.DevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
-	rplib.CreateBootEntry(parts.DevPath, parts.Sysboot_nr, LOADER, rplib.BOOT_ENTRY_SNAPPY)
+	rplib.CreateBootEntry(parts.TargetDevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
+	rplib.CreateBootEntry(parts.TargetDevPath, parts.Sysboot_nr, LOADER, rplib.BOOT_ENTRY_SNAPPY)
 }

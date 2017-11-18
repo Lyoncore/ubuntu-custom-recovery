@@ -120,7 +120,7 @@ func preparePartitions(parts *Partitions) {
 		err := os.MkdirAll(WRITABLE_MNT_DIR, 0755)
 		rplib.Checkerr(err)
 	}
-	err := syscallMount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
+	err := syscallMount(fmtPartPath(parts.TargetDevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
 	rplib.Checkerr(err)
 
 	//Mount system-boot for logger and restore data
@@ -128,7 +128,7 @@ func preparePartitions(parts *Partitions) {
 		err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
 		rplib.Checkerr(err)
 	}
-	err = syscallMount(fmtPartPath(parts.DevPath, parts.Sysboot_nr), SYSBOOT_MNT_DIR, "vfat", 0, "")
+	err = syscallMount(fmtPartPath(parts.TargetDevPath, parts.Sysboot_nr), SYSBOOT_MNT_DIR, "vfat", 0, "")
 	rplib.Checkerr(err)
 }
 
@@ -171,12 +171,12 @@ func recoverProcess(parts *Partitions) {
 
 	if configs.Configs.Bootloader == "u-boot" {
 		// update uboot env
-		log.Println("Update uboot env")
+		log.Println("[Update uboot env]")
 		err = updateUbootEnv(RecoveryLabel)
 		rplib.Checkerr(err)
 	} else if configs.Configs.Bootloader == "grub" {
 		// update uboot env
-		log.Println("Update grub cfg/env")
+		log.Println("[Update grub cfg/env]")
 		// mount as writable before editing
 		rplib.Shellexec("mount", "-o", "rw,remount", RECO_ROOT_DIR)
 		err = updateGrubCfg(RecoveryLabel, SYSBOOT_GRUB_CFG, RECO_PART_GRUB_ENV)
@@ -184,7 +184,7 @@ func recoverProcess(parts *Partitions) {
 		rplib.Checkerr(err)
 
 		// update efi Boot Entries
-		log.Println("Update boot entries")
+		log.Println("[Update boot entries]")
 		updateBootEntries(parts)
 	}
 }
@@ -210,7 +210,7 @@ func main() {
 	log.Printf("RECOVERY_LABEL: %s", RecoveryLabel)
 
 	// Find boot device, all other partiitons info
-	parts, err := getPartitions(RecoveryLabel)
+	parts, err := getPartitions(RecoveryLabel, RecoveryType)
 	if err != nil {
 		log.Panicf("Boot device not found, error: %s\n", err)
 	}
@@ -221,7 +221,7 @@ func main() {
 	if configs.Configs.Arch == "amd64" {
 		if err := RestoreBootEntries(parts, RecoveryType); err != nil {
 			// When error return which means the boot entries fixed
-			fmt.Println(err)
+			log.Println(err)
 			os.Exit(0x55) //ERESTART
 		}
 	}
