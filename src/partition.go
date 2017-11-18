@@ -281,7 +281,7 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 }
 
 func RestoreParts(parts *Partitions, bootloader string, partType string) error {
-	var dev_path string = strings.Replace(parts.SourceDevPath, "mapper/", "", -1)
+	var dev_path string = strings.Replace(parts.TargetDevPath, "mapper/", "", -1)
 	var part_nr int
 	if bootloader == "u-boot" {
 		parts.Writable_start = parts.Recovery_end + 1
@@ -310,7 +310,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 		return fmt.Errorf("Oops, unknown partition type:%s", partType)
 	}
 
-	sysboot_path := fmtPartPath(parts.SourceDevPath, parts.Sysboot_nr)
+	sysboot_path := fmtPartPath(parts.TargetDevPath, parts.Sysboot_nr)
 	cmd := exec.Command("mkfs.vfat", "-F", "32", "-n", SysbootLabel, sysboot_path)
 	cmd.Run()
 	err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
@@ -331,7 +331,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	// And do mkfs in writable (For ensure the writable is enlarged)
 	var writable_start string = fmt.Sprintf("%vB", parts.Writable_start)
 	var writable_nr string = strconv.Itoa(parts.Writable_nr)
-	writable_path := fmtPartPath(parts.SourceDevPath, parts.Writable_nr)
+	writable_path := fmtPartPath(parts.TargetDevPath, parts.Writable_nr)
 
 	for part_nr <= parts.Last_part_nr {
 		cmd = exec.Command("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))
