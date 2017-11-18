@@ -28,7 +28,7 @@ import (
 	"syscall"
 	"time"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 )
 
 var version string
@@ -197,9 +197,6 @@ func cleanupPartitions() {
 }
 
 func main() {
-	//setup logger
-	//logger.SimpleSetup()
-
 	flag.Parse()
 	if len(flag.Args()) != 2 {
 		log.Panicf(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] and [RECOVERY_LABEL]. Current arguments: %v", flag.Args()))

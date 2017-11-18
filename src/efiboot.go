@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 )
 
 const EFIBOOTMGR = "efibootmgr"

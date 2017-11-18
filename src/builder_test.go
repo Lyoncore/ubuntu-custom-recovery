@@ -32,10 +32,9 @@ import (
 	"strings"
 	"syscall"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 	reco "github.com/Lyoncore/ubuntu-recovery/src"
+	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 	uenv "github.com/mvo5/uboot-go/uenv"
-	"github.com/snapcore/snapd/logger"
 
 	. "gopkg.in/check.v1"
 )
@@ -45,7 +44,6 @@ type BuilderSuite struct{}
 var _ = Suite(&BuilderSuite{})
 
 func (s *BuilderSuite) SetUpSuite(c *C) {
-	logger.SimpleSetup()
 	//Create a MBR image
 	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s", MBRimage), fmt.Sprintf("bs=%d", part_size), "count=1")
 

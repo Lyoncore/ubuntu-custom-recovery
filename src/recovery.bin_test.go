@@ -25,7 +25,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 )
 
 const gptMnt = "/tmp/gptmnt"

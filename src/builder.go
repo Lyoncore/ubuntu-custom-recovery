@@ -33,7 +33,7 @@ import (
 
 	uenv "github.com/mvo5/uboot-go/uenv"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 )
 
 func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string) error {
@@ -164,16 +164,6 @@ func startupNetwork() error {
 func releaseDhcp() error {
 	cmd := exec.Command("dhclient", "-x")
 	return cmd.Run()
-}
-
-func serialVaultService() error {
-	vaultServerIP := rplib.Shellcmdoutput("ip route | awk '/default/ { print $3 }'") // assume identity-vault is hosted on the gateway
-	log.Println("vaultServerIP:", vaultServerIP)
-
-	if !configs.Recovery.SignSerial {
-	}
-	// TODO: Start signing serial
-	return nil
 }
 
 func ConfirmRecovry(in *os.File) bool {

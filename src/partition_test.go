@@ -32,9 +32,8 @@ import (
 	"testing"
 	"time"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 	reco "github.com/Lyoncore/ubuntu-recovery/src"
-	"github.com/snapcore/snapd/logger"
+	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 	. "gopkg.in/check.v1"
 )
 
@@ -90,7 +89,6 @@ func MountTestImg(mntImg string, umntLoop string) {
 }
 
 func (s *GetPartSuite) SetUpTest(c *C) {
-	logger.SimpleSetup()
 	//Create a MBR image
 	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s", MBRimage), fmt.Sprintf("bs=%d", part_size), "count=1")
 	rplib.Shellexec("sgdisk", "--load-backup=tests/mbr.part", MBRimage)
