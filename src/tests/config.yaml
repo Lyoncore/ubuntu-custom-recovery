@@ -4,32 +4,19 @@ snaps:
   os: core
   gadget: pi3
 configs:
-  arch: arm
+  arch: armhf
   baseimage: base.img
-  recoverytype: recovery
-  recoverysize: 768
+  swap: on
+  swapsize: 1024
   release: 16
-  channel: edge
-  size: 4
-  packages:
-    - snapweb
-  partition-type: mbr
+  partition-type: mbr 
   bootloader: u-boot
-udf:
-  binary: ./ubuntu-device-flash
-  command: core
-debug:
-  devmode: on
-  ssh: on
-  xz: off
 recovery:
   type: factory_install
-  filesystem-label: ESP
-  boot-partition:
-  systemboot-partition:
-  writable-partition:
-  boot-image:
-  systemboot-image:
-  writable-image:
-  sign-serial: on
-  sign-api-key: U2VyaWFsIFZhdWx0Cg
+  installerfslabel: INSTALLER
+  recoverysize: 768 
+  filesystem-label: ESP 
+  oem-preinst-hook-dir: OEM_pre_install_hook
+  oem-postinst-hook-dir: OEM_post_install_hook
+  oem-prereboot-hook-dir: OEM_pre_reboot_hook
+  oemlogdir: MFGMEDIA
