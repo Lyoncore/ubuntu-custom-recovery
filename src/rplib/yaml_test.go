@@ -18,3 +18,13 @@ func (s *YamlSuite) TestLoad(c *C) {
 	err := configs.Load("test_data/config.yaml")
 	c.Assert(err, IsNil)
 }
+
+func (s *YamlSuite) TestGetVolumeSizebyLabel(c *C) {
+	var gi rplib.GadgetInfo
+	err := gi.Load("test_data/gadget.yaml")
+	c.Assert(err, IsNil)
+
+	sizeMB, err := gi.GetVolumeSizebyLabel("system-boot")
+	c.Assert(err, IsNil)
+	c.Assert(sizeMB, Equals, 50)
+}

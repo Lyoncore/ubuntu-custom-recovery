@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
@@ -150,4 +152,90 @@ func (config *ConfigRecovery) String() string {
 		panic(err)
 	}
 	return string(io)
+}
+
+// The Gadget yaml parsing from snapd/snap/gadget.go
+type GadgetInfo struct {
+	Volumes map[string]GadgetVolume `yaml:"volumes,omitempty"`
+
+	// Default configuration for snaps (snap-id => key => value).
+	Defaults map[string]map[string]interface{} `yaml:"defaults,omitempty"`
+}
+
+type GadgetVolume struct {
+	Schema     string            `yaml:"schema"`
+	Bootloader string            `yaml:"bootloader"`
+	ID         string            `yaml:"id"`
+	Structure  []VolumeStructure `yaml:"structure"`
+}
+
+type VolumeStructure struct {
+	Name        string          `yaml:"name"`
+	Label       string          `yaml:"filesystem-label"`
+	Offset      string          `yaml:"offset"`
+	OffsetWrite string          `yaml:"offset-write"`
+	Size        string          `yaml:"size"`
+	Type        string          `yaml:"type"`
+	ID          string          `yaml:"id"`
+	Filesystem  string          `yaml:"filesystem"`
+	Content     []VolumeContent `yaml:"content"`
+}
+
+type VolumeContent struct {
+	Source string `yaml:"source"`
+	Target string `yaml:"target"`
+
+	Image       string `yaml:"image"`
+	Offset      string `yaml:"offset"`
+	OffsetWrite string `yaml:"offset-write"`
+	Size        string `yaml:"size"`
+
+	Unpack bool `yaml:"unpack"`
+}
+
+func (gadgetInfo *GadgetInfo) Load(gadgetYaml string) error {
+	log.Printf("Loading gadget.yaml %s ...", gadgetYaml)
+	yamlFile, err := ioutil.ReadFile(gadgetYaml)
+
+	if err != nil {
+		return err
+	}
+
+	err = yaml.Unmarshal(yamlFile, &gadgetInfo)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (gadgetInfo *GadgetInfo) GetVolumeSizebyLabel(FsLabel string) (sizeMB int, err error) {
+	sizeMB = 0
+	err = nil
+
+	if gadgetInfo == nil {
+		sizeMB = 0
+		err = fmt.Errorf("nil gadgetInfo")
+		return
+	}
+
+	// find system-boot and make copy
+	for _, v := range gadgetInfo.Volumes {
+		for _, st := range v.Structure {
+			if st.Label == FsLabel {
+				if strings.Contains(st.Size, "M") {
+					sizeMB, err = strconv.Atoi(strings.Trim(st.Size, "M"))
+				} else if strings.Contains(st.Size, "G") {
+					if size, err := strconv.Atoi(strings.Trim(st.Size, "G")); err == nil {
+						sizeMB = size * 1024
+					}
+				} else {
+					if size, err := strconv.Atoi(string(st.Size)); err == nil {
+						sizeMB = size / 1024
+					}
+				}
+			}
+		}
+	}
+	return
 }
