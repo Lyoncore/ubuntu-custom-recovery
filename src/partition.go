@@ -29,7 +29,7 @@ import (
 	"strings"
 	"syscall"
 
-	""./rplib""
+	"./rplib"
 )
 
 /*            The partiion layout
