@@ -42,8 +42,10 @@ const (
 	ASSERTION_DIR        = "/writable/recovery/"
 	ASSERTION_BACKUP_DIR = "/tmp/assert_backup/"
 	CONFIG_YAML          = "/recovery/config.yaml"
+	CONFIG_GADGET_YAML   = "/recovery/gadget.yaml"
 	WRITABLE_MNT_DIR     = "/tmp/writableMnt/"
 	SYSBOOT_MNT_DIR      = "/tmp/system-boot/"
+	RECO_TAR_MNT_DIR     = "/tmp/recoMnt/"
 	RECO_FACTORY_DIR     = "/recovery/factory/"
 	RECO_ROOT_DIR        = "/run/initramfs/recovery/recovery/"
 	SYSBOOT_TARBALL      = RECO_FACTORY_DIR + "system-boot.tar.xz"
@@ -70,6 +72,7 @@ const (
 )
 
 var configs rplib.ConfigRecovery
+var gadgetInfo rplib.GadgetInfo
 var RecoveryType string
 var RecoveryLabel string
 
@@ -92,6 +95,16 @@ func parseConfigs(configFilePath string) {
 	err := configs.Load(configPath)
 	rplib.Checkerr(err)
 	log.Println(configs)
+}
+
+func getSysbootSizeFromYaml(gadgetPath string) (int, error) {
+	// Load config.yaml
+	err := gadgetInfo.Load(gadgetPath)
+	if err != nil {
+		return -1, err
+	}
+
+	return gadgetInfo.GetVolumeSizebyLabel(SysbootLabel)
 }
 
 // easier for function mocking
@@ -223,6 +236,19 @@ func main() {
 		}
 	}
 
+	// Headless_installer just copy the recovery partition
+	if RecoveryType == rplib.HEADLESS_INSTALLER {
+		err := CopyRecoveryPart(parts)
+		if err != nil {
+			os.Exit(-1)
+		}
+		os.Exit(0)
+	}
+
+	sizeMB, err := getSysbootSizeFromYaml(CONFIG_GADGET_YAML)
+	if err == nil {
+		SetPartitionStartEnd(parts, SysbootLabel, sizeMB, configs.Configs.Bootloader)
+	}
 	preparePartitions(parts)
 	recoverProcess(parts)
 	cleanupPartitions()

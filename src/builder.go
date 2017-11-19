@@ -70,7 +70,6 @@ menuentry "Factory Restore" {
 	cmd := exec.Command("grub-editenv", grub_env, "set", "recovery_type=factory_restore")
 	err = cmd.Run()
 	if err != nil {
-		log.Println(err)
 		return err
 	}
 
