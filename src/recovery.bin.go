@@ -28,7 +28,7 @@ import (
 	"syscall"
 	"time"
 
-	./rplib
+	"./rplib"
 )
 
 var version string

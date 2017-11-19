@@ -33,7 +33,7 @@ import (
 	"time"
 
 	reco "github.com/Lyoncore/ubuntu-recovery/src"
-	./rplib
+	"./rplib"
 	. "gopkg.in/check.v1"
 )
 

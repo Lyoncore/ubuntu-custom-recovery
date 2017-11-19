@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	./rplib
+	"./rplib"
 )
 
 const EFIBOOTMGR = "efibootmgr"
