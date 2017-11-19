@@ -29,7 +29,7 @@ import (
 	"strings"
 	"syscall"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
+	"./rplib"
 )
 
 /*            The partiion layout
