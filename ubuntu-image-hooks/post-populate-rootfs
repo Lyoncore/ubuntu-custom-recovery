@@ -165,7 +165,7 @@ update_bootloader_cfg() {
 
 update_recovery_assets() {
     echo "update_recovery_assets"
-    cp $UNPACK_GADGET/meta/gadget.yaml $UNPACK_GADGET/recovery-assets/
+    cp $UNPACK_GADGET/meta/gadget.yaml $UNPACK_GADGET/recovery-assets/recovery/
 }
 
 backup_writable
