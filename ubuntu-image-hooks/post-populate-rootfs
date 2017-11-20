@@ -16,49 +16,42 @@ backup_writable () {
 
 backup_bootfs () {
     echo "backup bootfs to system-boot.tar.xz"
-    TMPDIR=$(mktemp -d)
-    cp -r $UNPACK_GADGET/boot-assets/* $TMPDIR
-    if [ -d $UNPACK_BOOT/uboot/ ]; then
-        cp -r $UNPACK_BOOT/uboot/* $TMPDIR
-    elif [ -d $UNPACK_BOOT/grub/ ]; then
-        cp -r $UNPACK_BOOT/grub/* $TMPDIR
-    fi
-
     mkdir $UNPACK_GADGET/recovery-assets/recovery/factory/ || true
+    TMPDIR=$(mktemp -d)
+    $UNPACK_GADGET/ubuntu-image-hooks/bin/make_bootfs -gadget_yaml_path $UNPACK_GADGET/meta/gadget.yaml -gadget_unpack_path $UNPACK_GADGET -tmp_bootfs_path $TMPDIR
+    cp $UNPACK_BOOT/grub/grubenv $TMPDIR/EFI/ubuntu/
     tar --xattrs -Jcpf $UNPACK_GADGET/recovery-assets/recovery/factory/system-boot.tar.xz -C $TMPDIR .
-
     rm -rf $TMPDIR
 }
 
-populate_recovery_initrd () {
+populate_recovery_initrd_kernel () {
     echo "populate recovery initrd"
     KERNEL=$(find $UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/ -name '*kernel_*.snap' | xargs basename)
-    mkdir $UNPACK_GADGET/recovery-assets/$KERNEL || true
+    mkdir -p $UNPACK_GADGET/recovery-assets/$KERNEL || true
     cdir=$PWD
     TMPDIR=$(mktemp -d)
+    SQUASH_TMPDIR=$(mktemp -d)
+    cd $SQUASH_TMPDIR
+    unsquashfs $cdir/$UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/$KERNEL
+    INITRD=$SQUASH_TMPDIR/squashfs-root/initrd.img
+	KERNEL_IMG=$SQUASH_TMPDIR/squashfs-root/kernel.img
     cd $TMPDIR
-    if file $UNPACK_BOOT/uboot/*.snap/initrd.img | grep 'LZMA \| XZ'; then
-        unxz < $UNPACK_BOOT/uboot/*.snap/initrd.img | cpio -i
+    if file $INITRD | grep 'LZMA \| XZ'; then
+        unxz < $INITRD | cpio -i
         cp $UNPACK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
         sed -i '1i/scripts/local-premount/00_recovery \"$@\"' scripts/local-premount/ORDER
         find | cpio --quiet -o -H newc | xz -c9 --check=crc32 > $UNPACK_GADGET/recovery-assets/$KERNEL/initrd.img
-    elif file $UNPACK_BOOT/uboot/*.snap/initrd.img | grep gzip; then
-        gunzip < $UNPACK_BOOT/uboot/*.snap/initrd.img | cpio -i
+    elif file $INITRD | grep gzip; then
+        gunzip < $INITRD | cpio -i
         cp $UNPACK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
         sed -i '1i/scripts/local-premount/00_recovery \"$@\"' scripts/local-premount/ORDER
         find | cpio --quiet -o -H newc | gzip -9 > $UNPACK_GADGET/recovery-assets/$KERNEL/initrd.img
     fi
 
+	cp $KERNEL_IMG $UNPACK_GADGET/recovery-assets/$KERNEL/
+
     cd $cdir
-    rm -rf $TMPDIR
-
-}
-
-backup_kernel() {
-    echo "backup kernel"
-    KERNEL=$(find $UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/ -name '*kernel_*.snap' | xargs basename)
-    mkdir $UNPACK_GADGET/recovery-assets/$KERNEL || true
-    cp $UNPACK_BOOT/uboot/*.snap/kernel.img $UNPACK_GADGET/recovery-assets/$KERNEL
+    rm -rf $TMPDIR $SQUASH_TMPDIR
 }
 
 backup_snaps() {
@@ -116,11 +109,20 @@ EOF
 
 }
 
+_check_grub-common() {
+    if [ ! -f /usr/bin/grub-editenv ];then
+        echo "ERROR: Cannot find grub-editenv, please install grub-common"
+        exit 1
+    fi
+}
+
 update_bootloader_cfg() {
     echo "update_bootloader_cfg"
-    recovery_type=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml recovery type)
-    recovery_label=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml recovery filesystem-label)
-    bootloader=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml configs bootloader)
+    recovery_type=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml recovery type | grep -o '^[^#]*')
+    recovery_label=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml recovery filesystem-label | grep -o '^[^#]*')
+    bootloader=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml configs bootloader | grep -o '^[^#]*')
+    installerfslabel=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml recovery installerfslabel | grep -o '^[^#]*')
+    
     if [ $bootloader == 'u-boot' ];then
         _check_u-boot-tools
         TMP=$(mktemp)
@@ -138,16 +140,38 @@ update_bootloader_cfg() {
         fw_setenv -c $TMP recovery_core $RECOVERY_CORE
         fw_setenv -c $TMP recovery_kernel $RECOVERY_KERNEL
         rm $TMP
-    else #TODO: To support grub
+    elif [ $bootloader == 'grub' ]; then
+        _check_grub-common
+
+        RECOVERY_CORE=$(grub-editenv $UNPACK_BOOT/grub/grubenv list | grep snap_core | cut -d '=' -f 2)
+        RECOVERY_KERNEL=$(grub-editenv $UNPACK_BOOT/grub/grubenv list | grep snap_kernel | cut -d '=' -f 2)
+        if [ ! -d $UNPACK_GADGET/recovery-assets/EFI/ubuntu/ ]; then
+            mkdir -p $UNPACK_GADGET/recovery-assets/EFI/ubuntu/
+        fi
+        grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set recovery_core=$RECOVERY_CORE
+        grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set recovery_kernel=$RECOVERY_KERNEL
+        grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set recovery_label=$recovery_label
+        grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set recovery_type=$recovery_type
+        grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set installerfslabel=$installerfslabel
+        if [ $recovery_type == "headless_installer" ];then
+            installer_label=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml recovery installerfslabel | grep -o '^[^#]*')
+            grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set installerfslabel=$installer_label
+        fi
+    else
         echo "Unkonw bootloader:$bootloader"
         exit 1
-    fi
+    fi  
+}
+
+update_recovery_assets() {
+    echo "update_recovery_assets"
+    cp $UNPACK_GADGET/meta/gadget.yaml $UNPACK_GADGET/recovery-assets/recovery/
 }
 
 backup_writable
 backup_bootfs
-populate_recovery_initrd
-backup_kernel
+populate_recovery_initrd_kernel
 backup_snaps
 prepare_writable_squashfs
 update_bootloader_cfg
+update_recovery_assets

@@ -1,7 +1,7 @@
 project: pi3
 snaps:
   kernel: pi2-kernel
-  os: core
+  os: ubuntu-core
   gadget: pi3
 configs:
   arch: armhf
@@ -9,13 +9,13 @@ configs:
   swap: on
   swapsize: 1024
   release: 16
-  partition-type: mbr 
+  partition-type: mbr
   bootloader: u-boot
 recovery:
   type: factory_install
   installerfslabel: INSTALLER
-  recoverysize: 768 
-  filesystem-label: ESP 
+  recoverysize: 768
+  filesystem-label: ESP
   oem-preinst-hook-dir: OEM_pre_install_hook
   oem-postinst-hook-dir: OEM_post_install_hook
   oem-prereboot-hook-dir: OEM_pre_reboot_hook

@@ -33,57 +33,66 @@ import (
 
 	uenv "github.com/mvo5/uboot-go/uenv"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 )
 
-func hack_grub_cfg(recovery_type_cfg string, recovery_type_label string, recovery_part_label string, grub_cfg string) {
-	// add cloud-init disabled option
+func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string) error {
 	// sed -i "s/^set cmdline="\(.*\)"$/set cmdline="\1 $cloud_init_disabled"/g"
 	rplib.Shellexec("sed", "-i", "s/^set cmdline=\"\\(.*\\)\"$/set cmdline=\"\\1 $cloud_init_disabled\"/g", grub_cfg)
 
 	// add recovery grub menuentry
 	f, err := os.OpenFile(grub_cfg, os.O_APPEND|os.O_WRONLY, 0600)
-	rplib.Checkerr(err)
+	if err != nil {
+		log.Printf("Open %s failed", grub_cfg)
+		return err
+	}
+	defer f.Close()
 
 	text := fmt.Sprintf(`
-menuentry "%s" {
+menuentry "Factory Restore" {
         # load recovery system
-        echo "[grub.cfg] load %s system"
+        echo "[grub.cfg] load factory_restore system"
         search --no-floppy --set --label "%s"
         echo "[grub.cfg] root: ${root}"
-        set cmdline="root=LABEL=%s ro init=/lib/systemd/systemd console=ttyS0 console=tty1 panic=-1 -- recoverytype=%s"
+		load_env -f (${root})/EFI/ubuntu/grubenv
+        set cmdline="recovery=LABEL=%s ro init=/lib/systemd/systemd console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=%s snap_core=${recovery_core} snap_kernel=${recovery_kernel}"
         echo "[grub.cfg] loading kernel..."
-        loopback loop0 /kernel.snap
-        linux (loop0)/vmlinuz $cmdline
+        linuxefi ($root)/$recovery_kernel/kernel.img $cmdline
         echo "[grub.cfg] loading initrd..."
-        initrd /initrd.img
+        initrdefi ($root)/$recovery_kernel/initrd.img
         echo "[grub.cfg] boot..."
         boot
-}`, recovery_type_label, recovery_type_cfg, recovery_part_label, recovery_part_label, recovery_type_cfg)
+}`, recovery_part_label, recovery_part_label, recovery_part_label)
 	if _, err = f.WriteString(text); err != nil {
-		panic(err)
+		return err
 	}
 
-	f.Close()
+	cmd := exec.Command("grub-editenv", grub_env, "set", "recovery_type=factory_restore")
+	err = cmd.Run()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func UpdateUbootEnv(RecoveryLabel string) error {
 	// update uboot.env in recovery partition after first install
-	env, err := uenv.Open(UBOOT_ENV)
+	env, err := uenv.Open(SYSBOOT_UBOOT_ENV)
 	if err != nil {
-		log.Println("Open %s failed", UBOOT_ENV)
+		log.Printf("Open %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
 	env.Set("snap_mode", "")
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", UBOOT_ENV)
+		log.Printf("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
 	env.Set("recovery_type", "factory_restore")
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", UBOOT_ENV)
+		log.Printf("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
@@ -97,7 +106,7 @@ func UpdateUbootEnv(RecoveryLabel string) error {
 	}
 	env.Set("recovery_core", core)
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", UBOOT_ENV)
+		log.Printf("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
@@ -110,7 +119,13 @@ func UpdateUbootEnv(RecoveryLabel string) error {
 	}
 	env.Set("recovery_kernel", kernel)
 	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", UBOOT_ENV)
+		log.Printf("Write %s failed", SYSBOOT_UBOOT_ENV)
+		return err
+	}
+
+	env.Set("recovery_label", fmt.Sprintf("LABEL=%s", RecoveryLabel))
+	if err = env.Save(); err != nil {
+		log.Printf("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
 
@@ -156,33 +171,27 @@ func releaseDhcp() error {
 	return cmd.Run()
 }
 
-func serialVaultService() error {
-	vaultServerIP := rplib.Shellcmdoutput("ip route | awk '/default/ { print $3 }'") // assume identity-vault is hosted on the gateway
-	log.Println("vaultServerIP:", vaultServerIP)
-
-	if !configs.Recovery.SignSerial {
-	}
-	// TODO: Start signing serial
-	return nil
-}
-
 func ConfirmRecovry(in *os.File) bool {
 	//in is for golang testing input.
 	//Get user input, if in is nil
 	if in == nil {
 		in = os.Stdin
 	}
+
+	// TODO: Add user confirmation pre-hook
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 
-	fmt.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
+	log.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
 	var input string
 	fmt.Fscanf(in, "%s\n", &input)
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("4 4 1 7"), 0644)
 
 	if "y" != input && "Y" != input {
+		// TODO: Add user confirmation post-yes-hook
 		return false
 	}
 
+	// TODO: Add user confirmation post-no-hook
 	return true
 }
 
@@ -192,7 +201,7 @@ func BackupAssertions(parts *Partitions) error {
 	if err != nil {
 		return err
 	}
-	err = syscall.Mount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
+	err = syscall.Mount(fmtPartPath(parts.TargetDevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
 	if err != nil {
 		return err
 	}
@@ -209,7 +218,7 @@ func BackupAssertions(parts *Partitions) error {
 
 		err = rplib.CopyTree(src, dst)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			return err
 		}
 	}

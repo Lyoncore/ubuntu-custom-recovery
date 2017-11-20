@@ -28,7 +28,7 @@ import (
 	"syscall"
 	"time"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 )
 
 var version string
@@ -42,9 +42,12 @@ const (
 	ASSERTION_DIR        = "/writable/recovery/"
 	ASSERTION_BACKUP_DIR = "/tmp/assert_backup/"
 	CONFIG_YAML          = "/recovery/config.yaml"
+	CONFIG_GADGET_YAML   = "/recovery/gadget.yaml"
 	WRITABLE_MNT_DIR     = "/tmp/writableMnt/"
 	SYSBOOT_MNT_DIR      = "/tmp/system-boot/"
+	RECO_TAR_MNT_DIR     = "/tmp/recoMnt/"
 	RECO_FACTORY_DIR     = "/recovery/factory/"
+	RECO_ROOT_DIR        = "/run/initramfs/recovery/recovery/"
 	SYSBOOT_TARBALL      = RECO_FACTORY_DIR + "system-boot.tar.xz"
 	WRITABLE_TARBALL     = RECO_FACTORY_DIR + "writable.tar.xz"
 	LOG_PATH             = WRITABLE_MNT_DIR + "system-data/var/log/recovery/log.txt"
@@ -58,13 +61,18 @@ const (
 	SYSTEMD_SYSTEM_DIR       = "/lib/systemd/system/"
 	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
 
-	UBOOT_ENV        = SYSBOOT_MNT_DIR + "uboot.env"
-	BACKUP_SNAP_PATH = "/backup_snaps/"
+	SYSBOOT_UBOOT_ENV  = SYSBOOT_MNT_DIR + "uboot.env"
+	SYSBOOT_GRUB_ENV   = SYSBOOT_MNT_DIR + "efi/ubuntu/grubenv"
+	SYSBOOT_GRUB_CFG   = SYSBOOT_MNT_DIR + "efi/ubuntu/grub.cfg"
+	RECO_PART_GRUB_ENV = RECO_ROOT_DIR + "EFI/ubuntu/grubenv"
+	RECO_PART_GRUB_CFG = RECO_ROOT_DIR + "EFI/ubuntu/grub.cfg"
+	BACKUP_SNAP_PATH   = "/backup_snaps/"
 
 	WRITABLE_INCLUDES_SQUASHFS = "/recovery/writable-includes.squashfs"
 )
 
 var configs rplib.ConfigRecovery
+var gadgetInfo rplib.GadgetInfo
 var RecoveryType string
 var RecoveryLabel string
 
@@ -83,19 +91,20 @@ func parseConfigs(configFilePath string) {
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
 	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
 
-	flag.Parse()
-	if len(flag.Args()) != 2 {
-		log.Panicf(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] and [RECOVERY_LABEL]. Current arguments: %v", flag.Args()))
-	}
-	// TODO: use enum to represent RECOVERY_TYPE
-	RecoveryType, RecoveryLabel = flag.Arg(0), flag.Arg(1)
-	log.Printf("RECOVERY_TYPE: %s", RecoveryType)
-	log.Printf("RECOVERY_LABEL: %s", RecoveryLabel)
-
 	// Load config.yaml
 	err := configs.Load(configPath)
 	rplib.Checkerr(err)
 	log.Println(configs)
+}
+
+func getSysbootSizeFromYaml(gadgetPath string) (int, error) {
+	// Load config.yaml
+	err := gadgetInfo.Load(gadgetPath)
+	if err != nil {
+		return -1, err
+	}
+
+	return gadgetInfo.GetVolumeSizebyLabel(SysbootLabel)
 }
 
 // easier for function mocking
@@ -103,13 +112,7 @@ var getPartitions = GetPartitions
 var restoreParts = RestoreParts
 var syscallMount = syscall.Mount
 
-func preparePartitions() {
-	// Find boot device, all other partiitons info
-	parts, err := getPartitions(RecoveryLabel)
-	if err != nil {
-		log.Panicf("Boot device not found, error: %s\n", err)
-	}
-
+func preparePartitions(parts *Partitions) {
 	// TODO: verify the image
 	// If this is user triggered factory restore (first time is in factory and should happen automatically), ask user for confirm.
 	if rplib.FACTORY_RESTORE == RecoveryType {
@@ -126,11 +129,11 @@ func preparePartitions() {
 	restoreParts(parts, configs.Configs.Bootloader, configs.Configs.PartitionType)
 
 	//Mount writable for logger and restore data
-	if _, err = os.Stat(WRITABLE_MNT_DIR); err != nil {
+	if _, err := os.Stat(WRITABLE_MNT_DIR); err != nil {
 		err := os.MkdirAll(WRITABLE_MNT_DIR, 0755)
 		rplib.Checkerr(err)
 	}
-	err = syscallMount(fmtPartPath(parts.DevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
+	err := syscallMount(fmtPartPath(parts.TargetDevPath, parts.Writable_nr), WRITABLE_MNT_DIR, "ext4", 0, "")
 	rplib.Checkerr(err)
 
 	//Mount system-boot for logger and restore data
@@ -138,7 +141,7 @@ func preparePartitions() {
 		err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
 		rplib.Checkerr(err)
 	}
-	err = syscallMount(fmtPartPath(parts.DevPath, parts.Sysboot_nr), SYSBOOT_MNT_DIR, "vfat", 0, "")
+	err = syscallMount(fmtPartPath(parts.TargetDevPath, parts.Sysboot_nr), SYSBOOT_MNT_DIR, "vfat", 0, "")
 	rplib.Checkerr(err)
 }
 
@@ -148,8 +151,10 @@ var copySnapsAsserts = CopySnapsAsserts
 var addFirstBootService = AddFirstBootService
 var restoreAsserions = RestoreAsserions
 var updateUbootEnv = UpdateUbootEnv
+var updateGrubCfg = UpdateGrubCfg
+var updateBootEntries = UpdateBootEntries
 
-func recoverProcess() {
+func recoverProcess(parts *Partitions) {
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
 
 	// stream log to stdout and writable partition
@@ -177,12 +182,24 @@ func recoverProcess() {
 		restoreAsserions()
 	}
 
-	// update uboot env
-	log.Println("Update uboot env")
-	//fsck needs ignore error code
-	log.Println("[set next recoverytype to factory_restore]")
-	err = updateUbootEnv(RecoveryLabel)
-	rplib.Checkerr(err)
+	if configs.Configs.Bootloader == "u-boot" {
+		// update uboot env
+		log.Println("[Update uboot env]")
+		err = updateUbootEnv(RecoveryLabel)
+		rplib.Checkerr(err)
+	} else if configs.Configs.Bootloader == "grub" {
+		// update uboot env
+		log.Println("[Update grub cfg/env]")
+		// mount as writable before editing
+		rplib.Shellexec("mount", "-o", "rw,remount", RECO_ROOT_DIR)
+		err = updateGrubCfg(RecoveryLabel, SYSBOOT_GRUB_CFG, RECO_PART_GRUB_ENV)
+		rplib.Shellexec("mount", "-o", "ro,remount", RECO_ROOT_DIR)
+		rplib.Checkerr(err)
+
+		// update efi Boot Entries
+		log.Println("[Update boot entries]")
+		updateBootEntries(parts)
+	}
 }
 
 var syscallUnMount = syscall.Unmount
@@ -193,11 +210,46 @@ func cleanupPartitions() {
 }
 
 func main() {
-	//setup logger
-	//logger.SimpleSetup()
+	flag.Parse()
+	if len(flag.Args()) != 2 {
+		log.Panicf(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] and [RECOVERY_LABEL]. Current arguments: %v", flag.Args()))
+	}
+	// TODO: use enum to represent RECOVERY_TYPE
+	RecoveryType, RecoveryLabel = flag.Arg(0), flag.Arg(1)
+	log.Printf("RECOVERY_TYPE: %s", RecoveryType)
+	log.Printf("RECOVERY_LABEL: %s", RecoveryLabel)
+
+	// Find boot device, all other partiitons info
+	parts, err := getPartitions(RecoveryLabel, RecoveryType)
+	if err != nil {
+		log.Panicf("Boot device not found, error: %s\n", err)
+	}
 
 	parseConfigs(CONFIG_YAML)
-	preparePartitions()
-	recoverProcess()
+	// Check boot entries if corrupted and in recovery mode.
+	// Currently only support amd64
+	if configs.Configs.Arch == "amd64" {
+		if err := RestoreBootEntries(parts, RecoveryType); err != nil {
+			// When error return which means the boot entries fixed
+			log.Println(err)
+			os.Exit(0x55) //ERESTART
+		}
+	}
+
+	// Headless_installer just copy the recovery partition
+	if RecoveryType == rplib.HEADLESS_INSTALLER {
+		err := CopyRecoveryPart(parts)
+		if err != nil {
+			os.Exit(-1)
+		}
+		os.Exit(0)
+	}
+
+	sizeMB, err := getSysbootSizeFromYaml(CONFIG_GADGET_YAML)
+	if err == nil {
+		SetPartitionStartEnd(parts, SysbootLabel, sizeMB, configs.Configs.Bootloader)
+	}
+	preparePartitions(parts)
+	recoverProcess(parts)
 	cleanupPartitions()
 }

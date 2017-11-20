@@ -32,9 +32,8 @@ import (
 	"testing"
 	"time"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
 	reco "github.com/Lyoncore/ubuntu-recovery/src"
-	"github.com/snapcore/snapd/logger"
+	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 	. "gopkg.in/check.v1"
 )
 
@@ -90,7 +89,6 @@ func MountTestImg(mntImg string, umntLoop string) {
 }
 
 func (s *GetPartSuite) SetUpTest(c *C) {
-	logger.SimpleSetup()
 	//Create a MBR image
 	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s", MBRimage), fmt.Sprintf("bs=%d", part_size), "count=1")
 	rplib.Shellexec("sgdisk", "--load-backup=tests/mbr.part", MBRimage)
@@ -107,7 +105,7 @@ func (s *GetPartSuite) TearDownTest(c *C) {
 }
 
 func getPartsConds(c *C, Label string, Loop string, passCase bool, recoCase bool, sysbootCase bool, writableCase bool) {
-	parts, err := reco.GetPartitions(Label)
+	parts, err := reco.GetPartitions(Label, rplib.FACTORY_RESTORE)
 	if passCase == false {
 		c.Assert(err, NotNil)
 		c.Assert(parts, IsNil)
@@ -115,10 +113,16 @@ func getPartsConds(c *C, Label string, Loop string, passCase bool, recoCase bool
 	} else {
 		c.Assert(err, IsNil)
 
-		ret := strings.Compare(parts.DevNode, Loop)
+		ret := strings.Compare(parts.SourceDevNode, Loop)
 		c.Assert(ret, Equals, 0)
 
-		ret = strings.Compare(parts.DevPath, fmt.Sprintf("/dev/mapper/%s", Loop))
+		ret = strings.Compare(parts.SourceDevPath, fmt.Sprintf("/dev/mapper/%s", Loop))
+		c.Assert(ret, Equals, 0)
+
+		ret = strings.Compare(parts.TargetDevNode, Loop)
+		c.Assert(ret, Equals, 0)
+
+		ret = strings.Compare(parts.TargetDevPath, fmt.Sprintf("/dev/mapper/%s", Loop))
 		c.Assert(ret, Equals, 0)
 	}
 	if recoCase {
@@ -158,16 +162,16 @@ func _build_image(image string) {
 
 func _clear_partition() {
 	for count := 0; count < 10; count++ {
-		parts, err := reco.GetPartitions(RecoveryLabel)
+		parts, err := reco.GetPartitions(RecoveryLabel, rplib.FACTORY_RESTORE)
 		if err != nil {
 			fmt.Println("Partitions are cleared, continoue")
 			break
 		}
 
 		fmt.Println(parts)
-		cmd := exec.Command("dd", "if=/dev/zero", fmt.Sprintf("of=%s", parts.DevPath))
+		cmd := exec.Command("dd", "if=/dev/zero", fmt.Sprintf("of=%s", parts.SourceDevPath))
 		cmd.Run()
-		cmd = exec.Command(fmt.Sprintf("partparobe %s", parts.DevPath))
+		cmd = exec.Command(fmt.Sprintf("partparobe %s", parts.SourceDevPath))
 		cmd.Run()
 		cmd = exec.Command("udevadm", "trigger")
 		cmd.Run()
@@ -177,7 +181,7 @@ func _clear_partition() {
 	}
 }
 
-func (s *GetPartSuite) TestgetPartitions(c *C) {
+func (s *GetPartSuite) TestGetPartitions(c *C) {
 	_clear_partition()
 	_build_image(MBRimage)
 	//Case in MBR
@@ -244,10 +248,10 @@ func (s *GetPartSuite) TestFindPart(c *C) {
 	cmd := exec.Command("udevadm", "trigger")
 	cmd.Run()
 
-	DevNode, DevPath, PartNr, err := reco.FindPart(RecoveryLabel)
+	SourceDevNode, SourceDevPath, PartNr, err := reco.FindPart(RecoveryLabel)
 	c.Check(err, IsNil)
-	c.Check(DevNode, Equals, mbrLoop)
-	c.Check(DevPath, Equals, fmt.Sprintf("/dev/mapper/%s", DevNode))
+	c.Check(SourceDevNode, Equals, mbrLoop)
+	c.Check(SourceDevPath, Equals, fmt.Sprintf("/dev/mapper/%s", SourceDevNode))
 	nr, err := strconv.Atoi(RecoveryPart)
 	c.Check(err, IsNil)
 	c.Check(PartNr, Equals, nr)
@@ -258,19 +262,19 @@ func (s *GetPartSuite) TestFindPart(c *C) {
 	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, WritablePart))
 	cmd = exec.Command("udevadm", "trigger")
 	cmd.Run()
-	DevNode, DevPath, PartNr, err = reco.FindPart(RecoveryLabel)
+	SourceDevNode, SourceDevPath, PartNr, err = reco.FindPart(RecoveryLabel)
 	c.Check(err, IsNil)
-	c.Check(DevNode, Equals, mbrLoop)
-	c.Check(DevPath, Equals, fmt.Sprintf("/dev/mapper/%s", DevNode))
+	c.Check(SourceDevNode, Equals, mbrLoop)
+	c.Check(SourceDevPath, Equals, fmt.Sprintf("/dev/mapper/%s", SourceDevNode))
 	nr, err = strconv.Atoi(RecoveryPart)
 	c.Check(err, IsNil)
 	c.Check(PartNr, Equals, nr)
 	MountTestImg("", mbrLoop)
 
-	DevNode, DevPath, PartNr, err = reco.FindPart("WrongLabel")
+	SourceDevNode, SourceDevPath, PartNr, err = reco.FindPart("WrongLabel")
 	c.Check(err, NotNil)
-	c.Check(DevNode, Equals, "")
-	c.Check(DevPath, Equals, "")
+	c.Check(SourceDevNode, Equals, "")
+	c.Check(SourceDevPath, Equals, "")
 	c.Check(PartNr, Equals, -1)
 }
 
@@ -297,7 +301,7 @@ func (s *GetPartSuite) TestRestoreParts(c *C) {
 	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", mbrLoop, WritablePart))
 	cmd := exec.Command("udevadm", "trigger")
 	cmd.Run()
-	parts, err := reco.GetPartitions(RecoveryLabel)
+	parts, err := reco.GetPartitions(RecoveryLabel, rplib.FACTORY_RESTORE)
 	c.Assert(err, IsNil)
 	err = reco.RestoreParts(parts, "u-boot", "mbr")
 	c.Check(err, IsNil)
@@ -344,7 +348,7 @@ func (s *GetPartSuite) TestRestoreParts(c *C) {
 	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, fmt.Sprintf("/dev/mapper/%sp%s", gptLoop, WritablePart))
 	cmd = exec.Command("udevadm", "trigger")
 	cmd.Run()
-	parts, err = reco.GetPartitions(RecoveryLabel)
+	parts, err = reco.GetPartitions(RecoveryLabel, rplib.FACTORY_RESTORE)
 	c.Assert(err, IsNil)
 	err = reco.RestoreParts(parts, "grub", "gpt")
 	c.Check(err, IsNil)
