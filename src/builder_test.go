@@ -33,7 +33,7 @@ import (
 	"syscall"
 
 	reco "github.com/Lyoncore/ubuntu-recovery/src"
-	"./rplib"
+	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 	uenv "github.com/mvo5/uboot-go/uenv"
 
 	. "gopkg.in/check.v1"
