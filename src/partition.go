@@ -293,7 +293,7 @@ func SetPartitionStartEnd(parts *Partitions, partName string, partSizeMB int, bo
 			// Not allow to edit system-boot in u-boot yet.
 		} else if bootloader == "grub" {
 			parts.Sysboot_start = parts.Recovery_end + 1
-			parts.Sysboot_end = parts.Sysboot_start + int64(partSizeMB*1024)
+			parts.Sysboot_end = parts.Sysboot_start + int64(partSizeMB*1024*1024)
 		}
 		//TODO: To support swap partition
 		// case "swap":
