@@ -129,7 +129,6 @@ if [ $ret == 85 ]; then
 elif [ $ret != 0 ]; then
     debugshell
 elif [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
-    debugshell
     poweroff
 fi
 
@@ -138,4 +137,3 @@ fi
 sync
 
 udevadm trigger
-debugshell
