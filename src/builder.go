@@ -128,12 +128,6 @@ func UpdateUbootEnv(RecoveryLabel string) error {
 		log.Printf("Write %s failed", SYSBOOT_UBOOT_ENV)
 		return err
 	}
-
-	env.Set("recovery_label", fmt.Sprintf("LABEL=%s", RecoveryLabel))
-	if err = env.Save(); err != nil {
-		log.Println("Write %s failed", UBOOT_ENV)
-		return err
-	}
 	return err
 }
 
