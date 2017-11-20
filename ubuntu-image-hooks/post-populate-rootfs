@@ -163,9 +163,15 @@ update_bootloader_cfg() {
     fi  
 }
 
+update_recovery_assets() {
+    echo "update_recovery_assets"
+    cp $UNPACK_GADGET/meta/gadget.yaml $UNPACK_GADGET/recovery-assets/
+}
+
 backup_writable
 backup_bootfs
 populate_recovery_initrd_kernel
 backup_snaps
 prepare_writable_squashfs
 update_bootloader_cfg
+update_recovery_assets
