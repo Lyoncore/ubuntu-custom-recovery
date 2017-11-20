@@ -3,8 +3,8 @@
 
 # redirect output to serial console, since the HDMI output not enabled
 # FIXME, the output console should be selectable
-exec </dev/ttyS0 >/dev/ttyS0 2>&1
-console="/dev/ttyS0"
+exec </dev/tty1 >/dev/tty1 2>&1
+console="/dev/tty1"
 
 PREREQ=""
 
@@ -129,6 +129,7 @@ if [ $ret == 85 ]; then
 elif [ $ret != 0 ]; then
     debugshell
 elif [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
+    debugshell
     poweroff
 fi
 
@@ -137,3 +138,4 @@ fi
 sync
 
 udevadm trigger
+debugshell
