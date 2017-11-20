@@ -36,6 +36,7 @@ import (
 	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 )
 
+// TODO: Maybe need to modify for [Ubuntu Server]
 func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string) error {
 	// sed -i "s/^set cmdline="\(.*\)"$/set cmdline="\1 $cloud_init_disabled"/g"
 	rplib.Shellexec("sed", "-i", "s/^set cmdline=\"\\(.*\\)\"$/set cmdline=\"\\1 $cloud_init_disabled\"/g", grub_cfg)
@@ -129,6 +130,12 @@ func UpdateUbootEnv(RecoveryLabel string) error {
 		return err
 	}
 	return err
+}
+
+// TODO: Add this for ubuntu server
+func updateFstab(parts *Partitions, recoveryos string) error {
+	uuid = rplib.Shellcmdoutput(fmt.Sprintf("blkid -s UUID -o value %s%d", parts.TargetDevPath, parts.Wriatble_nr)
+
 }
 
 //FIXME: now only support eth0, enx0 interface

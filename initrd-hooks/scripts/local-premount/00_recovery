@@ -30,6 +30,7 @@ set -x
 
 # Check the recovery type
 recoverytype=
+recoveryos=ubuntu_core
 for t in $(cat /proc/cmdline); do
     if [ "$t" = "recoverytype=factory_restore" ]; then
         recoverytype=factory_restore
@@ -43,6 +44,10 @@ for t in $(cat /proc/cmdline); do
     elif [ "$t" = "recoverytype=custom" ]; then
         recoverytype=custom
         break
+    elif [ "$t" = "recoveryos=ubuntu_core" ]; then
+        recoveryos=ubuntu_core
+    elif [ "$t" = "recoveryos=ubuntu_classic" ];then
+        recoveryos=ubuntu_classic
     elif [ "$t" = "fixrtc" ];then
         FIXRTC=ture
     fi
@@ -120,11 +125,11 @@ mount --bind $BASE/recovery /$newroot/$BASE/recovery
 echo "[chroot execute recovery.bin]"
 
 set +e
-/bin/chroot /$newroot /recovery/bin/recovery.bin $recoverytype "$recoverylabel"
+/bin/chroot /$newroot /recovery/bin/recovery.bin $recoverytype $recoverylabel $recoveryos
 ret=$?
 
 # ERESTART is errno 85 which restart system requirest from recovery.bin
-if [ $ret == 85 ]; then
+if [ $ret == 85 || $recoveryos == "ubuntu_classic" ]; then
     reboot
 elif [ $ret != 0 ]; then
     debugshell

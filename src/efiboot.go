@@ -10,19 +10,19 @@ import (
 const EFIBOOTMGR = "efibootmgr"
 const LOADER = "\\EFI\\BOOT\\BOOTX64.EFI"
 
-func RestoreBootEntries(parts *Partitions, recoveryType string) error {
+func RestoreBootEntries(parts *Partitions, recoveryType string, os_entry string) error {
 	// Detect uefi entry needs to be rebuilt if corructed (only when facotry restore)
 	if rplib.FACTORY_RESTORE == recoveryType {
 		log.Println("[Restoring efi boot entries]")
 		recov_entry := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
-		snappy_entry := rplib.GetBootEntries(rplib.BOOT_ENTRY_SNAPPY)
+		snappy_entry := rplib.GetBootEntries(os_entry)
 		if len(recov_entry) < 1 || len(snappy_entry) < 1 {
 			//remove old uefi entry
 			entries := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
 			for _, entry := range entries {
 				rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
 			}
-			entries = rplib.GetBootEntries(rplib.BOOT_ENTRY_SNAPPY)
+			entries = rplib.GetBootEntries(os_entry)
 			for _, entry := range entries {
 				rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
 			}
@@ -32,7 +32,7 @@ func RestoreBootEntries(parts *Partitions, recoveryType string) error {
 			rplib.CreateBootEntry(parts.TargetDevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
 
 			log.Println("[add system-boot entry]")
-			rplib.CreateBootEntry(parts.TargetDevPath, parts.Sysboot_nr, LOADER, rplib.BOOT_ENTRY_SNAPPY)
+			rplib.CreateBootEntry(parts.TargetDevPath, parts.Sysboot_nr, LOADER, os_entry)
 
 			return fmt.Errorf("Boot entries corrupted has been fixed, reboot system")
 		}
@@ -41,18 +41,18 @@ func RestoreBootEntries(parts *Partitions, recoveryType string) error {
 	return nil
 }
 
-func UpdateBootEntries(parts *Partitions) {
+func UpdateBootEntries(parts *Partitions, os_entry string) {
 	log.Println("[remove past uefi entry]")
 	entries := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
 	for _, entry := range entries {
 		rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
 	}
-	entries = rplib.GetBootEntries(rplib.BOOT_ENTRY_SNAPPY)
+	entries = rplib.GetBootEntries(os_entry)
 	for _, entry := range entries {
 		rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
 	}
 
 	log.Println("[add new uefi entry]")
 	rplib.CreateBootEntry(parts.TargetDevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
-	rplib.CreateBootEntry(parts.TargetDevPath, parts.Sysboot_nr, LOADER, rplib.BOOT_ENTRY_SNAPPY)
+	rplib.CreateBootEntry(parts.TargetDevPath, parts.Sysboot_nr, LOADER, os_entry)
 }

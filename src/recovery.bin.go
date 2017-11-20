@@ -75,6 +75,7 @@ var configs rplib.ConfigRecovery
 var gadgetInfo rplib.GadgetInfo
 var RecoveryType string
 var RecoveryLabel string
+var RecoveryOS string
 
 func parseConfigs(configFilePath string) {
 	var configPath string
@@ -111,6 +112,16 @@ func getSysbootSizeFromYaml(gadgetPath string) (int, error) {
 var getPartitions = GetPartitions
 var restoreParts = RestoreParts
 var syscallMount = syscall.Mount
+
+func getBootEntryName(recoveryos string) string {
+	switch RecoveryOS {
+	case rplib.RECOVERY_OS_UBUNTU_CORE:
+		return rplib.BOOT_ENTRY_SNAPPY
+	case rplib.RECOVERY_OS_UBUNTU_CLASIC:
+		return rplib.BOOT_ENTRY_UBUNTU_CLASSIC
+	}
+	return rplib.BOOT_ENTRY_SNAPPY
+}
 
 func preparePartitions(parts *Partitions) {
 	// TODO: verify the image
@@ -154,7 +165,7 @@ var updateUbootEnv = UpdateUbootEnv
 var updateGrubCfg = UpdateGrubCfg
 var updateBootEntries = UpdateBootEntries
 
-func recoverProcess(parts *Partitions) {
+func recoverProcess(parts *Partitions, recoveryos string) {
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
 
 	// stream log to stdout and writable partition
@@ -168,9 +179,11 @@ func recoverProcess(parts *Partitions) {
 	rplib.Checkerr(err)
 
 	// add firstboot service
-	log.Println("[Add FIRSTBOOT service]")
-	err = addFirstBootService(RecoveryType, RecoveryLabel)
-	rplib.Checkerr(err)
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CORE {
+		log.Println("[Add FIRSTBOOT service]")
+		err = addFirstBootService(RecoveryType, RecoveryLabel)
+		rplib.Checkerr(err)
+	}
 
 	switch RecoveryType {
 	case rplib.FACTORY_INSTALL:
@@ -198,7 +211,7 @@ func recoverProcess(parts *Partitions) {
 
 		// update efi Boot Entries
 		log.Println("[Update boot entries]")
-		updateBootEntries(parts)
+		updateBootEntries(parts, getBootEntryName(RecoveryOS))
 	}
 }
 
@@ -215,9 +228,10 @@ func main() {
 		log.Panicf(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] and [RECOVERY_LABEL]. Current arguments: %v", flag.Args()))
 	}
 	// TODO: use enum to represent RECOVERY_TYPE
-	RecoveryType, RecoveryLabel = flag.Arg(0), flag.Arg(1)
+	RecoveryType, RecoveryLabel, RecoveryOS = flag.Arg(0), flag.Arg(1), flag.Arg(2)
 	log.Printf("RECOVERY_TYPE: %s", RecoveryType)
 	log.Printf("RECOVERY_LABEL: %s", RecoveryLabel)
+	log.Printf("RECOVERY_OS: %s", RecoveryOS)
 
 	// Find boot device, all other partiitons info
 	parts, err := getPartitions(RecoveryLabel, RecoveryType)
@@ -229,7 +243,7 @@ func main() {
 	// Check boot entries if corrupted and in recovery mode.
 	// Currently only support amd64
 	if configs.Configs.Arch == "amd64" {
-		if err := RestoreBootEntries(parts, RecoveryType); err != nil {
+		if err := RestoreBootEntries(parts, RecoveryType, getBootEntryName(RecoveryOS)); err != nil {
 			// When error return which means the boot entries fixed
 			log.Println(err)
 			os.Exit(0x55) //ERESTART
@@ -250,6 +264,6 @@ func main() {
 		SetPartitionStartEnd(parts, SysbootLabel, sizeMB, configs.Configs.Bootloader)
 	}
 	preparePartitions(parts)
-	recoverProcess(parts)
+	recoverProcess(parts, RecoveryOS)
 	cleanupPartitions()
 }
