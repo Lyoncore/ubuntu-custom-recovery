@@ -128,7 +128,7 @@ func preparePartitions(parts *Partitions) {
 	// If this is user triggered factory restore (first time is in factory and should happen automatically), ask user for confirm.
 	if rplib.FACTORY_RESTORE == RecoveryType {
 		if ConfirmRecovry(nil) == false {
-			os.Exit(1)
+			os.Exit(0x55) //ERESTART
 		}
 
 		//backup assertions
