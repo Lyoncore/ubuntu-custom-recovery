@@ -34,13 +34,10 @@ recoveryos=ubuntu_core
 for t in $(cat /proc/cmdline); do
     if [ "$t" = "recoverytype=factory_restore" ]; then
         recoverytype=factory_restore
-        break
     elif [ "$t" = "recoverytype=factory_install" ]; then
         recoverytype=factory_install
-        break
     elif [ "$t" = "recoverytype=headless_installer" ]; then
         recoverytype=headless_installer
-        break
     elif [ "$t" = "recoverytype=custom" ]; then
         recoverytype=custom
         break
@@ -129,7 +126,7 @@ set +e
 ret=$?
 
 # ERESTART is errno 85 which restart system requirest from recovery.bin
-if [ $ret == 85 || $recoveryos == "ubuntu_classic" ]; then
+if [ $ret == 85 ] || [ $ret == 0 -a "ubuntu_classic" == $recoveryos ]; then
     reboot
 elif [ $ret != 0 ]; then
     debugshell

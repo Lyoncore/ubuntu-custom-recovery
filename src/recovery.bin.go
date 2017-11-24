@@ -69,6 +69,10 @@ const (
 	BACKUP_SNAP_PATH   = "/backup_snaps/"
 
 	WRITABLE_INCLUDES_SQUASHFS = "/recovery/writable-includes.squashfs"
+
+	// Ubuntu classic specific
+	WRITABLE_ETC_FSTAB      = WRITABLE_MNT_DIR + "etc/fstab"
+	WRITABLE_GRUB_40_CUSTOM = WRITABLE_MNT_DIR + "etc/grub.d/40_custom"
 )
 
 var configs rplib.ConfigRecovery
@@ -117,7 +121,7 @@ func getBootEntryName(recoveryos string) string {
 	switch RecoveryOS {
 	case rplib.RECOVERY_OS_UBUNTU_CORE:
 		return rplib.BOOT_ENTRY_SNAPPY
-	case rplib.RECOVERY_OS_UBUNTU_CLASIC:
+	case rplib.RECOVERY_OS_UBUNTU_CLASSIC:
 		return rplib.BOOT_ENTRY_UBUNTU_CLASSIC
 	}
 	return rplib.BOOT_ENTRY_SNAPPY
@@ -164,6 +168,7 @@ var restoreAsserions = RestoreAsserions
 var updateUbootEnv = UpdateUbootEnv
 var updateGrubCfg = UpdateGrubCfg
 var updateBootEntries = UpdateBootEntries
+var updateFstab = UpdateFstab
 
 func recoverProcess(parts *Partitions, recoveryos string) {
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
@@ -178,10 +183,14 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 	err = copySnapsAsserts()
 	rplib.Checkerr(err)
 
-	// add firstboot service
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CORE {
+		// add firstboot service for ubuntu core
 		log.Println("[Add FIRSTBOOT service]")
 		err = addFirstBootService(RecoveryType, RecoveryLabel)
+		rplib.Checkerr(err)
+	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+		log.Println("[Update fstab]")
+		err = updateFstab(parts, recoveryos)
 		rplib.Checkerr(err)
 	}
 
@@ -203,9 +212,16 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 	} else if configs.Configs.Bootloader == "grub" {
 		// update uboot env
 		log.Println("[Update grub cfg/env]")
+
+		var grub_cfg string
+		if recoveryos == rplib.RECOVERY_OS_UBUNTU_CORE {
+			grub_cfg = SYSBOOT_GRUB_CFG
+		} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+			grub_cfg = WRITABLE_GRUB_40_CUSTOM
+		}
 		// mount as writable before editing
 		rplib.Shellexec("mount", "-o", "rw,remount", RECO_ROOT_DIR)
-		err = updateGrubCfg(RecoveryLabel, SYSBOOT_GRUB_CFG, RECO_PART_GRUB_ENV)
+		err = updateGrubCfg(RecoveryLabel, grub_cfg, RECO_PART_GRUB_ENV, recoveryos)
 		rplib.Shellexec("mount", "-o", "ro,remount", RECO_ROOT_DIR)
 		rplib.Checkerr(err)
 
@@ -224,8 +240,8 @@ func cleanupPartitions() {
 
 func main() {
 	flag.Parse()
-	if len(flag.Args()) != 2 {
-		log.Panicf(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] and [RECOVERY_LABEL]. Current arguments: %v", flag.Args()))
+	if len(flag.Args()) != 3 {
+		log.Panicf(fmt.Sprintf("Need two arguments. [RECOVERY_TYPE] [RECOVERY_LABEL] [RECOVERY_OS]. Current arguments: %v", flag.Args()))
 	}
 	// TODO: use enum to represent RECOVERY_TYPE
 	RecoveryType, RecoveryLabel, RecoveryOS = flag.Arg(0), flag.Arg(1), flag.Arg(2)

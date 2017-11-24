@@ -364,7 +364,7 @@ func (s *BuilderSuite) TestUpdateGrubCfg(c *C) {
 	err = configs.Load("tests/config.yaml")
 	c.Assert(err, IsNil)
 
-	err = reco.UpdateGrubCfg(configs.Recovery.FsLabel, filepath.Join(reco.SYSBOOT_MNT_DIR, "grub.cfg"), filepath.Join(reco.SYSBOOT_MNT_DIR, "grubenv"))
+	err = reco.UpdateGrubCfg(configs.Recovery.FsLabel, filepath.Join(reco.SYSBOOT_MNT_DIR, "grub.cfg"), filepath.Join(reco.SYSBOOT_MNT_DIR, "grubenv"), rplib.RECOVERY_OS_UBUNTU_CORE)
 	c.Assert(err, IsNil)
 
 	// Verify

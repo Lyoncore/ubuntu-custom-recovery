@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -36,9 +37,37 @@ import (
 	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 )
 
-// TODO: Maybe need to modify for [Ubuntu Server]
-func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string) error {
-	// sed -i "s/^set cmdline="\(.*\)"$/set cmdline="\1 $cloud_init_disabled"/g"
+const GRUB_MENUENTRY_FACTORY_RESTORE = `
+menuentry "Factory Restore" {
+		###OS_GRUB_MENU_CMDS###
+        # load recovery system
+        echo "[grub.cfg] load factory_restore system"
+        search --no-floppy --set --label "###RECO_PARTITION_LABEL###"
+        echo "[grub.cfg] root: ${root}"
+		load_env -f (${root})/EFI/ubuntu/grubenv
+        set cmdline="recovery=LABEL=###RECO_PARTITION_LABEL### ro init=/lib/systemd/systemd console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=###RECO_PARTITION_LABEL### snap_core=${recovery_core} snap_kernel=${recovery_kernel} recoveryos=###RECO_OS###"
+        echo "[grub.cfg] loading kernel..."
+        linux ($root)/$recovery_kernel/kernel.img $cmdline
+        echo "[grub.cfg] loading initrd..."
+        initrd ($root)/$recovery_kernel/initrd.img
+        echo "[grub.cfg] boot..."
+        boot
+}`
+
+const UBUNTU_CORE_GRUB_MENU_CMDS = ``
+const RECO_UBUNTU_CORE = `ubuntu_core`
+
+const UBUNTU_CLASSIC_GRUB_MENU_CMDS = `
+	    recordfail
+        load_video
+        gfxmode auto
+        insmod gzio
+        if [ x$grub_platform = xxen ]; then insmod xzio; insmod lzopio; fi
+        insmod part_gpt
+        insmod ext2`
+const RECO_UBUNTU_CLASSIC = `ubuntu_classic`
+
+func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string, recoveryos string) error {
 	rplib.Shellexec("sed", "-i", "s/^set cmdline=\"\\(.*\\)\"$/set cmdline=\"\\1 $cloud_init_disabled\"/g", grub_cfg)
 
 	// add recovery grub menuentry
@@ -49,22 +78,17 @@ func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string)
 	}
 	defer f.Close()
 
-	text := fmt.Sprintf(`
-menuentry "Factory Restore" {
-        # load recovery system
-        echo "[grub.cfg] load factory_restore system"
-        search --no-floppy --set --label "%s"
-        echo "[grub.cfg] root: ${root}"
-		load_env -f (${root})/EFI/ubuntu/grubenv
-        set cmdline="recovery=LABEL=%s ro init=/lib/systemd/systemd console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=%s snap_core=${recovery_core} snap_kernel=${recovery_kernel}"
-        echo "[grub.cfg] loading kernel..."
-        linuxefi ($root)/$recovery_kernel/kernel.img $cmdline
-        echo "[grub.cfg] loading initrd..."
-        initrdefi ($root)/$recovery_kernel/initrd.img
-        echo "[grub.cfg] boot..."
-        boot
-}`, recovery_part_label, recovery_part_label, recovery_part_label)
-	if _, err = f.WriteString(text); err != nil {
+	var menuentry string
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+		menuentry = strings.Replace(GRUB_MENUENTRY_FACTORY_RESTORE, "###OS_GRUB_MENU_CMDS###", UBUNTU_CLASSIC_GRUB_MENU_CMDS, -1)
+		menuentry = strings.Replace(menuentry, "###RECO_OS###", RECO_UBUNTU_CLASSIC, -1)
+	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CORE {
+		menuentry = strings.Replace(GRUB_MENUENTRY_FACTORY_RESTORE, "###OS_GRUB_MENU_CMDS###", UBUNTU_CORE_GRUB_MENU_CMDS, -1)
+		menuentry = strings.Replace(menuentry, "###RECO_OS###", RECO_UBUNTU_CORE, -1)
+	}
+	menuentry = strings.Replace(menuentry, "###RECO_PARTITION_LABEL###", recovery_part_label, -1)
+
+	if _, err = f.WriteString(menuentry); err != nil {
 		return err
 	}
 
@@ -132,10 +156,40 @@ func UpdateUbootEnv(RecoveryLabel string) error {
 	return err
 }
 
-// TODO: Add this for ubuntu server
-func updateFstab(parts *Partitions, recoveryos string) error {
-	uuid = rplib.Shellcmdoutput(fmt.Sprintf("blkid -s UUID -o value %s%d", parts.TargetDevPath, parts.Wriatble_nr)
+func UpdateFstab(parts *Partitions, recoveryos string) error {
+	if parts == nil {
+		return fmt.Errorf("nil Partitions")
+	}
 
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+		writable_uuid := rplib.Shellcmdoutput(fmt.Sprintf("blkid -s UUID -o value %s%d", parts.TargetDevPath, parts.Writable_nr))
+		match, err := regexp.MatchString("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", writable_uuid)
+		if err != nil || match == false {
+			return fmt.Errorf("finding writable uuid failed:%v", writable_uuid)
+		}
+		sysboot_uuid := rplib.Shellcmdoutput(fmt.Sprintf("blkid -s UUID -o value %s%d", parts.TargetDevPath, parts.Sysboot_nr))
+		match, err = regexp.MatchString("[0-9a-fA-F]{4}-[0-9a-fA-F]{4}", sysboot_uuid)
+		if err != nil || match == false {
+			return fmt.Errorf("finding system-boot uuid failed:%v", sysboot_uuid)
+		}
+
+		f_fstab, err := os.Create(WRITABLE_ETC_FSTAB)
+		if err != nil {
+			return err
+		}
+		defer f_fstab.Close()
+
+		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/	ext4	errors=remount-ro	0	1", writable_uuid))
+		if err != nil {
+			return err
+		}
+		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/boot/EFI	vfat	umask=0077	0	1", sysboot_uuid))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 //FIXME: now only support eth0, enx0 interface
@@ -197,6 +251,10 @@ func ConfirmRecovry(in *os.File) bool {
 }
 
 func BackupAssertions(parts *Partitions) error {
+	if parts == nil {
+		fmt.Errorf("nil Partitions")
+	}
+
 	// back up serial assertion
 	err := os.MkdirAll(WRITABLE_MNT_DIR, 0755)
 	if err != nil {
