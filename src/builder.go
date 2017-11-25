@@ -52,13 +52,14 @@ menuentry "Factory Restore" {
         initrd ($root)/$recovery_kernel/initrd.img
         echo "[grub.cfg] boot..."
         boot
-}`
+}
+`
 
 const UBUNTU_CORE_GRUB_MENU_CMDS = ``
 const RECO_UBUNTU_CORE = `ubuntu_core`
 
 const UBUNTU_CLASSIC_GRUB_MENU_CMDS = `
-	    recordfail
+        recordfail
         load_video
         gfxmode auto
         insmod gzio
@@ -179,14 +180,107 @@ func UpdateFstab(parts *Partitions, recoveryos string) error {
 		}
 		defer f_fstab.Close()
 
-		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/	ext4	errors=remount-ro	0	1", writable_uuid))
+		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/	ext4	errors=remount-ro	0	1\n", writable_uuid))
 		if err != nil {
 			return err
 		}
-		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/boot/EFI	vfat	umask=0077	0	1", sysboot_uuid))
+		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/boot/EFI	vfat	umask=0077	0	1\n", sysboot_uuid))
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func chrootWritablePrepare(writableMnt string, sysbootMnt string) error {
+	var efiMnt = filepath.Join(writableMnt, "boot/EFI")
+	if _, err := os.Stat(efiMnt); os.IsNotExist(err) {
+		if err = os.Mkdir(efiMnt, 0755); err != nil {
+			return err
+		}
+
+	}
+
+	if err := syscall.Mount(sysbootMnt, efiMnt, "vfat", syscall.MS_BIND, ""); err != nil {
+		return err
+	}
+
+	if err := syscall.Mount("/sys", filepath.Join(writableMnt, "sys"), "sysfs", syscall.MS_BIND, ""); err != nil {
+		return err
+	}
+
+	if err := syscall.Mount("/proc", filepath.Join(writableMnt, "proc"), "proc", syscall.MS_BIND, ""); err != nil {
+		return err
+	}
+
+	if err := syscall.Mount("/dev", filepath.Join(writableMnt, "dev"), "devtmpfs", syscall.MS_BIND, ""); err != nil {
+		return err
+	}
+
+	if err := syscall.Mount("/run", filepath.Join(writableMnt, "run"), "tmpfs", syscall.MS_BIND, ""); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func chrootUmountBinded(writableMnt string) error {
+	if err := syscall.Unmount(filepath.Join(writableMnt, "boot/EFI"), 0); err != nil {
+		return err
+	}
+
+	if err := syscall.Unmount(filepath.Join(writableMnt, "sys"), 0); err != nil {
+		return err
+	}
+
+	if err := syscall.Unmount(filepath.Join(writableMnt, "proc"), 0); err != nil {
+		return err
+	}
+
+	if err := syscall.Unmount(filepath.Join(writableMnt, "dev"), 0); err != nil {
+		return err
+	}
+
+	if err := syscall.Unmount(filepath.Join(writableMnt, "run"), 0); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displayGrubMenu bool) error {
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+		if err := chrootWritablePrepare(writableMnt, sysbootMnt); err != nil {
+			return err
+		}
+		defer chrootUmountBinded(writableMnt)
+
+		if displayGrubMenu {
+			rplib.Shellexec("sed", "-i", "s/^GRUB_HIDDEN_TIMEOUT=0/#GRUB_HIDDEN_TIMEOUT=0/g", filepath.Join(writableMnt, "etc/default/grub"))
+		}
+
+		//Remove all old grub in boot partition if exist
+		d, err := os.Open(sysbootMnt)
+		if err != nil {
+			return err
+		}
+		defer d.Close()
+		names, err := d.Readdirnames(-1)
+		if err != nil {
+			return err
+		}
+		for _, name := range names {
+			err = os.RemoveAll(filepath.Join(sysbootMnt, name))
+			if err != nil {
+				return err
+			}
+		}
+
+		rplib.Shellexec("chroot", writableMnt, "grub-install", "--target=x86_64-efi")
+
+		rplib.Shellexec("chroot", writableMnt, "update-grub")
+
 	}
 
 	return nil

@@ -169,6 +169,7 @@ var updateUbootEnv = UpdateUbootEnv
 var updateGrubCfg = UpdateGrubCfg
 var updateBootEntries = UpdateBootEntries
 var updateFstab = UpdateFstab
+var grubInstall = GrubInstall
 
 func recoverProcess(parts *Partitions, recoveryos string) {
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
@@ -227,7 +228,12 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 
 		// update efi Boot Entries
 		log.Println("[Update boot entries]")
-		updateBootEntries(parts, getBootEntryName(RecoveryOS))
+		if recoveryos == rplib.RECOVERY_OS_UBUNTU_CORE {
+			updateBootEntries(parts, getBootEntryName(RecoveryOS))
+		} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+			// grub install also updates the boot entries
+			grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true)
+		}
 	}
 }
 
