@@ -17,6 +17,8 @@ case "$1" in
 esac
 
 . /usr/share/initramfs-tools/hook-functions
+
+cp /sbin/findfs $DESTDIR/sbin/
 if [ -n "$INJECT" ]; then
 	. /usr/share/initramfs-tools/scripts/functions
 	rm -f $DESTDIR/scripts/local-premount/ORDER
