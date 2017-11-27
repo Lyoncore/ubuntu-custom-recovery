@@ -85,7 +85,7 @@ if [ $recoveryos == "ubuntu_core" ]; then
     kernelfs=$BASE/kerelsnap/
     mkdir -p $kernelfs
     mount $BASE/recovery/backup_snaps/$kernel_snap $kernelfs
-else if [ $recoveryos == "ubuntu_classic" ]; then
+elif [ $recoveryos == "ubuntu_classic" ]; then
     mount $BASE/recovery/recovery/factory/rootfs.squashfs $osrootfs
     kernelfs=$osrootfs
 fi
