@@ -148,6 +148,11 @@ func FindTargetParts(parts *Partitions, recoveryType string) error {
 			blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
 			if blockDevice != parts.SourceDevPath {
 				devPath = blockDevice
+				if devPath == "/dev/mmcblk0" {
+					parts.TargetDevPath = devPath
+					parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
+					return nil
+				}
 				break
 			}
 		}
@@ -346,10 +351,8 @@ func CopyRecoveryPart(parts *Partitions) error {
 
 	// set target grubenv to factory_restore
 	cmd := exec.Command("grub-editenv", filepath.Join(RECO_TAR_MNT_DIR, "EFI/ubuntu/grubenv"), "set", "recovery_type=factory_install")
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
+	cmd.Run()
+
 	return nil
 }
 
