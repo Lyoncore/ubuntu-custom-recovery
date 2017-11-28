@@ -1,5 +1,5 @@
 #!/bin/sh -e
-# initramfs hook for recovery
+# initramfs hook for 00_recovery
 
 PREREQS=""
 
@@ -22,5 +22,6 @@ cp /sbin/findfs $DESTDIR/sbin/
 if [ -n "$INJECT" ]; then
 	. /usr/share/initramfs-tools/scripts/functions
 	rm -f $DESTDIR/scripts/local-premount/ORDER
+	sed -i 's/PREREQ=""/PREREQ="00_recovery"/g' /usr/share/initramfs-tools/scripts/local-premount/btrfs
 	cache_run_scripts "${DESTDIR}" "/scripts/local-premount"
 fi
