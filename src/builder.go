@@ -47,9 +47,9 @@ menuentry "Factory Restore" {
 		load_env -f (${root})/EFI/ubuntu/grubenv
         set cmdline="recovery=LABEL=###RECO_PARTITION_LABEL### ro init=/lib/systemd/systemd console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=###RECO_PARTITION_LABEL### snap_core=${recovery_core} snap_kernel=${recovery_kernel} recoveryos=###RECO_OS###"
         echo "[grub.cfg] loading kernel..."
-        linux ($root)/$recovery_kernel/kernel.img $cmdline
+        linux ($root)/###RECO_BOOTIMG_PATH###kernel.img $cmdline
         echo "[grub.cfg] loading initrd..."
-        initrd ($root)/$recovery_kernel/initrd.img
+        initrd ($root)/###RECO_BOOTIMG_PATH###initrd.img
         echo "[grub.cfg] boot..."
         boot
 }
@@ -57,6 +57,7 @@ menuentry "Factory Restore" {
 
 const UBUNTU_CORE_GRUB_MENU_CMDS = ``
 const RECO_UBUNTU_CORE = `ubuntu_core`
+const RECO_BOOTIMG_PATH_UBUNTU_CORE = `$recovery_kernel/`
 
 const UBUNTU_CLASSIC_GRUB_MENU_CMDS = `
         recordfail
@@ -67,6 +68,7 @@ const UBUNTU_CLASSIC_GRUB_MENU_CMDS = `
         insmod part_gpt
         insmod ext2`
 const RECO_UBUNTU_CLASSIC = `ubuntu_classic`
+const RECO_BOOTIMG_PATH_UBUNTU_CLASSIC = ``
 
 func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string, recoveryos string) error {
 	rplib.Shellexec("sed", "-i", "s/^set cmdline=\"\\(.*\\)\"$/set cmdline=\"\\1 $cloud_init_disabled\"/g", grub_cfg)
@@ -83,9 +85,11 @@ func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string,
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
 		menuentry = strings.Replace(GRUB_MENUENTRY_FACTORY_RESTORE, "###OS_GRUB_MENU_CMDS###", UBUNTU_CLASSIC_GRUB_MENU_CMDS, -1)
 		menuentry = strings.Replace(menuentry, "###RECO_OS###", RECO_UBUNTU_CLASSIC, -1)
+		menuentry = strings.Replace(menuentry, "###RECO_BOOTIMG_PATH###", RECO_BOOTIMG_PATH_UBUNTU_CLASSIC, -1)
 	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CORE {
 		menuentry = strings.Replace(GRUB_MENUENTRY_FACTORY_RESTORE, "###OS_GRUB_MENU_CMDS###", UBUNTU_CORE_GRUB_MENU_CMDS, -1)
 		menuentry = strings.Replace(menuentry, "###RECO_OS###", RECO_UBUNTU_CORE, -1)
+		menuentry = strings.Replace(menuentry, "###RECO_BOOTIMG_PATH###", RECO_BOOTIMG_PATH_UBUNTU_CORE, -1)
 	}
 	menuentry = strings.Replace(menuentry, "###RECO_PARTITION_LABEL###", recovery_part_label, -1)
 
