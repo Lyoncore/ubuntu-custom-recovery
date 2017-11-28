@@ -413,8 +413,12 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 		return err
 	}
 	defer syscall.Unmount(SYSBOOT_MNT_DIR, 0)
-	cmd = exec.Command("tar", "--xattrs", "-xJvpf", SYSBOOT_TARBALL, "-C", SYSBOOT_MNT_DIR)
-	cmd.Run()
+
+	// The ubuntu classic would install grub by grub-install
+	// If the sysboot tarball file not exists, just ignore it
+	if _, err := os.Stat(SYSBOOT_TARBALL); !os.IsNotExist(err) {
+		rplib.Shellexec("tar", "--xattrs", "-xJvpf", SYSBOOT_TARBALL, "-C", SYSBOOT_MNT_DIR)
+	}
 	cmd = exec.Command("parted", "-ms", dev_path, "set", strconv.Itoa(parts.Sysboot_nr), "boot", "on")
 	cmd.Run()
 
@@ -441,8 +445,13 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	err = syscall.Mount(writable_path, WRITABLE_MNT_DIR, "ext4", 0, "")
 	rplib.Checkerr(err)
 	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
-	cmd = exec.Command("tar", "--xattrs", "-xJvpf", WRITABLE_TARBALL, "-C", WRITABLE_MNT_DIR)
-	cmd.Run()
+	// Here to support install rootfs from squashfs file
+	// If the writable tarball file not exists, just ignore it and unsquashfs the squashfs file
+	if _, err := os.Stat(WRITABLE_TARBALL); !os.IsNotExist(err) {
+		rplib.Shellexec("tar", "--xattrs", "-xJvpf", WRITABLE_TARBALL, "-C", WRITABLE_MNT_DIR)
+	} else if _, err := os.Stat(ROOTFS_SQUASHFS); !os.IsNotExist(err) {
+		rplib.Shellexec("unsquashfs", "-d", WRITABLE_MNT_DIR, "-f", ROOTFS_SQUASHFS)
+	}
 
 	return nil
 }
