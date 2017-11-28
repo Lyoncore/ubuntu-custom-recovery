@@ -167,12 +167,12 @@ func UpdateFstab(parts *Partitions, recoveryos string) error {
 	}
 
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
-		writable_uuid := rplib.Shellcmdoutput(fmt.Sprintf("blkid -s UUID -o value %s%d", parts.TargetDevPath, parts.Writable_nr))
+		writable_uuid := rplib.Shellcmdoutput(fmt.Sprintf("blkid -s UUID -o value %s", fmtPartPath(parts.TargetDevPath, parts.Writable_nr)))
 		match, err := regexp.MatchString("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", writable_uuid)
 		if err != nil || match == false {
 			return fmt.Errorf("finding writable uuid failed:%v", writable_uuid)
 		}
-		sysboot_uuid := rplib.Shellcmdoutput(fmt.Sprintf("blkid -s UUID -o value %s%d", parts.TargetDevPath, parts.Sysboot_nr))
+		sysboot_uuid := rplib.Shellcmdoutput(fmt.Sprintf("blkid -s UUID -o value %s", fmtPartPath(parts.TargetDevPath, parts.Sysboot_nr)))
 		match, err = regexp.MatchString("[0-9a-fA-F]{4}-[0-9a-fA-F]{4}", sysboot_uuid)
 		if err != nil || match == false {
 			return fmt.Errorf("finding system-boot uuid failed:%v", sysboot_uuid)
