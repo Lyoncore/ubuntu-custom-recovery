@@ -3,8 +3,8 @@
 
 # redirect output to serial console, since the HDMI output not enabled
 # FIXME, the output console should be selectable
-exec </dev/tty1 >/dev/tty1 2>&1
-console="/dev/tty1"
+exec </dev/ttyS0 >/dev/ttyS0 2>&1
+console="/dev/ttyS0"
 
 PREREQ=""
 
@@ -133,12 +133,12 @@ set +e
 ret=$?
 
 # ERESTART is errno 85 which restart system requirest from recovery.bin
-if [ $ret == 85 ] || [ $ret == 0 -a "ubuntu_classic" == $recoveryos ]; then
+if [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
+    poweroff
+elif [ $ret == 85 ] || [ $ret == 0 -a "ubuntu_classic" == $recoveryos ]; then
     reboot
 elif [ $ret != 0 ]; then
     debugshell
-elif [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
-    poweroff
 fi
 
 # TODO: Add post hook after recovery.bin
