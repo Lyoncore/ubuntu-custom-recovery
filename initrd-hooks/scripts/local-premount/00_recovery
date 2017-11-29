@@ -70,14 +70,14 @@ PREHOOK_DIR=$BASE/recovery/recovery/factory/hooks.d/factory-restore-prehook
 POSTHOOK_DIR=$BASE/recovery/recovery/factory/hooks.d/factory-restore-posthook
 if [ -d $PREHOOK_DIR ]; then
     echo "[Factory Restore Prehook] Run scripts in $PREHOOK_DIR"
-	export RECOVERYTYPE=$recoverytype
+    export RECOVERYTYPE=$recoverytype
     export RECOVERYPART=$recovery_part
     export RECOVERYMNT=$BASE/recovery
-	find "$PREHOOK_DIR" -type f | sort | while read -r filename; do bash -x -c "$filename"; done
+    find "$PREHOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
 
-	if [ $? != 0 ];then
-		debugshell
-	fi
+    if [ $? != 0 ];then
+        debugshell
+    fi
 fi
 
 # fixrtc
@@ -149,14 +149,14 @@ set -e
 # TODO: Add post hook after recovery.bin
 if [ $ret == 0 -a -d $POSTHOOK_DIR ]; then
     echo "[Factory Restore Posthook] Run scripts in $POSTHOOK_DIR"
-	export RECOVERYTYPE=$recoverytype
+    export RECOVERYTYPE=$recoverytype
     export RECOVERYPART=$recovery_part
     export RECOVERYMNT=$BASE/recovery
-	find "$PREHOOK_DIR" -type f | sort | while read -r filename; do bash -x -c "$filename"; done
+    find "$POSTHOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
 
     if [ $? != 0 ];then
-		debugshell
-	fi
+        debugshell
+    fi
 fi
 
 # ERESTART is errno 85 which restart system requirest from recovery.bin
