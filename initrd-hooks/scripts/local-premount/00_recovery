@@ -66,6 +66,19 @@ mkdir -p $BASE/recovery
 mount -o defaults,ro "$recovery_part" $BASE/recovery
 
 # TODO: Add prehook before recovery.bin
+PREHOOK_DIR=$BASE/recovery/recovery/factory/hooks.d/factory-restore-prehook
+POSTHOOK_DIR=$BASE/recovery/recovery/factory/hooks.d/factory-restore-posthook
+if [ -d $PREHOOK_DIR ]; then
+    echo "[Factory Restore Prehook] Run scripts in $PREHOOK_DIR"
+	export RECOVERYTYPE=$recoverytype
+    export RECOVERYPART=$recovery_part
+    export RECOVERYMNT=$BASE/recovery
+	find "$PREHOOK_DIR" -type f | sort | while read -r filename; do bash -x -c "$filename"; done
+
+	if [ $? != 0 ];then
+		debugshell
+	fi
+fi
 
 # fixrtc
 # set to last modify time, the partition create time will be not be very old time
@@ -131,6 +144,20 @@ echo "[chroot execute recovery.bin]"
 set +e
 /bin/chroot /$newroot /recovery/bin/recovery.bin $recoverytype $recoverylabel $recoveryos
 ret=$?
+set -e
+
+# TODO: Add post hook after recovery.bin
+if [ $ret == 0 -a -d $POSTHOOK_DIR ]; then
+    echo "[Factory Restore Posthook] Run scripts in $POSTHOOK_DIR"
+	export RECOVERYTYPE=$recoverytype
+    export RECOVERYPART=$recovery_part
+    export RECOVERYMNT=$BASE/recovery
+	find "$PREHOOK_DIR" -type f | sort | while read -r filename; do bash -x -c "$filename"; done
+
+    if [ $? != 0 ];then
+		debugshell
+	fi
+fi
 
 # ERESTART is errno 85 which restart system requirest from recovery.bin
 if [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
@@ -141,7 +168,6 @@ elif [ $ret != 0 ]; then
     debugshell
 fi
 
-# TODO: Add post hook after recovery.bin
 
 sync
 
