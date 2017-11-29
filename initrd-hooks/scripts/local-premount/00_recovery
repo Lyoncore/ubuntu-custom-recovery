@@ -3,8 +3,8 @@
 
 # redirect output to serial console, since the HDMI output not enabled
 # FIXME, the output console should be selectable
-exec </dev/ttyS0 >/dev/ttyS0 2>&1
-console="/dev/ttyS0"
+exec </dev/console >/dev/console 2>&1
+console="/dev/console"
 
 PREREQ=""
 
