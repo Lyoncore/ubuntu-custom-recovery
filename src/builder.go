@@ -255,6 +255,24 @@ func chrootUmountBinded(writableMnt string) error {
 
 func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displayGrubMenu bool) error {
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+		// Remove old entries and recreate
+		recov_entry := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
+		os_boot_entry := rplib.GetBootEntries(rplib.RECOVERY_OS_UBUNTU_CLASSIC)
+		if len(recov_entry) < 1 || len(os_boot_entry) < 1 {
+			//remove old uefi entry
+			entries := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
+			for _, entry := range entries {
+				rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
+			}
+			entries = rplib.GetBootEntries(rplib.RECOVERY_OS_UBUNTU_CLASSIC)
+			for _, entry := range entries {
+				rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
+			}
+			// add new uefi entry
+			log.Println("[add new uefi entry]")
+			rplib.CreateBootEntry(parts.TargetDevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
+		}
+
 		if err := chrootWritablePrepare(writableMnt, sysbootMnt); err != nil {
 			return err
 		}
