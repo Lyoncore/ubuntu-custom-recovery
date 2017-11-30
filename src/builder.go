@@ -279,8 +279,7 @@ func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displ
 		defer chrootUmountBinded(writableMnt)
 
 		if displayGrubMenu {
-			rplib.Shellexec("sed", "-i", "s/^GRUB_HIDDEN_TIMEOUT=0/#GRUB_HIDDEN_TIMEOUT=0/g", filepath.Join(writableMnt, "etc/default/grub"))
-			rplib.Shellexec("sed", "-i", "s/^GRUB_TIMEOUT=10/GRUB_TIMEOUT=3/g", filepath.Join(writableMnt, "etc/default/grub"))
+			rplib.Shellexec("sed", "-i", "s/^GRUB_HIDDEN_TIMEOUT=0/GRUB_RECORDFAIL_TIMEOUT=3\n#GRUB_HIDDEN_TIMEOUT=0/g", filepath.Join(writableMnt, "etc/default/grub"))
 		}
 
 		//Remove all old grub in boot partition if exist

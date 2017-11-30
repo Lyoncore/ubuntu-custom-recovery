@@ -77,17 +77,19 @@ import (
 type Partitions struct {
 	// XxxDevNode: sda (W/O partiiton number)
 	// XxxDevPath: /dev/sda (W/O partition number)
-	SourceDevNode, SourceDevPath                       string
-	TargetDevNode, TargetDevPath                       string
-	Recovery_nr, Sysboot_nr, Writable_nr, Last_part_nr int
-	Recovery_start, Recovery_end                       int64
-	Sysboot_start, Sysboot_end                         int64
-	Writable_start, Writable_end                       int64
+	SourceDevNode, SourceDevPath                                string
+	TargetDevNode, TargetDevPath                                string
+	Recovery_nr, Sysboot_nr, Swap_nr, Writable_nr, Last_part_nr int
+	Recovery_start, Recovery_end                                int64
+	Sysboot_start, Sysboot_end                                  int64
+	Swap_start, Swap_end                                        int64
+	Writable_start, Writable_end                                int64
 }
 
 const (
 	SysbootLabel  = "system-boot"
 	WritableLabel = "writable"
+	SwapLabel     = "swap"
 )
 
 func FindPart(Label string) (devNode string, devPath string, partNr int, err error) {
@@ -206,7 +208,7 @@ var parts Partitions
 func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, error) {
 	var err error
 	const OLD_PARTITION = "/tmp/old-partition.txt"
-	parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+	parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 
 	//The Sourec device which must has a recovery partition
 	parts.SourceDevNode, parts.SourceDevPath, parts.Recovery_nr, err = FindPart(recoveryLabel)
@@ -218,7 +220,7 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 	err = FindTargetParts(&parts, recoveryType)
 	if err != nil {
 		err = errors.New(fmt.Sprintf("Target install partition not found"))
-		parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+		parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 		return nil, err
 	}
 
@@ -229,6 +231,13 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 			//Target system-boot found and must not source device in headless_installer mode
 			parts.Sysboot_nr = sysboot_nr
 		}
+	}
+
+	//swap partition info
+	_, _, parts.Swap_nr, err = FindPart(SwapLabel)
+	if err != nil {
+		//Partition not found, keep value in '-1'
+		parts.Swap_nr = -1
 	}
 
 	//writable-boot partition info
@@ -273,6 +282,10 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 		} else if parts.Sysboot_nr != -1 && parts.Sysboot_nr == nr {
 			parts.Sysboot_start = start
 			parts.Sysboot_end = end
+		} else if parts.Swap_nr != -1 && parts.Swap_nr == nr {
+			parts.Swap_start = start
+			parts.Swap_end = end
+		}
 		} else if parts.Writable_nr != -1 && parts.Writable_nr == nr {
 			parts.Writable_start = start
 			parts.Writable_end = end
@@ -301,8 +314,13 @@ func SetPartitionStartEnd(parts *Partitions, partName string, partSizeMB int, bo
 			parts.Sysboot_end = parts.Sysboot_start + int64(partSizeMB*1024*1024)
 		}
 		//TODO: To support swap partition
-		// case "swap":
-
+	case "swap":
+		if bootloader == "u-boot" {
+			// Not allow to edit swap in u-boot yet.
+		} else if bootloader == "grub" {
+			parts.Swap_start = parts.Sysboot_end + 1
+			parts.Swap_end = parts.Swap_start + int64(partSizeMB*1024*1024)
+		}
 		// The writable partition would be enlarged to maximum.
 		// Here does not support change the Start, End
 	default:
@@ -361,11 +379,18 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	var part_nr int
 	if bootloader == "u-boot" {
 		parts.Writable_nr = parts.Recovery_nr + 1 //writable is one after recovery
-		part_nr = parts.Recovery_nr + 1
+		part_nr = parts.Writable_nr
 	} else if bootloader == "grub" {
 		parts.Sysboot_nr = parts.Recovery_nr + 1
-		parts.Writable_nr = parts.Sysboot_nr + 1 //writable is one after system-boot
-		part_nr = parts.Recovery_nr + 1
+		if configs.Configs.Swap == true {
+		parts.Swap_nr = parts.Sysboot_nr + 1 //swap is one after system-boot
+			parts.Writable_nr = parts.Sysboot_nr + 1 //writable is one after system-boot
+			part_nr = parts.Writable_nr
+		} else {
+			parts.Swap_nr = -1 //swap is enabled
+			parts.Writable_nr = parts.Sysboot_nr + 1 //writable is one after system-boot
+		part_nr = parts.Writable_nr
+	}
 	} else {
 		return fmt.Errorf("Oops, unknown bootloader:%s", bootloader)
 	}
