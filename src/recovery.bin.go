@@ -233,7 +233,11 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 			updateBootEntries(parts, getBootEntryName(RecoveryOS))
 		} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
 			// grub install also updates the boot entries
-			grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true)
+			if configs.Configs.Swap {
+				grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true, true, fmtPartPath(parts.TargetDevPath, parts.Swap_nr))
+			} else {
+				grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true, false, "")
+			}
 		}
 	}
 }
@@ -285,6 +289,10 @@ func main() {
 	sizeMB, err := getSysbootSizeFromYaml(CONFIG_GADGET_YAML)
 	if err == nil {
 		SetPartitionStartEnd(parts, SysbootLabel, sizeMB, configs.Configs.Bootloader)
+	}
+	sizeMB, err = strconv.Atoi(configs.Configs.SwapSize)
+	if err == nil {
+		SetPartitionStartEnd(parts, SwapLabel, sizeMB, configs.Configs.Bootloader)
 	}
 	preparePartitions(parts)
 	recoverProcess(parts, RecoveryOS)

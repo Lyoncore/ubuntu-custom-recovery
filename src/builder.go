@@ -253,7 +253,7 @@ func chrootUmountBinded(writableMnt string) error {
 	return nil
 }
 
-func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displayGrubMenu bool) error {
+func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displayGrubMenu bool, swapenable bool, resumeDev string) error {
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
 		// Remove old entries and recreate
 		recov_entry := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
@@ -279,7 +279,11 @@ func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displ
 		defer chrootUmountBinded(writableMnt)
 
 		if displayGrubMenu {
-			rplib.Shellexec("sed", "-i", "s/^GRUB_HIDDEN_TIMEOUT=0/GRUB_RECORDFAIL_TIMEOUT=3\n#GRUB_HIDDEN_TIMEOUT=0/g", filepath.Join(writableMnt, "etc/default/grub"))
+			rplib.Shellexec("sed", "-i", "s/^GRUB_HIDDEN_TIMEOUT=0/GRUB_RECORDFAIL_TIMEOUT=3\\n#GRUB_HIDDEN_TIMEOUT=0/g", filepath.Join(writableMnt, "etc/default/grub"))
+		}
+
+		if swapenable {
+			rplib.Shellexec("sed", "-i", fmt.Sprintf("s@quiet splash@quiet splash resume=%s@g", resumeDev), filepath.Join(writableMnt, "etc/default/grub"))
 		}
 
 		//Remove all old grub in boot partition if exist

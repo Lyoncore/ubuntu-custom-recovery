@@ -285,7 +285,6 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 		} else if parts.Swap_nr != -1 && parts.Swap_nr == nr {
 			parts.Swap_start = start
 			parts.Swap_end = end
-		}
 		} else if parts.Writable_nr != -1 && parts.Writable_nr == nr {
 			parts.Writable_start = start
 			parts.Writable_end = end
@@ -376,21 +375,18 @@ func CopyRecoveryPart(parts *Partitions) error {
 
 func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	var dev_path string = strings.Replace(parts.TargetDevPath, "mapper/", "", -1)
-	var part_nr int
+	part_nr := parts.Last_part_nr
 	if bootloader == "u-boot" {
 		parts.Writable_nr = parts.Recovery_nr + 1 //writable is one after recovery
-		part_nr = parts.Writable_nr
 	} else if bootloader == "grub" {
 		parts.Sysboot_nr = parts.Recovery_nr + 1
 		if configs.Configs.Swap == true {
-		parts.Swap_nr = parts.Sysboot_nr + 1 //swap is one after system-boot
-			parts.Writable_nr = parts.Sysboot_nr + 1 //writable is one after system-boot
-			part_nr = parts.Writable_nr
+			parts.Swap_nr = parts.Sysboot_nr + 1  //swap is one after system-boot
+			parts.Writable_nr = parts.Swap_nr + 1 //writable is one after swap
 		} else {
-			parts.Swap_nr = -1 //swap is enabled
+			parts.Swap_nr = -1                       //swap is not enabled
 			parts.Writable_nr = parts.Sysboot_nr + 1 //writable is one after system-boot
-		part_nr = parts.Writable_nr
-	}
+		}
 	} else {
 		return fmt.Errorf("Oops, unknown bootloader:%s", bootloader)
 	}
@@ -404,10 +400,9 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	}
 
 	// Remove partitions after recovery
-	for part_nr <= parts.Last_part_nr {
-		cmd := exec.Command("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))
-		cmd.Run()
-		part_nr++
+	for part_nr > parts.Recovery_nr {
+		rplib.Shellexec("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))
+		part_nr--
 	}
 
 	// Restore system-boot
@@ -450,8 +445,31 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	cmd = exec.Command("parted", "-ms", dev_path, "set", strconv.Itoa(parts.Sysboot_nr), "boot", "on")
 	cmd.Run()
 
+	// Create swap partition
+	if configs.Configs.Swap == true {
+		_, new_end := rplib.GetPartitionBeginEnd(dev_path, parts.Sysboot_nr)
+		parts.Swap_start = int64(new_end + 1)
+
+		if partType == "gpt" {
+			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "linux-swap", fmt.Sprintf("%vB", parts.Swap_start), fmt.Sprintf("%vB", parts.Swap_end), "name", fmt.Sprintf("%v", parts.Swap_nr), SwapLabel)
+		} else if partType == "mbr" {
+			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "linux-swap", fmt.Sprintf("%vB", parts.Swap_start), fmt.Sprintf("%vB", parts.Swap_end))
+		}
+		cmd = exec.Command("udevadm", "settle")
+		cmd.Run()
+
+		cmd = exec.Command("mkswap", fmtPartPath(parts.TargetDevPath, parts.Swap_nr))
+		cmd.Run()
+
+	}
+
 	// Restore writable
-	_, new_end := rplib.GetPartitionBeginEnd(dev_path, parts.Sysboot_nr)
+	var new_end int
+	if configs.Configs.Swap == true {
+		_, new_end = rplib.GetPartitionBeginEnd(dev_path, parts.Swap_nr)
+	} else {
+		_, new_end = rplib.GetPartitionBeginEnd(dev_path, parts.Sysboot_nr)
+	}
 	parts.Writable_start = int64(new_end + 1)
 	var writable_start string = fmt.Sprintf("%vB", parts.Writable_start)
 	var writable_nr string = strconv.Itoa(parts.Writable_nr)
