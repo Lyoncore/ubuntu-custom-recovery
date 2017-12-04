@@ -34,6 +34,7 @@ import (
 
 	uenv "github.com/mvo5/uboot-go/uenv"
 
+	hooks "github.com/Lyoncore/ubuntu-recovery/src/hooks"
 	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
 )
 
@@ -353,20 +354,41 @@ func ConfirmRecovry(in *os.File) bool {
 		in = os.Stdin
 	}
 
-	// TODO: Add user confirmation pre-hook
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 
+	if configs.Recovery.UserConfirmPrehookFile != "" {
+		hooks.RestoreConfirmPrehook.SetPath(HOOKS_DIR + configs.Recovery.UserConfirmPrehookFile)
+		if hooks.RestoreConfirmPrehook.IsHookExist() {
+			err := hooks.RestoreConfirmPrehook.Run(false, "", "")
+			if err != nil {
+				log.Println(err)
+			}
+		}
+	}
 	log.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
 	var input string
 	fmt.Fscanf(in, "%s\n", &input)
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("4 4 1 7"), 0644)
 
+	if configs.Recovery.UserConfirmPosthookFile != "" {
+		hooks.RestoreConfirmPosthook.SetPath(HOOKS_DIR + configs.Recovery.UserConfirmPosthookFile)
+	}
 	if "y" != input && "Y" != input {
-		// TODO: Add user confirmation post-yes-hook
+		if hooks.RestoreConfirmPosthook.IsHookExist() {
+			err := hooks.RestoreConfirmPosthook.Run(true, "USERCONFIRM", "true")
+			if err != nil {
+				log.Println(err)
+			}
+		}
 		return false
 	}
 
-	// TODO: Add user confirmation post-no-hook
+	if hooks.RestoreConfirmPosthook.IsHookExist() {
+		err := hooks.RestoreConfirmPosthook.Run(true, "USERCONFIRM", "false")
+		if err != nil {
+			log.Println(err)
+		}
+	}
 	return true
 }
 

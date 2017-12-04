@@ -59,6 +59,7 @@ const (
 	ASSERT_PRE_SRC_PATH      = RECO_FACTORY_DIR + "assertions-preinstall/"
 	SNAPS_DST_PATH           = SYSTEM_DATA_PATH + "var/lib/snapd/seed/snaps/"
 	ASSERT_DST_PATH          = SYSTEM_DATA_PATH + "var/lib/snapd/seed/assertions/"
+	HOOKS_DIR                = RECO_FACTORY_DIR + "hooks.d/"
 	SYSTEMD_SYSTEM_DIR       = "/lib/systemd/system/"
 	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
 
