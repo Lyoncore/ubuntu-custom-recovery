@@ -359,7 +359,7 @@ func ConfirmRecovry(in *os.File) bool {
 	if configs.Recovery.UserConfirmPrehookFile != "" {
 		hooks.RestoreConfirmPrehook.SetPath(HOOKS_DIR + configs.Recovery.UserConfirmPrehookFile)
 		if hooks.RestoreConfirmPrehook.IsHookExist() {
-			err := hooks.RestoreConfirmPrehook.Run(false, "", "")
+			err := hooks.RestoreConfirmPrehook.Run(RECO_ROOT_DIR, false, "", "")
 			if err != nil {
 				log.Println(err)
 			}
@@ -375,7 +375,7 @@ func ConfirmRecovry(in *os.File) bool {
 	}
 	if "y" != input && "Y" != input {
 		if hooks.RestoreConfirmPosthook.IsHookExist() {
-			err := hooks.RestoreConfirmPosthook.Run(true, "USERCONFIRM", "true")
+			err := hooks.RestoreConfirmPosthook.Run(RECO_ROOT_DIR, true, "USERCONFIRM", "no")
 			if err != nil {
 				log.Println(err)
 			}
@@ -384,7 +384,7 @@ func ConfirmRecovry(in *os.File) bool {
 	}
 
 	if hooks.RestoreConfirmPosthook.IsHookExist() {
-		err := hooks.RestoreConfirmPosthook.Run(true, "USERCONFIRM", "false")
+		err := hooks.RestoreConfirmPosthook.Run(RECO_ROOT_DIR, true, "USERCONFIRM", "yes")
 		if err != nil {
 			log.Println(err)
 		}

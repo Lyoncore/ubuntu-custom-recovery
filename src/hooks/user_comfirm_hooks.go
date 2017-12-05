@@ -28,14 +28,15 @@ func (RCHook *RestoreComfirmHooks) IsHookExist() bool {
 	}
 }
 
-func (RCHook *RestoreComfirmHooks) Run(envValEn bool, envName string, envValue string) error {
+func (RCHook *RestoreComfirmHooks) Run(recoveryMnt string, envValEn bool, envName string, envValue string) error {
 	log.Println("Run scripts: " + RCHook.path)
 	if RCHook.IsHookExist() {
-		var cmd *exec.Cmd
+		cmd := exec.Command("/bin/bash", RCHook.path)
+		cmd.Env = os.Environ()
+		cmd.Env = append(cmd.Env, fmt.Sprintf("RECOVERYMNT=%s", recoveryMnt))
 		if envValEn {
-			cmd = exec.Command(fmt.Sprintf("%s=%s", envName, envValue), "/bin/bash", RCHook.path)
-		} else {
-			cmd = exec.Command("/bin/bash", RCHook.path)
+			cmd.Env = os.Environ()
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", envName, envValue))
 		}
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
