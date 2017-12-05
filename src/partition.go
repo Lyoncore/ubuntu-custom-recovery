@@ -367,7 +367,7 @@ func CopyRecoveryPart(parts *Partitions) error {
 	rplib.Shellexec("sync")
 
 	// set target grubenv to factory_restore
-	cmd := exec.Command("grub-editenv", filepath.Join(RECO_TAR_MNT_DIR, "EFI/ubuntu/grubenv"), "set", "recovery_type=factory_install")
+	cmd := exec.Command("grub-editenv", filepath.Join(RECO_TAR_MNT_DIR, "efi/ubuntu/grubenv"), "set", "recovery_type=factory_install")
 	cmd.Run()
 
 	return nil

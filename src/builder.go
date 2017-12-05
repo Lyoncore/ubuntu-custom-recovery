@@ -45,7 +45,7 @@ menuentry "Factory Restore" {
         echo "[grub.cfg] load factory_restore system"
         search --no-floppy --set --label "###RECO_PARTITION_LABEL###"
         echo "[grub.cfg] root: ${root}"
-		load_env -f (${root})/EFI/ubuntu/grubenv
+		load_env -f (${root})/efi/ubuntu/grubenv
         set cmdline="recovery=LABEL=###RECO_PARTITION_LABEL### ro init=/lib/systemd/systemd console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=###RECO_PARTITION_LABEL### snap_core=${recovery_core} snap_kernel=${recovery_kernel} recoveryos=###RECO_OS###"
         echo "[grub.cfg] loading kernel..."
         linux ($root)/###RECO_BOOTIMG_PATH###kernel.img $cmdline
@@ -189,7 +189,7 @@ func UpdateFstab(parts *Partitions, recoveryos string) error {
 		if err != nil {
 			return err
 		}
-		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/boot/EFI	vfat	umask=0077	0	1\n", sysboot_uuid))
+		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/boot/efi	vfat	umask=0077	0	1\n", sysboot_uuid))
 		if err != nil {
 			return err
 		}
@@ -199,7 +199,7 @@ func UpdateFstab(parts *Partitions, recoveryos string) error {
 }
 
 func chrootWritablePrepare(writableMnt string, sysbootMnt string) error {
-	var efiMnt = filepath.Join(writableMnt, "boot/EFI")
+	var efiMnt = filepath.Join(writableMnt, "boot/efi")
 	if _, err := os.Stat(efiMnt); os.IsNotExist(err) {
 		if err = os.Mkdir(efiMnt, 0755); err != nil {
 			return err
@@ -231,7 +231,7 @@ func chrootWritablePrepare(writableMnt string, sysbootMnt string) error {
 }
 
 func chrootUmountBinded(writableMnt string) error {
-	if err := syscall.Unmount(filepath.Join(writableMnt, "boot/EFI"), 0); err != nil {
+	if err := syscall.Unmount(filepath.Join(writableMnt, "boot/efi"), 0); err != nil {
 		return err
 	}
 

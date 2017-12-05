@@ -66,8 +66,8 @@ const (
 	SYSBOOT_UBOOT_ENV  = SYSBOOT_MNT_DIR + "uboot.env"
 	SYSBOOT_GRUB_ENV   = SYSBOOT_MNT_DIR + "efi/ubuntu/grubenv"
 	SYSBOOT_GRUB_CFG   = SYSBOOT_MNT_DIR + "efi/ubuntu/grub.cfg"
-	RECO_PART_GRUB_ENV = RECO_ROOT_DIR + "EFI/ubuntu/grubenv"
-	RECO_PART_GRUB_CFG = RECO_ROOT_DIR + "EFI/ubuntu/grub.cfg"
+	RECO_PART_GRUB_ENV = RECO_ROOT_DIR + "efi/ubuntu/grubenv"
+	RECO_PART_GRUB_CFG = RECO_ROOT_DIR + "efi/ubuntu/grub.cfg"
 	BACKUP_SNAP_PATH   = "/backup_snaps/"
 
 	WRITABLE_INCLUDES_SQUASHFS = "/recovery/writable-includes.squashfs"
