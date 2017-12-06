@@ -464,14 +464,14 @@ func RestoreAsserions() error {
 	return nil
 }
 
-func EnableLogger() error {
-	if _, err := os.Stat(path.Dir(LOG_PATH)); err != nil {
-		err = os.MkdirAll(path.Dir(LOG_PATH), 0755)
+func EnableLogger(logPath string) error {
+	if _, err := os.Stat(path.Dir(logPath)); err != nil {
+		err = os.MkdirAll(path.Dir(logPath), 0755)
 		if err != nil {
 			return err
 		}
 	}
-	log_writable, err := os.OpenFile(LOG_PATH, os.O_CREATE|os.O_WRONLY, 0600)
+	log_writable, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}

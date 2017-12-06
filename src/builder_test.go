@@ -204,7 +204,7 @@ func (s *BuilderSuite) TestEnableLogger(c *C) {
 	//Create testing files
 	wdata := []byte("hello logger\n")
 
-	err := reco.EnableLogger()
+	err := reco.EnableLogger(CORE_LOG_PATH)
 	c.Assert(err, IsNil)
 
 	log.Printf("%s", wdata)

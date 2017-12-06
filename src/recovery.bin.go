@@ -51,7 +51,8 @@ const (
 	SYSBOOT_TARBALL      = RECO_FACTORY_DIR + "system-boot.tar.xz"
 	WRITABLE_TARBALL     = RECO_FACTORY_DIR + "writable.tar.xz"
 	ROOTFS_SQUASHFS      = RECO_FACTORY_DIR + "rootfs.squashfs"
-	LOG_PATH             = WRITABLE_MNT_DIR + "system-data/var/log/recovery/log.txt"
+	CORE_LOG_PATH        = WRITABLE_MNT_DIR + "system-data/var/log/recovery/log.txt"
+	CLASSIC_LOG_PATH     = WRITABLE_MNT_DIR + "var/log/recovery/log.txt"
 
 	SYSTEM_DATA_PATH         = WRITABLE_MNT_DIR + "system-data/"
 	SNAPS_SRC_PATH           = RECO_FACTORY_DIR + "snaps/"
@@ -183,22 +184,24 @@ var grubInstall = GrubInstall
 func recoverProcess(parts *Partitions, recoveryos string) {
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
 
-	// stream log to stdout and writable partition
-	err := enableLogger()
-	rplib.Checkerr(err)
-	log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
-
-	// Copy snaps
-	log.Println("[Add additional snaps/asserts]")
-	err = copySnapsAsserts()
-	rplib.Checkerr(err)
-
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CORE {
+		// stream log to stdout and writable partition
+		err := enableLogger(CORE_LOG_PATH)
+		rplib.Checkerr(err)
+		log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
+		// Copy snaps
+		log.Println("[Add additional snaps/asserts]")
+		err = copySnapsAsserts()
+		rplib.Checkerr(err)
+
 		// add firstboot service for ubuntu core
 		log.Println("[Add FIRSTBOOT service]")
 		err = addFirstBootService(RecoveryType, RecoveryLabel)
 		rplib.Checkerr(err)
 	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+		err := enableLogger(CLASSIC_LOG_PATH)
+		rplib.Checkerr(err)
+		log.Printf("Version: %v, Commit: %v, Build date: %v\n", version, commit, time.Unix(commitstampInt64, 0).UTC())
 		log.Println("[Update fstab]")
 		err = updateFstab(parts, recoveryos)
 		rplib.Checkerr(err)
@@ -217,7 +220,7 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 	if configs.Configs.Bootloader == "u-boot" {
 		// update uboot env
 		log.Println("[Update uboot env]")
-		err = updateUbootEnv(RecoveryLabel)
+		err := updateUbootEnv(RecoveryLabel)
 		rplib.Checkerr(err)
 	} else if configs.Configs.Bootloader == "grub" {
 		// update uboot env
@@ -231,7 +234,7 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 		}
 		// mount as writable before editing
 		rplib.Shellexec("mount", "-o", "rw,remount", RECO_ROOT_DIR)
-		err = updateGrubCfg(RecoveryLabel, grub_cfg, RECO_PART_GRUB_ENV, recoveryos)
+		err := updateGrubCfg(RecoveryLabel, grub_cfg, RECO_PART_GRUB_ENV, recoveryos)
 		rplib.Shellexec("mount", "-o", "ro,remount", RECO_ROOT_DIR)
 		rplib.Checkerr(err)
 
