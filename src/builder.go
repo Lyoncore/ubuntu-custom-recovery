@@ -31,6 +31,7 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+	"time"
 
 	uenv "github.com/mvo5/uboot-go/uenv"
 
@@ -347,8 +348,7 @@ func releaseDhcp() error {
 	return cmd.Run()
 }
 
-func ConfirmRecovry(in *os.File) bool {
-	//in is for golang testing input.
+func ConfirmRecovry(in *os.File, timeout int64) bool {
 	//Get user input, if in is nil
 	if in == nil {
 		in = os.Stdin
@@ -356,8 +356,8 @@ func ConfirmRecovry(in *os.File) bool {
 
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 
-	if configs.Recovery.UserConfirmPrehookFile != "" {
-		hooks.RestoreConfirmPrehook.SetPath(HOOKS_DIR + configs.Recovery.UserConfirmPrehookFile)
+	if configs.Recovery.RestoreConfirmPrehookFile != "" {
+		hooks.RestoreConfirmPrehook.SetPath(HOOKS_DIR + configs.Recovery.RestoreConfirmPrehookFile)
 		if hooks.RestoreConfirmPrehook.IsHookExist() {
 			err := hooks.RestoreConfirmPrehook.Run(RECO_ROOT_DIR, false, "", "")
 			if err != nil {
@@ -365,13 +365,39 @@ func ConfirmRecovry(in *os.File) bool {
 			}
 		}
 	}
+	log.Println("Wait user confirmation timeout:", timeout, "sec")
 	log.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
-	var input string
-	fmt.Fscanf(in, "%s\n", &input)
-	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("4 4 1 7"), 0644)
 
-	if configs.Recovery.UserConfirmPosthookFile != "" {
-		hooks.RestoreConfirmPosthook.SetPath(HOOKS_DIR + configs.Recovery.UserConfirmPosthookFile)
+	tty1, err := os.Open("/dev/tty1")
+	if err != nil {
+		panic(err)
+	}
+	ttyS0, err := os.Open("/dev/ttyS0")
+	if err != nil {
+		panic(err)
+	}
+
+	var input string
+	response := make(chan string)
+	go func() {
+		fmt.Fscanf(tty1, "%s\n", &input)
+		response <- input
+	}()
+	go func() {
+		fmt.Fscanf(ttyS0, "%s\n", &input)
+		response <- input
+	}()
+
+	select {
+	case s := <-response:
+		log.Println("response:", s)
+	case <-time.After(time.Second * time.Duration(timeout)):
+		log.Println("Timeout:", timeout, "sec. Reboot system!")
+	}
+
+	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("4 4 1 7"), 0644)
+	if configs.Recovery.RestoreConfirmPosthookFile != "" {
+		hooks.RestoreConfirmPosthook.SetPath(HOOKS_DIR + configs.Recovery.RestoreConfirmPosthookFile)
 	}
 	if "y" != input && "Y" != input {
 		if hooks.RestoreConfirmPosthook.IsHookExist() {

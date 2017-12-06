@@ -28,16 +28,17 @@ type ConfigRecovery struct {
 		SwapSize      string
 	}
 	Recovery struct {
-		Type                    string // one of "field_transition", "factory_install"
-		RecoverySize            string
-		FsLabel                 string `yaml:"filesystem-label"`
-		InstallerFsLabel        string
-		OemPreinstHookDir       string `yaml:"oem-preinst-hook-dir"`
-		OemPostinstHookDir      string `yaml:"oem-postinst-hook-dir"`
-		OemLogDir               string
-		SkipFactoryDiagResult   string `yaml:"skip-factory-diag-result"`
-		UserConfirmPrehookFile  string `yaml:"user-confirm-prehook-file"`
-		UserConfirmPosthookFile string `yaml:"user-confirm-posthook-file"`
+		Type                       string // one of "field_transition", "factory_install"
+		RecoverySize               string
+		FsLabel                    string `yaml:"filesystem-label"`
+		InstallerFsLabel           string
+		OemPreinstHookDir          string `yaml:"oem-preinst-hook-dir"`
+		OemPostinstHookDir         string `yaml:"oem-postinst-hook-dir"`
+		OemLogDir                  string
+		SkipFactoryDiagResult      string `yaml:"skip-factory-diag-result"`
+		RestoreConfirmPrehookFile  string `yaml:"restore-confirm-prehook-file"`
+		RestoreConfirmPosthookFile string `yaml:"restore-confirm-posthook-file"`
+		RestoreConfirmTimeoutSec   int64  `yaml:"restore-confirm-timeout"`
 	}
 }
 

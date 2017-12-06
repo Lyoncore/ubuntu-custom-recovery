@@ -132,8 +132,15 @@ func getBootEntryName(recoveryos string) string {
 func preparePartitions(parts *Partitions) {
 	// TODO: verify the image
 	// If this is user triggered factory restore (first time is in factory and should happen automatically), ask user for confirm.
+	var timeout int64
 	if rplib.FACTORY_RESTORE == RecoveryType {
-		if ConfirmRecovry(nil) == false {
+		if configs.Recovery.RestoreConfirmTimeoutSec >= 0 {
+			timeout = configs.Recovery.RestoreConfirmTimeoutSec
+		} else {
+			timeout = 300
+		}
+
+		if ConfirmRecovry(nil, timeout) == false {
 			os.Exit(0x55) //ERESTART
 		}
 
