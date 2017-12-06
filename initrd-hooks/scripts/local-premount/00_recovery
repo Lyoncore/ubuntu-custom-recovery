@@ -72,6 +72,7 @@ if [ -d $PREHOOK_DIR ]; then
     export RECOVERYTYPE=$recoverytype
     export RECOVERYPART=$recovery_part
     export RECOVERYMNT=$BASE/recovery
+    export RECOVERY_BIN_RETURN=$ret
     find "$PREHOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
 
     if [ $? != 0 ];then
@@ -145,7 +146,6 @@ set +e
 ret=$?
 set -e
 
-# TODO: Add post hook after recovery.bin
 if [ $ret == 0 -a -d $POSTHOOK_DIR ]; then
     echo "[Factory Restore Posthook] Run scripts in $POSTHOOK_DIR"
     export RECOVERYTYPE=$recoverytype
