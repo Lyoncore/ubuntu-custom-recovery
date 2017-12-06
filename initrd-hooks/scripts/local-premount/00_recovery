@@ -65,7 +65,6 @@ mkdir -p $BASE
 mkdir -p $BASE/recovery
 mount -o defaults,ro "$recovery_part" $BASE/recovery
 
-# TODO: Add prehook before recovery.bin
 PREHOOK_DIR=$BASE/recovery/recovery/factory/hooks.d/factory-restore-prehook
 POSTHOOK_DIR=$BASE/recovery/recovery/factory/hooks.d/factory-restore-posthook
 if [ -d $PREHOOK_DIR ]; then
