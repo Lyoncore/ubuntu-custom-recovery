@@ -72,18 +72,30 @@ mkdir -p $BASE
 mkdir -p $RECO_MNT
 mount -o defaults,ro "$recovery_part" $RECO_MNT
 
-# The factory_restore prehook not needed in headless_installer
-if [ $recoverytype != "headless_installer" ]; then
-    if [ -d $FR_PREHOOK_DIR ]; then
-        echo "[Factory Restore Prehook] Run scripts in $FR_PREHOOK_DIR"
-        export RECOVERYTYPE=$recoverytype
-        export RECOVERYPART=$recovery_part
-        export RECOVERYMNT=$RECO_MNT
-        find "$FR_PREHOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
+# Parsing the hook dir if in config.yaml
+hookdir=$(grep 'oem-preinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
+if [ ! -z $hookdir ]; then
+    FR_PREHOOK_DIR=$hookdir
+fi
+hookdir=$(grep 'oem-postinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
+if [ ! -z $hookdir ]; then
+    FR_POSTHOOK_DIR=$hookdir
+fi
+hookdir=$(grep 'oem-prereboot-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
+if [ ! -z $hookdir ]; then
+    FI_PREREBOOT_DIR=$hookdir
+fi
 
-        if [ $? != 0 ];then
-            debugshell
-        fi
+# The factory_restore avalible for all recoverytype
+if [ -d $FR_PREHOOK_DIR ]; then
+    echo "[Factory Restore Prehook] Run scripts in $FR_PREHOOK_DIR"
+    export RECOVERYTYPE=$recoverytype
+    export RECOVERYPART=$recovery_part
+    export RECOVERYMNT=$RECO_MNT
+    find "$FR_PREHOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
+
+    if [ $? != 0 ];then
+        debugshell
     fi
 fi
 
@@ -132,8 +144,6 @@ for d in modules firmware; do
     fi
 done
 
-# FIXME: remove ?
-#mount --bind $RECO_MNT/recovery/ $CHROOT/recovery/
 if [ -d $RECO_MNT/backup_snaps ]; then
     mount --bind $RECO_MNT/backup_snaps $CHROOT/backup_snaps/
 fi
@@ -143,7 +153,6 @@ mount --bind /sys $CHROOT/sys
 mount --bind /proc $CHROOT/proc
 mount --bind /dev $CHROOT/dev
 mount --bind /run $CHROOT/run
-# FIXME: remove ?
 mount --bind $RECO_MNT $CHROOT/$RECO_MNT
 
 echo "[chroot execute recovery.bin]"
@@ -168,29 +177,21 @@ if [ $recoverytype != "headless_installer" ]; then
     fi
 fi
 
-#FIXME
-debugshell
-
 # ERESTART is errno 85 which restart system requirest from recovery.bin
 if [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
     poweroff
-elif [ $ret == 85 ] || [ $ret == 0 -a "ubuntu_classic" == $recoveryos ]; then
-    # The factory_install prereboot hook only needed in factory_install
-    if [ $recoverytype == "factory_install" ]; then
-        if [ -d $FI_PREREBOOT_DIR ]; then
-            echo "[Factory Install Prereboot hook] Run scripts in $FI_PREREBOOT_DIR"
-            export RECOVERYTYPE=$recoverytype
-            export RECOVERYPART=$recovery_part
-            export RECOVERYMNT=$RECO_MNT
-            find "$FI_PREREBOOT_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
-        fi
-    fi
-    reboot
-elif [ $ret != 0 ]; then
+elif [ $ret != 0 ] && [ $ret != 85 ]; then
     debugshell
 fi
 
-
-sync
-
-udevadm trigger
+# The factory_install prereboot hook only needed in factory_install
+if [ $recoverytype == "factory_install" ]; then
+    if [ -d $FI_PREREBOOT_DIR ]; then
+        echo "[Factory Install Prereboot hook] Run scripts in $FI_PREREBOOT_DIR"
+        export RECOVERYTYPE=$recoverytype
+        export RECOVERYPART=$recovery_part
+        export RECOVERYMNT=$RECO_MNT
+        find "$FI_PREREBOOT_DIR" -type f | sort | while read -r filename; do chroot $CHROOT sh -x "$filename"; done
+    fi
+fi
+reboot
