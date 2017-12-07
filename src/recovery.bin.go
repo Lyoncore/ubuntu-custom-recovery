@@ -135,7 +135,7 @@ func preparePartitions(parts *Partitions) {
 	// If this is user triggered factory restore (first time is in factory and should happen automatically), ask user for confirm.
 	var timeout int64
 	if rplib.FACTORY_RESTORE == RecoveryType {
-		if configs.Recovery.RestoreConfirmTimeoutSec >= 0 {
+		if configs.Recovery.RestoreConfirmTimeoutSec > 0 {
 			timeout = configs.Recovery.RestoreConfirmTimeoutSec
 		} else {
 			timeout = 300
