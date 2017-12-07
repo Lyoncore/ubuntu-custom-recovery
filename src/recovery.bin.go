@@ -41,13 +41,13 @@ const (
 	DISABLE_CLOUD_OPTION = ""
 	ASSERTION_DIR        = "/writable/recovery/"
 	ASSERTION_BACKUP_DIR = "/tmp/assert_backup/"
-	CONFIG_YAML          = "/recovery/config.yaml"
-	CONFIG_GADGET_YAML   = "/recovery/gadget.yaml"
+	RECO_ROOT_DIR        = "/run/recovery/"
+	CONFIG_YAML          = RECO_ROOT_DIR + "recovery/config.yaml"
+	CONFIG_GADGET_YAML   = RECO_ROOT_DIR + "recovery/gadget.yaml"
 	WRITABLE_MNT_DIR     = "/tmp/writableMnt/"
 	SYSBOOT_MNT_DIR      = "/tmp/system-boot/"
 	RECO_TAR_MNT_DIR     = "/tmp/recoMnt/"
-	RECO_FACTORY_DIR     = "/recovery/factory/"
-	RECO_ROOT_DIR        = "/run/initramfs/recovery/recovery/"
+	RECO_FACTORY_DIR     = RECO_ROOT_DIR + "recovery/factory/"
 	SYSBOOT_TARBALL      = RECO_FACTORY_DIR + "system-boot.tar.xz"
 	WRITABLE_TARBALL     = RECO_FACTORY_DIR + "writable.tar.xz"
 	ROOTFS_SQUASHFS      = RECO_FACTORY_DIR + "rootfs.squashfs"
@@ -71,7 +71,7 @@ const (
 	RECO_PART_GRUB_CFG = RECO_ROOT_DIR + "efi/ubuntu/grub.cfg"
 	BACKUP_SNAP_PATH   = "/backup_snaps/"
 
-	WRITABLE_INCLUDES_SQUASHFS = "/recovery/writable-includes.squashfs"
+	WRITABLE_INCLUDES_SQUASHFS = RECO_ROOT_DIR + "recovery/writable-includes.squashfs"
 
 	// Ubuntu classic specific
 	WRITABLE_ETC_FSTAB      = WRITABLE_MNT_DIR + "etc/fstab"

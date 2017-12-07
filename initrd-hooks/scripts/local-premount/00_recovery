@@ -28,9 +28,17 @@ esac
 
 set -x
 
-# Check the recovery type
 recoverytype=
 recoveryos=ubuntu_core
+BASE=/run/initramfs
+RECO_MNT=/run/recovery
+OSROOTFS=$BASE/osrootfs/
+CHROOT=$BASE/chroot/
+FR_PREHOOK_DIR=$RECO_MNT/recovery/factory/hooks.d/factory-restore-prehook
+FR_POSTHOOK_DIR=$RECO_MNT/recovery/factory/hooks.d/factory-restore-posthook
+FI_PREREBOOT_DIR=$RECO_MNT/recovery/factory/hooks.d/factory-install-prehook
+
+# Check the recovery type
 for t in $(cat /proc/cmdline); do
     if [ "$t" = "recoverytype=factory_restore" ]; then
         recoverytype=factory_restore
@@ -60,108 +68,123 @@ recovery_part="$(findfs LABEL="$recoverylabel")"
 
 
 echo "[mount the recovery partition]"
-BASE=/run/initramfs/recovery
 mkdir -p $BASE
-mkdir -p $BASE/recovery
-mount -o defaults,ro "$recovery_part" $BASE/recovery
+mkdir -p $RECO_MNT
+mount -o defaults,ro "$recovery_part" $RECO_MNT
 
-PREHOOK_DIR=$BASE/recovery/recovery/factory/hooks.d/factory-restore-prehook
-POSTHOOK_DIR=$BASE/recovery/recovery/factory/hooks.d/factory-restore-posthook
-if [ -d $PREHOOK_DIR ]; then
-    echo "[Factory Restore Prehook] Run scripts in $PREHOOK_DIR"
-    export RECOVERYTYPE=$recoverytype
-    export RECOVERYPART=$recovery_part
-    export RECOVERYMNT=$BASE/recovery
-    export RECOVERY_BIN_RETURN=$ret
-    find "$PREHOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
+# The factory_restore prehook not needed in headless_installer
+if [ $recoverytype != "headless_installer" ]; then
+    if [ -d $FR_PREHOOK_DIR ]; then
+        echo "[Factory Restore Prehook] Run scripts in $FR_PREHOOK_DIR"
+        export RECOVERYTYPE=$recoverytype
+        export RECOVERYPART=$recovery_part
+        export RECOVERYMNT=$RECO_MNT
+        find "$FR_PREHOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
 
-    if [ $? != 0 ];then
-        debugshell
+        if [ $? != 0 ];then
+            debugshell
+        fi
     fi
 fi
 
 # fixrtc
 # set to last modify time, the partition create time will be not be very old time
 if [ -n $FIXRTC ]; then
-    date "+%Y-%m-%d %T" --set="$(stat -c %y $BASE/recovery/recovery/factory/writable.tar.xz )"
+    date "+%Y-%m-%d %T" --set="$(stat -c %y $RECO_MNT/recovery/factory/writable.tar.xz )"
 fi
 
 modprobe squashfs
-osrootfs=$BASE/osrootfs/
-mkdir -p $osrootfs
+mkdir -p $OSROOTFS
 if [ $recoveryos == "ubuntu_core" ]; then
     # mount core snap on chroot
     core_snap=$(tr " " "\n" < /proc/cmdline | grep 'snap_core=' | sed -e 's/snap_core=//')
-    mount $BASE/recovery/backup_snaps/$core_snap $osrootfs
+    mount $RECO_MNT/backup_snaps/$core_snap $OSROOTFS
 
     kernel_snap=$(tr " " "\n" < /proc/cmdline | grep 'snap_kernel=' | sed -e 's/snap_kernel=//')
     kernelfs=$BASE/kerelsnap/
     mkdir -p $kernelfs
-    mount $BASE/recovery/backup_snaps/$kernel_snap $kernelfs
+    mount $RECO_MNT/backup_snaps/$kernel_snap $kernelfs
 elif [ $recoveryos == "ubuntu_classic" ]; then
-    mount $BASE/recovery/recovery/factory/rootfs.squashfs $osrootfs
-    kernelfs=$osrootfs
+    mount $RECO_MNT/recovery/factory/rootfs.squashfs $OSROOTFS
+    kernelfs=$OSROOTFS
 fi
 
-newroot=$BASE/chroot/
-mkdir -p $newroot
+mkdir -p $CHROOT
 for dir in /bin /lib /lib64 /etc /var/ /usr /sbin; do
-    if [ -d $osrootfs/$dir/ ]; then
+    if [ -d $OSROOTFS/$dir/ ]; then
     	mkdir -p $BASE/chroot/$dir/
-    	mount --bind  $osrootfs/$dir/ $newroot/$dir/
+    	mount --bind  $OSROOTFS/$dir/ $CHROOT/$dir/
     fi
 done
 for dir in /run /dev /tmp /sys /srv /proc /mnt /root /recovery /backup_snaps; do
-    mkdir -p $newroot/$dir/
+    mkdir -p $CHROOT/$dir/
 done
 
 # mount lib/modules/, lib/firmware/
 for d in modules firmware; do
     # old deprecated
     if [ -d "$kernelfs/lib/$d" ]; then
-        mount --bind $kernelfs/lib/$d $newroot/lib/$d
+        mount --bind $kernelfs/lib/$d $CHROOT/lib/$d
     fi
     # new style
     if [ -d "$kernelfs/$d" ]; then
-        mount --bind $kernelfs/$d $newroot/lib/$d
+        mount --bind $kernelfs/$d $CHROOT/lib/$d
     fi
 done
 
-mount --bind $BASE/recovery/recovery/ $newroot/recovery/
-if [ -d $BASE/recovery/backup_snaps ]; then
-    mount --bind $BASE/recovery/backup_snaps $newroot/backup_snaps/
+# FIXME: remove ?
+#mount --bind $RECO_MNT/recovery/ $CHROOT/recovery/
+if [ -d $RECO_MNT/backup_snaps ]; then
+    mount --bind $RECO_MNT/backup_snaps $CHROOT/backup_snaps/
 fi
 
-echo "[switch_root to newroot]"
-mount --bind /sys /$newroot/sys
-mount --bind /proc /$newroot/proc
-mount --bind /dev /$newroot/dev
-mount --bind /run /$newroot/run
-mount --bind $BASE/recovery /$newroot/$BASE/recovery
+echo "[switch_root to CHROOT]"
+mount --bind /sys $CHROOT/sys
+mount --bind /proc $CHROOT/proc
+mount --bind /dev $CHROOT/dev
+mount --bind /run $CHROOT/run
+# FIXME: remove ?
+mount --bind $RECO_MNT $CHROOT/$RECO_MNT
 
 echo "[chroot execute recovery.bin]"
 
 set +e
-/bin/chroot /$newroot /recovery/bin/recovery.bin $recoverytype $recoverylabel $recoveryos
+/bin/chroot $CHROOT $RECO_MNT/recovery/bin/recovery.bin $recoverytype $recoverylabel $recoveryos
 ret=$?
 set -e
 
-if [ $ret == 0 -a -d $POSTHOOK_DIR ]; then
-    echo "[Factory Restore Posthook] Run scripts in $POSTHOOK_DIR"
-    export RECOVERYTYPE=$recoverytype
-    export RECOVERYPART=$recovery_part
-    export RECOVERYMNT=$BASE/recovery
-    find "$POSTHOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
+# The factory_restore posthook not needed in headless_installer
+if [ $recoverytype != "headless_installer" ]; then
+    if [ $ret == 0 -a -d $FR_POSTHOOK_DIR ]; then
+        echo "[Factory Restore Posthook] Run scripts in $FR_POSTHOOK_DIR"
+        export RECOVERYTYPE=$recoverytype
+        export RECOVERYPART=$recovery_part
+        export RECOVERYMNT=$RECO_MNT
+        find "$FR_POSTHOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
 
-    if [ $? != 0 ];then
-        debugshell
+        if [ $? != 0 ];then
+            debugshell
+        fi
     fi
 fi
+
+#FIXME
+debugshell
 
 # ERESTART is errno 85 which restart system requirest from recovery.bin
 if [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
     poweroff
 elif [ $ret == 85 ] || [ $ret == 0 -a "ubuntu_classic" == $recoveryos ]; then
+    # The factory_install prereboot hook only needed in factory_install
+    if [ $recoverytype == "factory_install" ]; then
+        if [ -d $FI_PREREBOOT_DIR ]; then
+            echo "[Factory Install Prereboot hook] Run scripts in $FI_PREREBOOT_DIR"
+            export RECOVERYTYPE=$recoverytype
+            export RECOVERYPART=$recovery_part
+            export RECOVERYMNT=$RECO_MNT
+            find "$FI_PREREBOOT_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
+        fi
+    fi
     reboot
 elif [ $ret != 0 ]; then
     debugshell
