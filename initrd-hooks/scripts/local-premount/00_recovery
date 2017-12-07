@@ -34,9 +34,9 @@ BASE=/run/initramfs
 RECO_MNT=/run/recovery
 OSROOTFS=$BASE/osrootfs/
 CHROOT=$BASE/chroot/
-FR_PREHOOK_DIR=$RECO_MNT/recovery/factory/hooks.d/factory-restore-prehook
-FR_POSTHOOK_DIR=$RECO_MNT/recovery/factory/hooks.d/factory-restore-posthook
-FI_PREREBOOT_DIR=$RECO_MNT/recovery/factory/hooks.d/factory-install-prehook
+OEM_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/hooks.d/factory-restore-prehook
+OEM_POSTINST_HOOK_DIR=$RECO_MNT/recovery/factory/hooks.d/factory-restore-posthook
+OEM_PREREBOOT_HOOK_DIR=$RECO_MNT/recovery/factory/hooks.d/factory-install-prehook
 
 # Check the recovery type
 for t in $(cat /proc/cmdline); do
@@ -75,24 +75,24 @@ mount -o defaults,ro "$recovery_part" $RECO_MNT
 # Parsing the hook dir if in config.yaml
 hookdir=$(grep 'oem-preinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
 if [ ! -z $hookdir ]; then
-    FR_PREHOOK_DIR=$hookdir
+    OEM_PREINST_HOOK_DIR=$hookdir
 fi
 hookdir=$(grep 'oem-postinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
 if [ ! -z $hookdir ]; then
-    FR_POSTHOOK_DIR=$hookdir
+    OEM_POSTINST_HOOK_DIR=$hookdir
 fi
 hookdir=$(grep 'oem-prereboot-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
 if [ ! -z $hookdir ]; then
-    FI_PREREBOOT_DIR=$hookdir
+    OEM_PREREBOOT_HOOK_DIR=$hookdir
 fi
 
-# The factory_restore avalible for all recoverytype
-if [ -d $FR_PREHOOK_DIR ]; then
-    echo "[Factory Restore Prehook] Run scripts in $FR_PREHOOK_DIR"
+# The oem-preinst-hook-dir avalible for all recoverytype
+if [ -d $OEM_PREINST_HOOK_DIR ]; then
+    echo "[Factory Restore Prehook] Run scripts in $OEM_PREINST_HOOK_DIR"
     export RECOVERYTYPE=$recoverytype
     export RECOVERYPART=$recovery_part
     export RECOVERYMNT=$RECO_MNT
-    find "$FR_PREHOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
+    find "$OEM_PREINST_HOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
 
     if [ $? != 0 ];then
         debugshell
@@ -164,12 +164,12 @@ set -e
 
 # The factory_restore posthook not needed in headless_installer
 if [ $recoverytype != "headless_installer" ]; then
-    if [ $ret == 0 -a -d $FR_POSTHOOK_DIR ]; then
-        echo "[Factory Restore Posthook] Run scripts in $FR_POSTHOOK_DIR"
+    if [ $ret == 0 -a -d $OEM_POSTINST_HOOK_DIR ]; then
+        echo "[Factory Restore Posthook] Run scripts in $OEM_POSTINST_HOOK_DIR"
         export RECOVERYTYPE=$recoverytype
         export RECOVERYPART=$recovery_part
         export RECOVERYMNT=$RECO_MNT
-        find "$FR_POSTHOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
+        find "$OEM_POSTINST_HOOK_DIR" -type f | sort | while read -r filename; do sh -x "$filename"; done
 
         if [ $? != 0 ];then
             debugshell
@@ -184,14 +184,14 @@ elif [ $ret != 0 ] && [ $ret != 85 ]; then
     debugshell
 fi
 
-# The factory_install prereboot hook only needed in factory_install
-if [ $recoverytype == "factory_install" ]; then
-    if [ -d $FI_PREREBOOT_DIR ]; then
-        echo "[Factory Install Prereboot hook] Run scripts in $FI_PREREBOOT_DIR"
+# The factory_restore posthook not needed in headless_installer
+if [ $recoverytype != "headless_installer" ]; then
+    if [ -d $OEM_PREREBOOT_HOOK_DIR ]; then
+        echo "[Factory Install Prereboot hook] Run scripts in $OEM_PREREBOOT_HOOK_DIR"
         export RECOVERYTYPE=$recoverytype
         export RECOVERYPART=$recovery_part
         export RECOVERYMNT=$RECO_MNT
-        find "$FI_PREREBOOT_DIR" -type f | sort | while read -r filename; do chroot $CHROOT sh -x "$filename"; done
+        find "$OEM_PREREBOOT_HOOK_DIR" -type f | sort | while read -r filename; do chroot $CHROOT sh -x "$filename"; done
     fi
 fi
 reboot
