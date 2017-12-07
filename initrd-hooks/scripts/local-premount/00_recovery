@@ -75,15 +75,15 @@ mount -o defaults,ro "$recovery_part" $RECO_MNT
 # Parsing the hook dir if in config.yaml
 hookdir=$(grep 'oem-preinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
 if [ ! -z $hookdir ]; then
-    OEM_PREINST_HOOK_DIR=$hookdir
+    OEM_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/hooks.d/$hookdir
 fi
 hookdir=$(grep 'oem-postinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
 if [ ! -z $hookdir ]; then
-    OEM_POSTINST_HOOK_DIR=$hookdir
+    OEM_POSTINST_HOOK_DIR=$RECO_MNT/recovery/factory/hooks.d/$hookdir
 fi
 hookdir=$(grep 'oem-prereboot-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
 if [ ! -z $hookdir ]; then
-    OEM_PREREBOOT_HOOK_DIR=$hookdir
+    OEM_PREREBOOT_HOOK_DIR=$RECO_MNT/recovery/factory/hooks.d/$hookdir
 fi
 
 # The oem-preinst-hook-dir avalible for all recoverytype
@@ -186,7 +186,7 @@ fi
 
 # The factory_restore posthook not needed in headless_installer
 if [ $recoverytype != "headless_installer" ]; then
-    if [ -d $OEM_PREREBOOT_HOOK_DIR ]; then
+    if [ $ret != 85 -a -d $OEM_PREREBOOT_HOOK_DIR ]; then
         echo "[Factory Install Prereboot hook] Run scripts in $OEM_PREREBOOT_HOOK_DIR"
         export RECOVERYTYPE=$recoverytype
         export RECOVERYPART=$recovery_part
