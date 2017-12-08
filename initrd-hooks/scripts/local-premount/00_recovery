@@ -178,12 +178,6 @@ if [ $recoverytype != "headless_installer" ]; then
     fi
 fi
 
-# ERESTART is errno 85 which restart system requirest from recovery.bin
-if [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
-    poweroff
-elif [ $ret != 0 ] && [ $ret != 85 ]; then
-    debugshell
-fi
 
 # The prereboot hook not needed in headless_installer
 if [ $recoverytype != "headless_installer" ]; then
@@ -196,4 +190,11 @@ if [ $recoverytype != "headless_installer" ]; then
         find "$OEM_PREREBOOT_HOOK_DIR" -type f | sort | while read -r filename; do chroot $CHROOT sh "$filename"; done
     fi
 fi
+# ERESTART is errno 85 which restart system requirest from recovery.bin
+if [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
+    poweroff
+elif [ $ret != 0 ] && [ $ret != 85 ]; then
+    debugshell
+fi
+
 reboot
