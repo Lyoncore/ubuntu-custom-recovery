@@ -51,8 +51,8 @@ const (
 	SYSBOOT_TARBALL      = RECO_FACTORY_DIR + "system-boot.tar.xz"
 	WRITABLE_TARBALL     = RECO_FACTORY_DIR + "writable.tar.xz"
 	ROOTFS_SQUASHFS      = RECO_FACTORY_DIR + "rootfs.squashfs"
-	CORE_LOG_PATH        = WRITABLE_MNT_DIR + "system-data/var/log/recovery/log.txt"
-	CLASSIC_LOG_PATH     = WRITABLE_MNT_DIR + "var/log/recovery/log.txt"
+	CORE_LOG_PATH        = WRITABLE_MNT_DIR + "system-data/var/log/recovery/recovery.bin.log"
+	CLASSIC_LOG_PATH     = WRITABLE_MNT_DIR + "var/log/recovery/recovery.bin.log"
 
 	SYSTEM_DATA_PATH         = WRITABLE_MNT_DIR + "system-data/"
 	SNAPS_SRC_PATH           = RECO_FACTORY_DIR + "snaps/"
