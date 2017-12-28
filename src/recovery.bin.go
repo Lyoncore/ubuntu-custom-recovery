@@ -28,7 +28,7 @@ import (
 	"syscall"
 	"time"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	rplib "github.com/Lyoncore/ubuntu-custom-recovery-rplib"
 )
 
 var version string

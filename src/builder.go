@@ -33,7 +33,7 @@ import (
 
 	uenv "github.com/mvo5/uboot-go/uenv"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery-rplib"
+	rplib "github.com/Lyoncore/ubuntu-custom-recovery-rplib"
 )
 
 func hack_grub_cfg(recovery_type_cfg string, recovery_type_label string, recovery_part_label string, grub_cfg string) {
