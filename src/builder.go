@@ -35,8 +35,8 @@ import (
 
 	uenv "github.com/mvo5/uboot-go/uenv"
 
-	hooks "github.com/Lyoncore/ubuntu-recovery/src/hooks"
-	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
+	hooks "github.com/Lyoncore/ubuntu-custom-recovery/src/hooks"
+	rplib "github.com/Lyoncore/ubuntu-custom-recovery/src/rplib"
 )
 
 const GRUB_MENUENTRY_FACTORY_RESTORE = `

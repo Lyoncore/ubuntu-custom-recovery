@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
+	rplib "github.com/Lyoncore/ubuntu-custom-recovery/src/rplib"
 )
 
 const EFIBOOTMGR = "efibootmgr"

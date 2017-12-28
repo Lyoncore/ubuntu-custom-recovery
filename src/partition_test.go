@@ -32,8 +32,8 @@ import (
 	"testing"
 	"time"
 
-	reco "github.com/Lyoncore/ubuntu-recovery/src"
-	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
+	reco "github.com/Lyoncore/ubuntu-custom-recovery/src"
+	rplib "github.com/Lyoncore/ubuntu-custom-recovery/src/rplib"
 	. "gopkg.in/check.v1"
 )
 
