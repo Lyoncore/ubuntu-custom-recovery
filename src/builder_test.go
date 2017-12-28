@@ -32,8 +32,8 @@ import (
 	"strings"
 	"syscall"
 
-	reco "github.com/Lyoncore/ubuntu-recovery/src"
-	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
+	reco "github.com/Lyoncore/ubuntu-custom-recovery/src"
+	rplib "github.com/Lyoncore/ubuntu-custom-recovery/src/rplib"
 	uenv "github.com/mvo5/uboot-go/uenv"
 
 	. "gopkg.in/check.v1"

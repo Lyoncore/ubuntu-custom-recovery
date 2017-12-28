@@ -33,7 +33,7 @@ import (
 
 	uenv "github.com/mvo5/uboot-go/uenv"
 
-	rplib "github.com/Lyoncore/ubuntu-recovery/src/rplib"
+	rplib "github.com/Lyoncore/ubuntu-custom-recovery/src/rplib"
 )
 
 func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string) error {
