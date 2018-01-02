@@ -367,8 +367,13 @@ func CopyRecoveryPart(parts *Partitions) error {
 	rplib.Shellexec("sync")
 
 	// set target grubenv to factory_restore
-	cmd := exec.Command("grub-editenv", filepath.Join(RECO_TAR_MNT_DIR, "efi/ubuntu/grubenv"), "set", "recovery_type=factory_install")
-	cmd.Run()
+	if _, err = os.Stat(SYSBOOT_MNT_DIR + "EFI"); err == nil {
+		cmd := exec.Command("grub-editenv", filepath.Join(RECO_TAR_MNT_DIR, "EFI/ubuntu/grubenv"), "set", "recovery_type=factory_install")
+		cmd.Run()
+	} else if _, err = os.Stat(SYSBOOT_MNT_DIR + "efi"); err == nil {
+		cmd := exec.Command("grub-editenv", filepath.Join(RECO_TAR_MNT_DIR, "efi/ubuntu/grubenv"), "set", "recovery_type=factory_install")
+		cmd.Run()
+	}
 
 	return nil
 }
@@ -440,7 +445,12 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	// The ubuntu classic would install grub by grub-install
 	// If the sysboot tarball file not exists, just ignore it
 	if _, err := os.Stat(SYSBOOT_TARBALL); !os.IsNotExist(err) {
-		rplib.Shellexec("tar", "--xattrs", "-xJvpf", SYSBOOT_TARBALL, "-C", SYSBOOT_MNT_DIR)
+		if err := os.MkdirAll("/tmp/tmp", 0755); err != nil {
+			return err
+		}
+		rplib.Shellexec("tar", "-xpJvf", SYSBOOT_TARBALL, "-C", "/tmp/tmp")
+		rplib.Shellexec("cp", "-r", "/tmp/tmp/.", SYSBOOT_MNT_DIR)
+		rplib.Shellexec("rm", "-rf", "/tmp/tmp/")
 	}
 	cmd = exec.Command("parted", "-ms", dev_path, "set", strconv.Itoa(parts.Sysboot_nr), "boot", "on")
 	cmd.Run()

@@ -46,7 +46,7 @@ menuentry "Factory Restore" {
         echo "[grub.cfg] load factory_restore system"
         search --no-floppy --set --label "###RECO_PARTITION_LABEL###"
         echo "[grub.cfg] root: ${root}"
-		load_env -f (${root})/efi/ubuntu/grubenv
+		load_env -f (${root})/###EFI_DIR###/ubuntu/grubenv
         set cmdline="recovery=LABEL=###RECO_PARTITION_LABEL### ro init=/lib/systemd/systemd console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=###RECO_PARTITION_LABEL### snap_core=${recovery_core} snap_kernel=${recovery_kernel} recoveryos=###RECO_OS###"
         echo "[grub.cfg] loading kernel..."
         linux ($root)/###RECO_BOOTIMG_PATH###kernel.img $cmdline
@@ -86,10 +86,12 @@ func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string,
 	var menuentry string
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
 		menuentry = strings.Replace(GRUB_MENUENTRY_FACTORY_RESTORE, "###OS_GRUB_MENU_CMDS###", UBUNTU_CLASSIC_GRUB_MENU_CMDS, -1)
+		menuentry = strings.Replace(menuentry, "###EFI_DIR###", Efi_dir, -1)
 		menuentry = strings.Replace(menuentry, "###RECO_OS###", RECO_UBUNTU_CLASSIC, -1)
 		menuentry = strings.Replace(menuentry, "###RECO_BOOTIMG_PATH###", RECO_BOOTIMG_PATH_UBUNTU_CLASSIC, -1)
 	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CORE {
 		menuentry = strings.Replace(GRUB_MENUENTRY_FACTORY_RESTORE, "###OS_GRUB_MENU_CMDS###", UBUNTU_CORE_GRUB_MENU_CMDS, -1)
+		menuentry = strings.Replace(menuentry, "###EFI_DIR###", Efi_dir, -1)
 		menuentry = strings.Replace(menuentry, "###RECO_OS###", RECO_UBUNTU_CORE, -1)
 		menuentry = strings.Replace(menuentry, "###RECO_BOOTIMG_PATH###", RECO_BOOTIMG_PATH_UBUNTU_CORE, -1)
 	}
@@ -190,7 +192,7 @@ func UpdateFstab(parts *Partitions, recoveryos string) error {
 		if err != nil {
 			return err
 		}
-		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/boot/efi	vfat	umask=0077	0	1\n", sysboot_uuid))
+		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/boot/%s	vfat	umask=0077	0	1\n", sysboot_uuid, Efi_dir))
 		if err != nil {
 			return err
 		}
@@ -200,7 +202,7 @@ func UpdateFstab(parts *Partitions, recoveryos string) error {
 }
 
 func chrootWritablePrepare(writableMnt string, sysbootMnt string) error {
-	var efiMnt = filepath.Join(writableMnt, "boot/efi")
+	var efiMnt = filepath.Join(writableMnt, "boot", Efi_dir)
 	if _, err := os.Stat(efiMnt); os.IsNotExist(err) {
 		if err = os.Mkdir(efiMnt, 0755); err != nil {
 			return err
@@ -232,7 +234,7 @@ func chrootWritablePrepare(writableMnt string, sysbootMnt string) error {
 }
 
 func chrootUmountBinded(writableMnt string) error {
-	if err := syscall.Unmount(filepath.Join(writableMnt, "boot/efi"), 0); err != nil {
+	if err := syscall.Unmount(filepath.Join(writableMnt, "boot", Efi_dir), 0); err != nil {
 		return err
 	}
 

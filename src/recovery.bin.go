@@ -25,6 +25,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -64,12 +65,8 @@ const (
 	SYSTEMD_SYSTEM_DIR       = "/lib/systemd/system/"
 	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
 
-	SYSBOOT_UBOOT_ENV  = SYSBOOT_MNT_DIR + "uboot.env"
-	SYSBOOT_GRUB_ENV   = SYSBOOT_MNT_DIR + "efi/ubuntu/grubenv"
-	SYSBOOT_GRUB_CFG   = SYSBOOT_MNT_DIR + "efi/ubuntu/grub.cfg"
-	RECO_PART_GRUB_ENV = RECO_ROOT_DIR + "efi/ubuntu/grubenv"
-	RECO_PART_GRUB_CFG = RECO_ROOT_DIR + "efi/ubuntu/grub.cfg"
-	BACKUP_SNAP_PATH   = "/backup_snaps/"
+	SYSBOOT_UBOOT_ENV = SYSBOOT_MNT_DIR + "uboot.env"
+	BACKUP_SNAP_PATH  = "/backup_snaps/"
 
 	WRITABLE_INCLUDES_SQUASHFS = RECO_ROOT_DIR + "recovery/writable-includes.squashfs"
 
@@ -181,6 +178,28 @@ var updateBootEntries = UpdateBootEntries
 var updateFstab = UpdateFstab
 var grubInstall = GrubInstall
 
+var Efi_dir = "efi"
+var SYSBOOT_GRUB_ENV = SYSBOOT_MNT_DIR + Efi_dir + "/ubuntu/grubenv"
+var SYSBOOT_GRUB_CFG = SYSBOOT_MNT_DIR + Efi_dir + "/ubuntu/grub.cfg"
+var RECO_PART_GRUB_ENV = RECO_ROOT_DIR + Efi_dir + "/ubuntu/grubenv"
+var RECO_PART_GRUB_CFG = RECO_ROOT_DIR + Efi_dir + "/ubuntu/grub.cfg"
+
+func find_efi_dir() error {
+	if _, err := os.Stat(SYSBOOT_MNT_DIR + "EFI"); err == nil {
+		Efi_dir = "EFI"
+		strings.Replace(SYSBOOT_GRUB_ENV, "efi", "EFI", 1)
+		strings.Replace(SYSBOOT_GRUB_CFG, "efi", "EFI", 1)
+		strings.Replace(RECO_PART_GRUB_ENV, "efi", "EFI", 1)
+		strings.Replace(RECO_PART_GRUB_CFG, "efi", "EFI", 1)
+	} else if _, err := os.Stat(SYSBOOT_MNT_DIR + "efi"); err == nil {
+		Efi_dir = "efi"
+	} else {
+		return fmt.Errorf("efi/EFI folder not found")
+	}
+
+	return nil
+}
+
 func recoverProcess(parts *Partitions, recoveryos string) {
 	commitstampInt64, _ := strconv.ParseInt(commitstamp, 10, 64)
 
@@ -198,6 +217,12 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 		log.Println("[Add FIRSTBOOT service]")
 		err = addFirstBootService(RecoveryType, RecoveryLabel)
 		rplib.Checkerr(err)
+
+		// Ubuntu core default is using EFI directory for boot partition
+		// Here to support both efi/EFI direcroty for classic and core
+		err = find_efi_dir()
+		rplib.Checkerr(err)
+
 	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
 		err := enableLogger(CLASSIC_LOG_PATH)
 		rplib.Checkerr(err)
