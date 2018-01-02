@@ -77,17 +77,19 @@ import (
 type Partitions struct {
 	// XxxDevNode: sda (W/O partiiton number)
 	// XxxDevPath: /dev/sda (W/O partition number)
-	SourceDevNode, SourceDevPath                       string
-	TargetDevNode, TargetDevPath                       string
-	Recovery_nr, Sysboot_nr, Writable_nr, Last_part_nr int
-	Recovery_start, Recovery_end                       int64
-	Sysboot_start, Sysboot_end                         int64
-	Writable_start, Writable_end                       int64
+	SourceDevNode, SourceDevPath                                string
+	TargetDevNode, TargetDevPath                                string
+	Recovery_nr, Sysboot_nr, Swap_nr, Writable_nr, Last_part_nr int
+	Recovery_start, Recovery_end                                int64
+	Sysboot_start, Sysboot_end                                  int64
+	Swap_start, Swap_end                                        int64
+	Writable_start, Writable_end                                int64
 }
 
 const (
 	SysbootLabel  = "system-boot"
 	WritableLabel = "writable"
+	SwapLabel     = "swap"
 )
 
 func FindPart(Label string) (devNode string, devPath string, partNr int, err error) {
@@ -148,6 +150,11 @@ func FindTargetParts(parts *Partitions, recoveryType string) error {
 			blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
 			if blockDevice != parts.SourceDevPath {
 				devPath = blockDevice
+				if devPath == "/dev/mmcblk0" {
+					parts.TargetDevPath = devPath
+					parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
+					return nil
+				}
 				break
 			}
 		}
@@ -201,7 +208,7 @@ var parts Partitions
 func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, error) {
 	var err error
 	const OLD_PARTITION = "/tmp/old-partition.txt"
-	parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+	parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 
 	//The Sourec device which must has a recovery partition
 	parts.SourceDevNode, parts.SourceDevPath, parts.Recovery_nr, err = FindPart(recoveryLabel)
@@ -213,7 +220,7 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 	err = FindTargetParts(&parts, recoveryType)
 	if err != nil {
 		err = errors.New(fmt.Sprintf("Target install partition not found"))
-		parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+		parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 		return nil, err
 	}
 
@@ -224,6 +231,13 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 			//Target system-boot found and must not source device in headless_installer mode
 			parts.Sysboot_nr = sysboot_nr
 		}
+	}
+
+	//swap partition info
+	_, _, parts.Swap_nr, err = FindPart(SwapLabel)
+	if err != nil {
+		//Partition not found, keep value in '-1'
+		parts.Swap_nr = -1
 	}
 
 	//writable-boot partition info
@@ -268,6 +282,9 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 		} else if parts.Sysboot_nr != -1 && parts.Sysboot_nr == nr {
 			parts.Sysboot_start = start
 			parts.Sysboot_end = end
+		} else if parts.Swap_nr != -1 && parts.Swap_nr == nr {
+			parts.Swap_start = start
+			parts.Swap_end = end
 		} else if parts.Writable_nr != -1 && parts.Writable_nr == nr {
 			parts.Writable_start = start
 			parts.Writable_end = end
@@ -296,8 +313,13 @@ func SetPartitionStartEnd(parts *Partitions, partName string, partSizeMB int, bo
 			parts.Sysboot_end = parts.Sysboot_start + int64(partSizeMB*1024*1024)
 		}
 		//TODO: To support swap partition
-		// case "swap":
-
+	case "swap":
+		if bootloader == "u-boot" {
+			// Not allow to edit swap in u-boot yet.
+		} else if bootloader == "grub" {
+			parts.Swap_start = parts.Sysboot_end + 1
+			parts.Swap_end = parts.Swap_start + int64(partSizeMB*1024*1024)
+		}
 		// The writable partition would be enlarged to maximum.
 		// Here does not support change the Start, End
 	default:
@@ -345,24 +367,31 @@ func CopyRecoveryPart(parts *Partitions) error {
 	rplib.Shellexec("sync")
 
 	// set target grubenv to factory_restore
-	cmd := exec.Command("grub-editenv", filepath.Join(RECO_TAR_MNT_DIR, "EFI/ubuntu/grubenv"), "set", "recovery_type=factory_install")
-	err = cmd.Run()
-	if err != nil {
-		return err
+	if _, err = os.Stat(SYSBOOT_MNT_DIR + "EFI"); err == nil {
+		cmd := exec.Command("grub-editenv", filepath.Join(RECO_TAR_MNT_DIR, "EFI/ubuntu/grubenv"), "set", "recovery_type=factory_install")
+		cmd.Run()
+	} else if _, err = os.Stat(SYSBOOT_MNT_DIR + "efi"); err == nil {
+		cmd := exec.Command("grub-editenv", filepath.Join(RECO_TAR_MNT_DIR, "efi/ubuntu/grubenv"), "set", "recovery_type=factory_install")
+		cmd.Run()
 	}
+
 	return nil
 }
 
 func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	var dev_path string = strings.Replace(parts.TargetDevPath, "mapper/", "", -1)
-	var part_nr int
+	part_nr := parts.Last_part_nr
 	if bootloader == "u-boot" {
 		parts.Writable_nr = parts.Recovery_nr + 1 //writable is one after recovery
-		part_nr = parts.Recovery_nr + 1
 	} else if bootloader == "grub" {
 		parts.Sysboot_nr = parts.Recovery_nr + 1
-		parts.Writable_nr = parts.Sysboot_nr + 1 //writable is one after system-boot
-		part_nr = parts.Recovery_nr + 1
+		if configs.Configs.Swap == true {
+			parts.Swap_nr = parts.Sysboot_nr + 1  //swap is one after system-boot
+			parts.Writable_nr = parts.Swap_nr + 1 //writable is one after swap
+		} else {
+			parts.Swap_nr = -1                       //swap is not enabled
+			parts.Writable_nr = parts.Sysboot_nr + 1 //writable is one after system-boot
+		}
 	} else {
 		return fmt.Errorf("Oops, unknown bootloader:%s", bootloader)
 	}
@@ -376,10 +405,9 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	}
 
 	// Remove partitions after recovery
-	for part_nr <= parts.Last_part_nr {
-		cmd := exec.Command("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))
-		cmd.Run()
-		part_nr++
+	for part_nr > parts.Recovery_nr {
+		rplib.Shellexec("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))
+		part_nr--
 	}
 
 	// Restore system-boot
@@ -413,13 +441,45 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 		return err
 	}
 	defer syscall.Unmount(SYSBOOT_MNT_DIR, 0)
-	cmd = exec.Command("tar", "--xattrs", "-xJvpf", SYSBOOT_TARBALL, "-C", SYSBOOT_MNT_DIR)
-	cmd.Run()
+
+	// The ubuntu classic would install grub by grub-install
+	// If the sysboot tarball file not exists, just ignore it
+	if _, err := os.Stat(SYSBOOT_TARBALL); !os.IsNotExist(err) {
+		if err := os.MkdirAll("/tmp/tmp", 0755); err != nil {
+			return err
+		}
+		rplib.Shellexec("tar", "-xpJvf", SYSBOOT_TARBALL, "-C", "/tmp/tmp")
+		rplib.Shellexec("cp", "-r", "/tmp/tmp/.", SYSBOOT_MNT_DIR)
+		rplib.Shellexec("rm", "-rf", "/tmp/tmp/")
+	}
 	cmd = exec.Command("parted", "-ms", dev_path, "set", strconv.Itoa(parts.Sysboot_nr), "boot", "on")
 	cmd.Run()
 
+	// Create swap partition
+	if configs.Configs.Swap == true {
+		_, new_end := rplib.GetPartitionBeginEnd(dev_path, parts.Sysboot_nr)
+		parts.Swap_start = int64(new_end + 1)
+
+		if partType == "gpt" {
+			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "linux-swap", fmt.Sprintf("%vB", parts.Swap_start), fmt.Sprintf("%vB", parts.Swap_end), "name", fmt.Sprintf("%v", parts.Swap_nr), SwapLabel)
+		} else if partType == "mbr" {
+			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "linux-swap", fmt.Sprintf("%vB", parts.Swap_start), fmt.Sprintf("%vB", parts.Swap_end))
+		}
+		cmd = exec.Command("udevadm", "settle")
+		cmd.Run()
+
+		cmd = exec.Command("mkswap", fmtPartPath(parts.TargetDevPath, parts.Swap_nr))
+		cmd.Run()
+
+	}
+
 	// Restore writable
-	_, new_end := rplib.GetPartitionBeginEnd(dev_path, parts.Sysboot_nr)
+	var new_end int
+	if configs.Configs.Swap == true {
+		_, new_end = rplib.GetPartitionBeginEnd(dev_path, parts.Swap_nr)
+	} else {
+		_, new_end = rplib.GetPartitionBeginEnd(dev_path, parts.Sysboot_nr)
+	}
 	parts.Writable_start = int64(new_end + 1)
 	var writable_start string = fmt.Sprintf("%vB", parts.Writable_start)
 	var writable_nr string = strconv.Itoa(parts.Writable_nr)
@@ -441,8 +501,13 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	err = syscall.Mount(writable_path, WRITABLE_MNT_DIR, "ext4", 0, "")
 	rplib.Checkerr(err)
 	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
-	cmd = exec.Command("tar", "--xattrs", "-xJvpf", WRITABLE_TARBALL, "-C", WRITABLE_MNT_DIR)
-	cmd.Run()
+	// Here to support install rootfs from squashfs file
+	// If the writable tarball file not exists, just ignore it and unsquashfs the squashfs file
+	if _, err := os.Stat(WRITABLE_TARBALL); !os.IsNotExist(err) {
+		rplib.Shellexec("tar", "--xattrs", "-xJvpf", WRITABLE_TARBALL, "-C", WRITABLE_MNT_DIR)
+	} else if _, err := os.Stat(ROOTFS_SQUASHFS); !os.IsNotExist(err) {
+		rplib.Shellexec("unsquashfs", "-d", WRITABLE_MNT_DIR, "-f", ROOTFS_SQUASHFS)
+	}
 
 	return nil
 }

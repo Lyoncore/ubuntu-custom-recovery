@@ -7,6 +7,7 @@ set -ex
 
 UNPACK_GADGET=$PWD/$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/gadget
 UNPACK_BOOT=$PWD/$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/image/boot/
+EFI="EFI"
 
 backup_writable () {
     echo "backup writable.tar.xz"
@@ -19,7 +20,12 @@ backup_bootfs () {
     mkdir $UNPACK_GADGET/recovery-assets/recovery/factory/ || true
     TMPDIR=$(mktemp -d)
     $UNPACK_GADGET/ubuntu-image-hooks/bin/make_bootfs -gadget_yaml_path $UNPACK_GADGET/meta/gadget.yaml -gadget_unpack_path $UNPACK_GADGET -tmp_bootfs_path $TMPDIR
-    cp $UNPACK_BOOT/grub/grubenv $TMPDIR/EFI/ubuntu/
+    if [ -d $TMPDIR/efi/ ];then
+        EFI="efi"
+    elif [ -d $TMPDIR/EFI/ ];then
+        EFI="EFI"
+    fi
+    cp $UNPACK_BOOT/grub/grubenv $TMPDIR/$EFI/ubuntu/
     tar --xattrs -Jcpf $UNPACK_GADGET/recovery-assets/recovery/factory/system-boot.tar.xz -C $TMPDIR .
     rm -rf $TMPDIR
 }
@@ -145,17 +151,17 @@ update_bootloader_cfg() {
 
         RECOVERY_CORE=$(grub-editenv $UNPACK_BOOT/grub/grubenv list | grep snap_core | cut -d '=' -f 2)
         RECOVERY_KERNEL=$(grub-editenv $UNPACK_BOOT/grub/grubenv list | grep snap_kernel | cut -d '=' -f 2)
-        if [ ! -d $UNPACK_GADGET/recovery-assets/EFI/ubuntu/ ]; then
-            mkdir -p $UNPACK_GADGET/recovery-assets/EFI/ubuntu/
+        if [ ! -d $UNPACK_GADGET/recovery-assets/$EFI/ubuntu/ ]; then
+            mkdir -p $UNPACK_GADGET/recovery-assets/$EFI/ubuntu/
         fi
-        grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set recovery_core=$RECOVERY_CORE
-        grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set recovery_kernel=$RECOVERY_KERNEL
-        grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set recovery_label=$recovery_label
-        grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set recovery_type=$recovery_type
-        grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set installerfslabel=$installerfslabel
+        grub-editenv $UNPACK_GADGET/recovery-assets/$EFI/ubuntu/grubenv set recovery_core=$RECOVERY_CORE
+        grub-editenv $UNPACK_GADGET/recovery-assets/$EFI/ubuntu/grubenv set recovery_kernel=$RECOVERY_KERNEL
+        grub-editenv $UNPACK_GADGET/recovery-assets/$EFI/ubuntu/grubenv set recovery_label=$recovery_label
+        grub-editenv $UNPACK_GADGET/recovery-assets/$EFI/ubuntu/grubenv set recovery_type=$recovery_type
+        grub-editenv $UNPACK_GADGET/recovery-assets/$EFI/ubuntu/grubenv set installerfslabel=$installerfslabel
         if [ $recovery_type == "headless_installer" ];then
             installer_label=$(_parse_yaml $UNPACK_GADGET/recovery-assets/recovery/config.yaml recovery installerfslabel | grep -o '^[^#]*')
-            grub-editenv $UNPACK_GADGET/recovery-assets/EFI/ubuntu/grubenv set installerfslabel=$installer_label
+            grub-editenv $UNPACK_GADGET/recovery-assets/$EFI/ubuntu/grubenv set installerfslabel=$installer_label
         fi
     else
         echo "Unkonw bootloader:$bootloader"

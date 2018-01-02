@@ -23,11 +23,11 @@ volumes:
           - source: recovery-assets/
             target: /
           - source: grubx64.efi
-            target: EFI/boot/grubx64.efi
+            target: efi/boot/grubx64.efi
           - source: shim.efi.signed
-            target: EFI/boot/bootx64.efi
+            target: efi/boot/bootx64.efi
           - source: grub_recovery.cfg
-            target: EFI/ubuntu/grub.cfg
+            target: efi/ubuntu/grub.cfg
       - name: EFI System
         type: EF,C12A7328-F81F-11D2-BA4B-00A0C93EC93B
         filesystem: vfat
@@ -35,8 +35,8 @@ volumes:
         size: 50M
         content:
           - source: grubx64.efi
-            target: EFI/boot/grubx64.efi
+            target: efi/boot/grubx64.efi
           - source: shim.efi.signed
-            target: EFI/boot/bootx64.efi
+            target: efi/boot/bootx64.efi
           - source: grub.cfg
-            target: EFI/ubuntu/grub.cfg
+            target: efi/ubuntu/grub.cfg

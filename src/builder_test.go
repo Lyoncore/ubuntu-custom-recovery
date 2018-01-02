@@ -93,28 +93,28 @@ func (s *BuilderSuite) TestConfirmRecovery(c *C) {
 	//input 'y'
 	io.WriteString(in, "y\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool := reco.ConfirmRecovry(in)
+	ret_bool := reco.ConfirmRecovry(in, 300)
 	c.Check(ret_bool, Equals, true)
 
 	//input 'Y'
 	in.Seek(0, os.SEEK_SET)
 	io.WriteString(in, "Y\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool = reco.ConfirmRecovry(in)
+	ret_bool = reco.ConfirmRecovry(in, 300)
 	c.Check(ret_bool, Equals, true)
 
 	//input 'n'
 	in.Seek(0, os.SEEK_SET)
 	io.WriteString(in, "n\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool = reco.ConfirmRecovry(in)
+	ret_bool = reco.ConfirmRecovry(in, 300)
 	c.Check(ret_bool, Equals, false)
 
 	//input 'N'
 	in.Seek(0, os.SEEK_SET)
 	io.WriteString(in, "N\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool = reco.ConfirmRecovry(in)
+	ret_bool = reco.ConfirmRecovry(in, 300)
 	c.Check(ret_bool, Equals, false)
 }
 
@@ -204,7 +204,7 @@ func (s *BuilderSuite) TestEnableLogger(c *C) {
 	//Create testing files
 	wdata := []byte("hello logger\n")
 
-	err := reco.EnableLogger()
+	err := reco.EnableLogger(CORE_LOG_PATH)
 	c.Assert(err, IsNil)
 
 	log.Printf("%s", wdata)
@@ -364,7 +364,7 @@ func (s *BuilderSuite) TestUpdateGrubCfg(c *C) {
 	err = configs.Load("tests/config.yaml")
 	c.Assert(err, IsNil)
 
-	err = reco.UpdateGrubCfg(configs.Recovery.FsLabel, filepath.Join(reco.SYSBOOT_MNT_DIR, "grub.cfg"), filepath.Join(reco.SYSBOOT_MNT_DIR, "grubenv"))
+	err = reco.UpdateGrubCfg(configs.Recovery.FsLabel, filepath.Join(reco.SYSBOOT_MNT_DIR, "grub.cfg"), filepath.Join(reco.SYSBOOT_MNT_DIR, "grubenv"), rplib.RECOVERY_OS_UBUNTU_CORE)
 	c.Assert(err, IsNil)
 
 	// Verify

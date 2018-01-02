@@ -156,7 +156,7 @@ func (s *MainTestSuite) TestrecoverProcess(c *C) {
 
 	origUpdateGrubCfg := updateGrubCfg
 	var updateGrubCfgCalled = false
-	updateGrubCfg = func(recoverylabe string, grub_cfg string, grub_env string) error {
+	updateGrubCfg = func(recoverylabe string, grub_cfg string, grub_env string, os string) error {
 		updateGrubCfgCalled = true
 		return nil
 	}

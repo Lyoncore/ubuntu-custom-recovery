@@ -28,16 +28,51 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
+	"time"
 
 	uenv "github.com/mvo5/uboot-go/uenv"
 
+	hooks "github.com/Lyoncore/ubuntu-custom-recovery/src/hooks"
 	rplib "github.com/Lyoncore/ubuntu-custom-recovery/src/rplib"
 )
 
-func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string) error {
-	// sed -i "s/^set cmdline="\(.*\)"$/set cmdline="\1 $cloud_init_disabled"/g"
+const GRUB_MENUENTRY_FACTORY_RESTORE = `
+menuentry "Factory Restore" {
+		###OS_GRUB_MENU_CMDS###
+        # load recovery system
+        echo "[grub.cfg] load factory_restore system"
+        search --no-floppy --set --label "###RECO_PARTITION_LABEL###"
+        echo "[grub.cfg] root: ${root}"
+		load_env -f (${root})/###EFI_DIR###/ubuntu/grubenv
+        set cmdline="recovery=LABEL=###RECO_PARTITION_LABEL### ro init=/lib/systemd/systemd console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=###RECO_PARTITION_LABEL### snap_core=${recovery_core} snap_kernel=${recovery_kernel} recoveryos=###RECO_OS###"
+        echo "[grub.cfg] loading kernel..."
+        linux ($root)/###RECO_BOOTIMG_PATH###kernel.img $cmdline
+        echo "[grub.cfg] loading initrd..."
+        initrd ($root)/###RECO_BOOTIMG_PATH###initrd.img
+        echo "[grub.cfg] boot..."
+        boot
+}
+`
+
+const UBUNTU_CORE_GRUB_MENU_CMDS = ``
+const RECO_UBUNTU_CORE = `ubuntu_core`
+const RECO_BOOTIMG_PATH_UBUNTU_CORE = `$recovery_kernel/`
+
+const UBUNTU_CLASSIC_GRUB_MENU_CMDS = `
+        recordfail
+        load_video
+        gfxmode auto
+        insmod gzio
+        if [ x$grub_platform = xxen ]; then insmod xzio; insmod lzopio; fi
+        insmod part_gpt
+        insmod ext2`
+const RECO_UBUNTU_CLASSIC = `ubuntu_classic`
+const RECO_BOOTIMG_PATH_UBUNTU_CLASSIC = ``
+
+func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string, recoveryos string) error {
 	rplib.Shellexec("sed", "-i", "s/^set cmdline=\"\\(.*\\)\"$/set cmdline=\"\\1 $cloud_init_disabled\"/g", grub_cfg)
 
 	// add recovery grub menuentry
@@ -48,22 +83,21 @@ func UpdateGrubCfg(recovery_part_label string, grub_cfg string, grub_env string)
 	}
 	defer f.Close()
 
-	text := fmt.Sprintf(`
-menuentry "Factory Restore" {
-        # load recovery system
-        echo "[grub.cfg] load factory_restore system"
-        search --no-floppy --set --label "%s"
-        echo "[grub.cfg] root: ${root}"
-		load_env -f (${root})/EFI/ubuntu/grubenv
-        set cmdline="recovery=LABEL=%s ro init=/lib/systemd/systemd console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=%s snap_core=${recovery_core} snap_kernel=${recovery_kernel}"
-        echo "[grub.cfg] loading kernel..."
-        linuxefi ($root)/$recovery_kernel/kernel.img $cmdline
-        echo "[grub.cfg] loading initrd..."
-        initrdefi ($root)/$recovery_kernel/initrd.img
-        echo "[grub.cfg] boot..."
-        boot
-}`, recovery_part_label, recovery_part_label, recovery_part_label)
-	if _, err = f.WriteString(text); err != nil {
+	var menuentry string
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+		menuentry = strings.Replace(GRUB_MENUENTRY_FACTORY_RESTORE, "###OS_GRUB_MENU_CMDS###", UBUNTU_CLASSIC_GRUB_MENU_CMDS, -1)
+		menuentry = strings.Replace(menuentry, "###EFI_DIR###", Efi_dir, -1)
+		menuentry = strings.Replace(menuentry, "###RECO_OS###", RECO_UBUNTU_CLASSIC, -1)
+		menuentry = strings.Replace(menuentry, "###RECO_BOOTIMG_PATH###", RECO_BOOTIMG_PATH_UBUNTU_CLASSIC, -1)
+	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CORE {
+		menuentry = strings.Replace(GRUB_MENUENTRY_FACTORY_RESTORE, "###OS_GRUB_MENU_CMDS###", UBUNTU_CORE_GRUB_MENU_CMDS, -1)
+		menuentry = strings.Replace(menuentry, "###EFI_DIR###", Efi_dir, -1)
+		menuentry = strings.Replace(menuentry, "###RECO_OS###", RECO_UBUNTU_CORE, -1)
+		menuentry = strings.Replace(menuentry, "###RECO_BOOTIMG_PATH###", RECO_BOOTIMG_PATH_UBUNTU_CORE, -1)
+	}
+	menuentry = strings.Replace(menuentry, "###RECO_PARTITION_LABEL###", recovery_part_label, -1)
+
+	if _, err = f.WriteString(menuentry); err != nil {
 		return err
 	}
 
@@ -131,6 +165,157 @@ func UpdateUbootEnv(RecoveryLabel string) error {
 	return err
 }
 
+func UpdateFstab(parts *Partitions, recoveryos string) error {
+	if parts == nil {
+		return fmt.Errorf("nil Partitions")
+	}
+
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+		writable_uuid := rplib.Shellcmdoutput(fmt.Sprintf("blkid -s UUID -o value %s", fmtPartPath(parts.TargetDevPath, parts.Writable_nr)))
+		match, err := regexp.MatchString("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", writable_uuid)
+		if err != nil || match == false {
+			return fmt.Errorf("finding writable uuid failed:%v", writable_uuid)
+		}
+		sysboot_uuid := rplib.Shellcmdoutput(fmt.Sprintf("blkid -s UUID -o value %s", fmtPartPath(parts.TargetDevPath, parts.Sysboot_nr)))
+		match, err = regexp.MatchString("[0-9a-fA-F]{4}-[0-9a-fA-F]{4}", sysboot_uuid)
+		if err != nil || match == false {
+			return fmt.Errorf("finding system-boot uuid failed:%v", sysboot_uuid)
+		}
+
+		f_fstab, err := os.Create(WRITABLE_ETC_FSTAB)
+		if err != nil {
+			return err
+		}
+		defer f_fstab.Close()
+
+		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/	ext4	errors=remount-ro	0	1\n", writable_uuid))
+		if err != nil {
+			return err
+		}
+		_, err = f_fstab.WriteString(fmt.Sprintf("UUID=%v	/boot/%s	vfat	umask=0077	0	1\n", sysboot_uuid, Efi_dir))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func chrootWritablePrepare(writableMnt string, sysbootMnt string) error {
+	var efiMnt = filepath.Join(writableMnt, "boot", Efi_dir)
+	if _, err := os.Stat(efiMnt); os.IsNotExist(err) {
+		if err = os.Mkdir(efiMnt, 0755); err != nil {
+			return err
+		}
+
+	}
+
+	if err := syscall.Mount(sysbootMnt, efiMnt, "vfat", syscall.MS_BIND, ""); err != nil {
+		return err
+	}
+
+	if err := syscall.Mount("/sys", filepath.Join(writableMnt, "sys"), "sysfs", syscall.MS_BIND, ""); err != nil {
+		return err
+	}
+
+	if err := syscall.Mount("/proc", filepath.Join(writableMnt, "proc"), "proc", syscall.MS_BIND, ""); err != nil {
+		return err
+	}
+
+	if err := syscall.Mount("/dev", filepath.Join(writableMnt, "dev"), "devtmpfs", syscall.MS_BIND, ""); err != nil {
+		return err
+	}
+
+	if err := syscall.Mount("/run", filepath.Join(writableMnt, "run"), "tmpfs", syscall.MS_BIND, ""); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func chrootUmountBinded(writableMnt string) error {
+	if err := syscall.Unmount(filepath.Join(writableMnt, "boot", Efi_dir), 0); err != nil {
+		return err
+	}
+
+	if err := syscall.Unmount(filepath.Join(writableMnt, "sys"), 0); err != nil {
+		return err
+	}
+
+	if err := syscall.Unmount(filepath.Join(writableMnt, "proc"), 0); err != nil {
+		return err
+	}
+
+	if err := syscall.Unmount(filepath.Join(writableMnt, "dev"), 0); err != nil {
+		return err
+	}
+
+	if err := syscall.Unmount(filepath.Join(writableMnt, "run"), 0); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displayGrubMenu bool, swapenable bool, resumeDev string) error {
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+		// Remove old entries and recreate
+		recov_entry := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
+		os_boot_entry := rplib.GetBootEntries(rplib.RECOVERY_OS_UBUNTU_CLASSIC)
+		if len(recov_entry) < 1 || len(os_boot_entry) < 1 {
+			//remove old uefi entry
+			entries := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
+			for _, entry := range entries {
+				rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
+			}
+			entries = rplib.GetBootEntries(rplib.RECOVERY_OS_UBUNTU_CLASSIC)
+			for _, entry := range entries {
+				rplib.Shellexec(EFIBOOTMGR, "-b", entry, "-B")
+			}
+			// add new uefi entry
+			log.Println("[add new uefi entry]")
+			rplib.CreateBootEntry(parts.TargetDevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
+		}
+
+		if err := chrootWritablePrepare(writableMnt, sysbootMnt); err != nil {
+			return err
+		}
+		defer chrootUmountBinded(writableMnt)
+
+		if displayGrubMenu {
+			rplib.Shellexec("sed", "-i", "s/^GRUB_HIDDEN_TIMEOUT=0/GRUB_RECORDFAIL_TIMEOUT=3\\n#GRUB_HIDDEN_TIMEOUT=0/g", filepath.Join(writableMnt, "etc/default/grub"))
+		}
+
+		if swapenable {
+			rplib.Shellexec("sed", "-i", fmt.Sprintf("s@quiet splash@quiet splash resume=%s@g", resumeDev), filepath.Join(writableMnt, "etc/default/grub"))
+		}
+
+		//Remove all old grub in boot partition if exist
+		d, err := os.Open(sysbootMnt)
+		if err != nil {
+			return err
+		}
+		defer d.Close()
+		names, err := d.Readdirnames(-1)
+		if err != nil {
+			return err
+		}
+		for _, name := range names {
+			err = os.RemoveAll(filepath.Join(sysbootMnt, name))
+			if err != nil {
+				return err
+			}
+		}
+
+		rplib.Shellexec("chroot", writableMnt, "grub-install", "--target=x86_64-efi")
+
+		rplib.Shellexec("chroot", writableMnt, "update-grub")
+
+	}
+
+	return nil
+}
+
 //FIXME: now only support eth0, enx0 interface
 func startupNetwork() error {
 	interface_list := strings.Split(rplib.Shellcmdoutput("ip -o link show | awk -F': ' '{print $2}'"), "\n")
@@ -165,31 +350,81 @@ func releaseDhcp() error {
 	return cmd.Run()
 }
 
-func ConfirmRecovry(in *os.File) bool {
-	//in is for golang testing input.
+func ConfirmRecovry(in *os.File, timeout int64) bool {
 	//Get user input, if in is nil
 	if in == nil {
 		in = os.Stdin
 	}
 
-	// TODO: Add user confirmation pre-hook
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 
+	if configs.Recovery.RestoreConfirmPrehookFile != "" {
+		hooks.RestoreConfirmPrehook.SetPath(HOOKS_DIR + configs.Recovery.RestoreConfirmPrehookFile)
+		if hooks.RestoreConfirmPrehook.IsHookExist() {
+			err := hooks.RestoreConfirmPrehook.Run(RECO_ROOT_DIR, false, "", "")
+			if err != nil {
+				log.Println(err)
+			}
+		}
+	}
+	log.Println("Wait user confirmation timeout:", timeout, "sec")
 	log.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
-	var input string
-	fmt.Fscanf(in, "%s\n", &input)
-	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("4 4 1 7"), 0644)
 
+	tty1, err := os.Open("/dev/tty1")
+	if err != nil {
+		panic(err)
+	}
+	ttyS0, err := os.Open("/dev/ttyS0")
+	if err != nil {
+		panic(err)
+	}
+
+	var input string
+	response := make(chan string)
+	go func() {
+		fmt.Fscanf(tty1, "%s\n", &input)
+		response <- input
+	}()
+	go func() {
+		fmt.Fscanf(ttyS0, "%s\n", &input)
+		response <- input
+	}()
+
+	select {
+	case s := <-response:
+		log.Println("response:", s)
+	case <-time.After(time.Second * time.Duration(timeout)):
+		log.Println("Timeout:", timeout, "sec. Reboot system!")
+	}
+
+	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("4 4 1 7"), 0644)
+	if configs.Recovery.RestoreConfirmPosthookFile != "" {
+		hooks.RestoreConfirmPosthook.SetPath(HOOKS_DIR + configs.Recovery.RestoreConfirmPosthookFile)
+	}
 	if "y" != input && "Y" != input {
-		// TODO: Add user confirmation post-yes-hook
+		if hooks.RestoreConfirmPosthook.IsHookExist() {
+			err := hooks.RestoreConfirmPosthook.Run(RECO_ROOT_DIR, true, "USERCONFIRM", "no")
+			if err != nil {
+				log.Println(err)
+			}
+		}
 		return false
 	}
 
-	// TODO: Add user confirmation post-no-hook
+	if hooks.RestoreConfirmPosthook.IsHookExist() {
+		err := hooks.RestoreConfirmPosthook.Run(RECO_ROOT_DIR, true, "USERCONFIRM", "yes")
+		if err != nil {
+			log.Println(err)
+		}
+	}
 	return true
 }
 
 func BackupAssertions(parts *Partitions) error {
+	if parts == nil {
+		fmt.Errorf("nil Partitions")
+	}
+
 	// back up serial assertion
 	err := os.MkdirAll(WRITABLE_MNT_DIR, 0755)
 	if err != nil {
@@ -231,14 +466,14 @@ func RestoreAsserions() error {
 	return nil
 }
 
-func EnableLogger() error {
-	if _, err := os.Stat(path.Dir(LOG_PATH)); err != nil {
-		err = os.MkdirAll(path.Dir(LOG_PATH), 0755)
+func EnableLogger(logPath string) error {
+	if _, err := os.Stat(path.Dir(logPath)); err != nil {
+		err = os.MkdirAll(path.Dir(logPath), 0755)
 		if err != nil {
 			return err
 		}
 	}
-	log_writable, err := os.OpenFile(LOG_PATH, os.O_CREATE|os.O_WRONLY, 0600)
+	log_writable, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
