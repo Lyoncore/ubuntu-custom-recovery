@@ -113,7 +113,7 @@ func FindPart(Label string) (devNode string, devPath string, partNr int, err err
 		if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
 			devPath = devPath[:len(devPath)-1]
 		} else {
-			part_nr := strings.Trim(fullPath, devPath)
+			part_nr := strings.TrimPrefix(fullPath, devPath)
 			if partNr, err = strconv.Atoi(part_nr); err != nil {
 				err = errors.New("Unknown error while FindPart")
 				return "", "", -1, err
