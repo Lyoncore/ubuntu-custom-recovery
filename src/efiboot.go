@@ -66,7 +66,7 @@ func RestoreBootEntries(parts *Partitions, recoveryType string, os_entry string)
 			}
 			// add new uefi entry
 			log.Println("[add new uefi entry]")
-			rplib.CreateBootEntry(parts.TargetDevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
+			rplib.CreateBootEntry(parts.SourceDevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
 
 			log.Println("[add system-boot entry]")
 			if loader, err := findSysBootEfi(parts); err == nil {
@@ -94,6 +94,6 @@ func UpdateBootEntries(parts *Partitions, os_entry string) {
 	}
 
 	log.Println("[add new uefi entry]")
-	rplib.CreateBootEntry(parts.TargetDevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
+	rplib.CreateBootEntry(parts.SourceDevPath, parts.Recovery_nr, LOADER, rplib.BOOT_ENTRY_RECOVERY)
 	rplib.CreateBootEntry(parts.TargetDevPath, parts.Sysboot_nr, LOADER, os_entry)
 }
