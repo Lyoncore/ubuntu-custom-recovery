@@ -224,7 +224,7 @@ var parts Partitions
 func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, error) {
 	var err error
 	const OLD_PARTITION = "/tmp/old-partition.txt"
-	parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+	parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, 0, 20479, -1, -1, -1, -1, -1, -1}
 
 	//The Sourec device which must has a recovery partition
 	parts.SourceDevNode, parts.SourceDevPath, parts.Recovery_nr, err = FindPart(recoveryLabel)
@@ -236,7 +236,7 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 	err = FindTargetParts(&parts, recoveryType)
 	if err != nil {
 		err = errors.New(fmt.Sprintf("Target install partition not found"))
-		parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+		parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, 0, 20479, -1, -1, -1, -1, -1, -1}
 		return nil, err
 	}
 
@@ -269,7 +269,7 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 	}
 
 	// find out detail information of each partition
-	cmd := exec.Command("parted", "-ms", fmt.Sprintf("/dev/%s", parts.SourceDevNode), "unit", "B", "print")
+	cmd := exec.Command("parted", "-ms", fmt.Sprintf("/dev/%s", parts.TargetDevNode), "unit", "B", "print")
 	stdout, _ := cmd.StdoutPipe()
 	cmd.Start()
 	scanner := bufio.NewScanner(stdout)
@@ -292,18 +292,11 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 			return nil, err
 		}
 
-		if parts.Recovery_nr != -1 && parts.Recovery_nr == nr {
-			parts.Recovery_start = start
-			parts.Recovery_end = end
-		} else if parts.Sysboot_nr != -1 && parts.Sysboot_nr == nr {
-			parts.Sysboot_start = start
-			parts.Sysboot_end = end
-		} else if parts.Swap_nr != -1 && parts.Swap_nr == nr {
-			parts.Swap_start = start
-			parts.Swap_end = end
-		} else if parts.Writable_nr != -1 && parts.Writable_nr == nr {
-			parts.Writable_start = start
-			parts.Writable_end = end
+		if parts.SourceDevPath == parts.TargetDevPath {
+			if parts.Recovery_nr != -1 && parts.Recovery_nr == nr {
+				parts.Recovery_start = start
+				parts.Recovery_end = end
+			}
 		}
 		parts.Last_part_nr = nr
 	}
@@ -400,7 +393,11 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	if bootloader == "u-boot" {
 		parts.Writable_nr = parts.Recovery_nr + 1 //writable is one after recovery
 	} else if bootloader == "grub" {
-		parts.Sysboot_nr = parts.Recovery_nr + 1
+		if parts.SourceDevPath == parts.TargetDevPath {
+			parts.Sysboot_nr = parts.Recovery_nr + 1
+		} else {
+			parts.Sysboot_nr = 1 //If target device is not same as source, the system-boot parition will start from 1st partition
+		}
 		if configs.Configs.Swap == true {
 			parts.Swap_nr = parts.Sysboot_nr + 1  //swap is one after system-boot
 			parts.Writable_nr = parts.Swap_nr + 1 //writable is one after swap
@@ -420,8 +417,12 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 		return fmt.Errorf("Oops, unknown partition type:%s", partType)
 	}
 
-	// Remove partitions after recovery
-	for part_nr > parts.Recovery_nr {
+	// Remove partitions expect the partitions before recovery
+	reserved_partition := 0
+	if parts.SourceDevPath == parts.TargetDevPath {
+		reserved_partition = parts.Recovery_nr
+	}
+	for part_nr > reserved_partition {
 		rplib.Shellexec("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))
 		part_nr--
 	}
@@ -443,11 +444,9 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "fat32", fmt.Sprintf("%vB", parts.Sysboot_start), fmt.Sprintf("%vB", parts.Sysboot_end))
 		}
 	}
-	cmd := exec.Command("udevadm", "settle")
-	cmd.Run()
+	rplib.Shellexec("udevadm", "settle")
 
-	cmd = exec.Command("mkfs.vfat", "-F", "32", "-n", SysbootLabel, sysboot_path)
-	cmd.Run()
+	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", SysbootLabel, sysboot_path)
 	err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
 	if err != nil {
 		return err
@@ -468,8 +467,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 		rplib.Shellexec("cp", "-r", "/tmp/tmp/.", SYSBOOT_MNT_DIR)
 		rplib.Shellexec("rm", "-rf", "/tmp/tmp/")
 	}
-	cmd = exec.Command("parted", "-ms", dev_path, "set", strconv.Itoa(parts.Sysboot_nr), "boot", "on")
-	cmd.Run()
+	rplib.Shellexec("parted", "-ms", dev_path, "set", strconv.Itoa(parts.Sysboot_nr), "boot", "on")
 
 	// Create swap partition
 	if configs.Configs.Swap == true {
@@ -481,12 +479,8 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 		} else if partType == "mbr" {
 			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "linux-swap", fmt.Sprintf("%vB", parts.Swap_start), fmt.Sprintf("%vB", parts.Swap_end))
 		}
-		cmd = exec.Command("udevadm", "settle")
-		cmd.Run()
-
-		cmd = exec.Command("mkswap", fmtPartPath(parts.TargetDevPath, parts.Swap_nr))
-		cmd.Run()
-
+		rplib.Shellexec("udevadm", "settle")
+		rplib.Shellexec("mkswap", fmtPartPath(parts.TargetDevPath, parts.Swap_nr))
 	}
 
 	// Restore writable
@@ -507,11 +501,9 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 		rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "ext4", writable_start, "-1M")
 	}
 
-	cmd = exec.Command("udevadm", "settle")
-	cmd.Run()
+	rplib.Shellexec("udevadm", "settle")
 
-	cmd = exec.Command("mkfs.ext4", "-F", "-L", WritableLabel, writable_path)
-	cmd.Run()
+	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, writable_path)
 	err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
 	rplib.Checkerr(err)
 	err = syscall.Mount(writable_path, WRITABLE_MNT_DIR, "ext4", 0, "")
