@@ -296,13 +296,14 @@ func main() {
 	log.Printf("RECOVERY_LABEL: %s", RecoveryLabel)
 	log.Printf("RECOVERY_OS: %s", RecoveryOS)
 
+	parseConfigs(CONFIG_YAML)
+
 	// Find boot device, all other partiitons info
 	parts, err := getPartitions(RecoveryLabel, RecoveryType)
 	if err != nil {
 		log.Panicf("Boot device not found, error: %s\n", err)
 	}
 
-	parseConfigs(CONFIG_YAML)
 	// Check boot entries if corrupted and in recovery mode.
 	// Currently only support amd64
 	if configs.Configs.Arch == "amd64" {

@@ -34,6 +34,8 @@ func fmtPartPath(devPath string, nr int) string {
 	var partPath string
 	if strings.Contains(devPath, "mmcblk") || strings.Contains(devPath, "mapper/") {
 		partPath = fmt.Sprintf("%sp%d", devPath, nr)
+	} else if strings.Contains(devPath, "nvme") {
+		partPath = fmt.Sprintf("%sn%d", devPath, nr)
 	} else {
 		partPath = fmt.Sprintf("%s%d", devPath, nr)
 	}

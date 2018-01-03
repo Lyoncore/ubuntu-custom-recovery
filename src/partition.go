@@ -138,30 +138,15 @@ func FindTargetParts(parts *Partitions, recoveryType string) error {
 	}
 
 	if recoveryType == rplib.HEADLESS_INSTALLER {
-		// target disk might be emmc
-		blockArray, _ := filepath.Glob("/sys/block/mmcblk*")
-		for _, block := range blockArray {
-			dat := []byte("")
-			dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
-			if err != nil {
-				return err
-			}
-			dat_str := strings.TrimSpace(string(dat))
-			blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
-			if blockDevice != parts.SourceDevPath {
-				devPath = blockDevice
-				if devPath == "/dev/mmcblk0" {
-					parts.TargetDevPath = devPath
-					parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
-					return nil
-				}
-				break
-			}
-		}
-
-		// target disk might be scsi disk
-		if devPath == "" {
-			blockArray, _ := filepath.Glob("/sys/block/sd*")
+		// If config.yaml has set the specific recovery device,
+		// it would use is as recovery device.
+		// Or it would find out the recovery device
+		if configs.Recovery.RecoveryDevice != "" {
+			parts.TargetDevPath = configs.Recovery.RecoveryDevice
+			parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
+		} else {
+			// target disk might be emmc
+			blockArray, _ := filepath.Glob("/sys/block/mmcblk*")
 			for _, block := range blockArray {
 				dat := []byte("")
 				dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
@@ -170,35 +155,66 @@ func FindTargetParts(parts *Partitions, recoveryType string) error {
 				}
 				dat_str := strings.TrimSpace(string(dat))
 				blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
-
 				if blockDevice != parts.SourceDevPath {
 					devPath = blockDevice
-					break
-				}
-			}
-		}
-
-		if devPath != "" {
-			// The devPath is with partiion /dev/sdX1 or /dev/mmcblkXp1
-			// Here to remove the partition information
-			for {
-				if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
-					devPath = devPath[:len(devPath)-1]
-				} else {
-					if devPath[len(devPath)-1] == 'p' {
-						devPath = devPath[:len(devPath)-1]
+					if devPath == "/dev/mmcblk0" {
+						parts.TargetDevPath = devPath
+						parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
+						return nil
 					}
-					parts.TargetDevPath = devPath
-					parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
 					break
 				}
 			}
-		} else {
-			return fmt.Errorf("No target disk found")
+
+			// target disk might be scsi disk
+			if devPath == "" {
+				blockArray, _ := filepath.Glob("/sys/block/sd*")
+				for _, block := range blockArray {
+					dat := []byte("")
+					dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
+					if err != nil {
+						return err
+					}
+					dat_str := strings.TrimSpace(string(dat))
+					blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
+
+					if blockDevice != parts.SourceDevPath {
+						devPath = blockDevice
+						break
+					}
+				}
+			}
+
+			if devPath != "" {
+				// The devPath is with partiion /dev/sdX1 or /dev/mmcblkXp1
+				// Here to remove the partition information
+				for {
+					if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
+						devPath = devPath[:len(devPath)-1]
+					} else {
+						if devPath[len(devPath)-1] == 'p' {
+							devPath = devPath[:len(devPath)-1]
+						}
+						parts.TargetDevPath = devPath
+						parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
+						break
+					}
+				}
+			} else {
+				return fmt.Errorf("No target disk found")
+			}
 		}
 	} else {
-		parts.TargetDevNode = parts.SourceDevNode
-		parts.TargetDevPath = parts.SourceDevPath
+		// If config.yaml has set the specific system device,
+		// it would use is as system device.
+		// Or it would assume the system device is same as recovery device
+		if configs.Recovery.SystemDevice != "" {
+			parts.TargetDevPath = configs.Recovery.SystemDevice
+			parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
+		} else {
+			parts.TargetDevNode = parts.SourceDevNode
+			parts.TargetDevPath = parts.SourceDevPath
+		}
 	}
 	return nil
 }

@@ -31,6 +31,8 @@ type ConfigRecovery struct {
 		Type                       string // one of "field_transition", "factory_install"
 		RecoverySize               string
 		FsLabel                    string `yaml:"filesystem-label"`
+		RecoveryDevice             string `yaml:"recovery-device"`
+		SystemDevice               string `yaml:"system-device"`
 		InstallerFsLabel           string
 		OemPreinstHookDir          string `yaml:"oem-preinst-hook-dir"`
 		OemPostinstHookDir         string `yaml:"oem-postinst-hook-dir"`
