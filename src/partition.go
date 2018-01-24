@@ -418,13 +418,14 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	}
 
 	// Remove partitions expect the partitions before recovery
-	reserved_partition := 0
 	if parts.SourceDevPath == parts.TargetDevPath {
-		reserved_partition = parts.Recovery_nr
-	}
-	for part_nr > reserved_partition {
-		rplib.Shellexec("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))
-		part_nr--
+		for part_nr > parts.Recovery_nr {
+			rplib.Shellexec("parted", "-ms", dev_path, "rm", fmt.Sprintf("%v", part_nr))
+			part_nr--
+		}
+	} else {
+		// Build a new GPT to remove all partitions if target device is another disk
+		rplib.Shellexec("parted", "-ms", dev_path, "mklabel", "gpt")
 	}
 
 	// Restore system-boot
