@@ -542,9 +542,12 @@ func AddFirstBootService(RecoveryType, RecoveryLabel string) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(filepath.Join(SYSTEM_DATA_PATH, FIRSTBOOT_SREVICE_SCRIPT), []byte(fmt.Sprintf("RECOVERYFSLABEL=\"%s\"\nRECOVERY_TYPE=\"%s\"\n", RecoveryLabel, RecoveryType)), 0644)
-	if err != nil {
-		return err
+	stat, err := os.Stat(FIRSTBOOT_SERVICE_DIR)
+	if err == nil && stat.IsDir() == true {
+		err := ioutil.WriteFile(filepath.Join(SYSTEM_DATA_PATH, FIRSTBOOT_SREVICE_SCRIPT), []byte(fmt.Sprintf("RECOVERYFSLABEL=\"%s\"\nRECOVERY_TYPE=\"%s\"\n", RecoveryLabel, RecoveryType)), 0644)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

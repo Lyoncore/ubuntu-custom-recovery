@@ -63,7 +63,8 @@ const (
 	ASSERT_DST_PATH          = SYSTEM_DATA_PATH + "var/lib/snapd/seed/assertions/"
 	HOOKS_DIR                = RECO_FACTORY_DIR
 	SYSTEMD_SYSTEM_DIR       = "/lib/systemd/system/"
-	FIRSTBOOT_SREVICE_SCRIPT = "/var/lib/devmode-firstboot/conf.sh"
+	FIRSTBOOT_SERVICE_DIR    = "/var/lib/devmode-firstboot/"
+	FIRSTBOOT_SREVICE_SCRIPT = FIRSTBOOT_SERVICE_DIR + "conf.sh"
 
 	SYSBOOT_UBOOT_ENV = SYSBOOT_MNT_DIR + "uboot.env"
 	BACKUP_SNAP_PATH  = "/backup_snaps/"
