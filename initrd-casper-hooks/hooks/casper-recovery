@@ -1,0 +1,28 @@
+#!/bin/sh -e
+# initramfs hook for 99ubuntu_custom-recovery
+
+PREREQS=""
+
+# Output pre-requisites
+prereqs()
+{
+       echo "$PREREQS"
+}
+
+case "$1" in
+    prereqs)
+       prereqs
+       exit 0
+       ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+cp /sbin/findfs $DESTDIR/sbin/
+if [ -n "$INJECT" ]; then
+	. /usr/share/initramfs-tools/scripts/functions
+	rm -f $DESTDIR/scripts/casper-bottom/ORDER
+    # FIXME, the btrfs should be incorrect
+	sed -i 's/PREREQ=""/PREREQ="99ubuntu_custom-recovery"/g' /usr/share/initramfs-tools/scripts/casper-bottom/btrfs
+	cache_run_scripts "${DESTDIR}" "/scripts/casper-bottom"
+fi
