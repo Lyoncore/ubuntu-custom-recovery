@@ -1,4 +1,4 @@
-#! /bin/sh -e
+#! /bin/sh -ex
 # initramfs casper-bottom script for recovery
 
 # redirect output to serial console, since the HDMI output not enabled
@@ -26,12 +26,10 @@ case "$1" in
         ;;
 esac
 
-set -x
-
 recoverytype=
 recoveryos=ubuntu_server_curtin
 BASE=/run/initramfs
-RECO_MNT=/run/recovery
+RECO_MNT=/root/cdrom
 OSROOTFS=$BASE/osrootfs/
 CHROOT=$BASE/chroot/
 OEM_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/factory-restore-prehook
@@ -39,43 +37,26 @@ OEM_POSTINST_HOOK_DIR=$RECO_MNT/recovery/factory/factory-restore-posthook
 OEM_PREREBOOT_HOOK_DIR=$RECO_MNT/recovery/factory/factory-install-prehook
 
 # Check the recovery type
-for t in $(cat /proc/cmdline); do
-    if [ "$t" = "recoverytype=factory_restore" ]; then
-        recoverytype=factory_restore
-    elif [ "$t" = "recoverytype=factory_install" ]; then
-        recoverytype=factory_install
-    elif [ "$t" = "recoverytype=headless_installer" ]; then
-        recoverytype=headless_installer
-    elif [ "$t" = "recoverytype=subiquity" ]; then
-        recoverytype=subiquity
-    elif [ "$t" = "recoveryos=ubuntu_server_curtin" ];then
-        recoveryos=ubuntu_server_curtin
-    elif [ "$t" = "fixrtc" ];then
-        FIXRTC=ture
-    fi
+for x in $(cat /proc/cmdline); do
+	case ${x} in
+		recoverytype=*)
+			recoverytype=${x#*=}
+		;;
+		recoveryos=*)
+			recoveryos=${x#*=}
+		;;
+     esac
 done
 
-[ -n "$recoverytype" ] || [ "$recoverytype" == "subiquity" ]|| exit 0 # fall back to subiquity
-
-#get recovery_label
-recoverylabel=$(tr " " "\n" </proc/cmdline | grep "recovery=LABEL=" | sed -e 's/recovery=LABEL=\(.*\)/\1/')
-
-wait-for-root "LABEL=$recoverylabel" "${ROOTDELAY:-180}" >/dev/null || true
-recovery_part="$(findfs LABEL="$recoverylabel")"
-[ -n "$recovery_part" ] || exit 1 # recovery partition not found
-
-# disbale subiquity
-/root/var/lib/snapd/seed/seed.yaml
-
-
-echo "[mount the recovery partition]"
-mkdir -p $BASE
-mkdir -p $RECO_MNT
-mount -o defaults,ro "$recovery_part" $RECO_MNT
-
-
+if [ ! -n "$recoverytype" ] || [ "$recoverytype" == "subiquity" ]; then
+    exit 0 # fall back to subiquity
+fi
 
 # Parsing the hook dir if in config.yaml
+hookdir=$(grep 'oem-headless-installer-preinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
+if [ ! -z $hookdir ]; then
+    OEM_HEADLESS_INSTALLER_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/$hookdir
+fi
 hookdir=$(grep 'oem-preinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
 if [ ! -z $hookdir ]; then
     OEM_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/$hookdir
@@ -89,91 +70,27 @@ if [ ! -z $hookdir ]; then
     OEM_PREREBOOT_HOOK_DIR=$RECO_MNT/recovery/factory/$hookdir
 fi
 
-# The oem-preinst-hook-dir avalible for all recoverytype
-if [ -d $OEM_PREINST_HOOK_DIR ]; then
-    echo "[Factory Restore Prehook] Run scripts in $OEM_PREINST_HOOK_DIR"
-    export RECOVERYTYPE=$recoverytype
-    export RECOVERYPART=$recovery_part
-    export RECOVERYMNT=$RECO_MNT
-    find "$OEM_PREINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
-
-    if [ $? != 0 ];then
-        debugshell
-    fi
-fi
-
-# fixrtc
-# set to last modify time, the partition create time will be not be very old time
-if [ -n $FIXRTC ]; then
-    date "+%Y-%m-%d %T" --set="$(stat -c %y $RECO_MNT/recovery/factory/writable.tar.xz )"
-fi
-
-modprobe squashfs
-mkdir -p $OSROOTFS
-if [ $recoveryos == "ubuntu_core" ]; then
-    # mount core snap on chroot
-    core_snap=$(tr " " "\n" < /proc/cmdline | grep 'snap_core=' | sed -e 's/snap_core=//')
-    mount $RECO_MNT/backup_snaps/$core_snap $OSROOTFS
-
-    kernel_snap=$(tr " " "\n" < /proc/cmdline | grep 'snap_kernel=' | sed -e 's/snap_kernel=//')
-    kernelfs=$BASE/kerelsnap/
-    mkdir -p $kernelfs
-    mount $RECO_MNT/backup_snaps/$kernel_snap $kernelfs
-elif [ $recoveryos == "ubuntu_classic" ]; then
-    mount $RECO_MNT/recovery/factory/rootfs.squashfs $OSROOTFS
-    kernelfs=$OSROOTFS
-fi
-
-mkdir -p $CHROOT
-for dir in /bin /lib /lib64 /etc /var/ /usr /sbin; do
-    if [ -d $OSROOTFS/$dir/ ]; then
-    	mkdir -p $BASE/chroot/$dir/
-    	mount --bind  $OSROOTFS/$dir/ $CHROOT/$dir/
-    fi
-done
-for dir in /run /dev /tmp /sys /srv /proc /mnt /root /recovery /backup_snaps; do
-    mkdir -p $CHROOT/$dir/
-done
-
-# mount lib/modules/, lib/firmware/
-for d in modules firmware; do
-    # old deprecated
-    if [ -d "$kernelfs/lib/$d" ]; then
-        mount --bind $kernelfs/lib/$d $CHROOT/lib/$d
-    fi
-    # new style
-    if [ -d "$kernelfs/$d" ]; then
-        mount --bind $kernelfs/$d $CHROOT/lib/$d
-    fi
-done
-
-if [ -d $RECO_MNT/backup_snaps ]; then
-    mount --bind $RECO_MNT/backup_snaps $CHROOT/backup_snaps/
-fi
-
-echo "[switch_root to CHROOT]"
-mount --bind /sys $CHROOT/sys
-mount --bind /proc $CHROOT/proc
-mount --bind /dev $CHROOT/dev
-mount --bind /run $CHROOT/run
-mount --bind /tmp $CHROOT/tmp
-mount --bind $RECO_MNT $CHROOT/$RECO_MNT
-
-echo "[chroot execute recovery.bin]"
-
-set +e
-/bin/chroot $CHROOT $RECO_MNT/recovery/bin/recovery.bin $recoverytype $recoverylabel $recoveryos
-ret=$?
-set -e
-
-# The factory_restore posthook not needed in headless_installer
-if [ $recoverytype != "headless_installer" ]; then
-    if [ $ret == 0 -a -d $OEM_POSTINST_HOOK_DIR ]; then
-        echo "[Factory Restore Posthook] Run scripts in $OEM_POSTINST_HOOK_DIR"
+# The oem-headless-installer-preinst-hook-dir hook
+if [ $recoverytype == "headless_installer" ]; then
+    if [ -d $OEM_HEADLESS_INSTALLER_PREINST_HOOK_DIR ]; then
+        echo "[Factory Restore Prehook] Run scripts in $OEM_HEADLESS_INSTALLER_PREINST_HOOK_DIR"
         export RECOVERYTYPE=$recoverytype
         export RECOVERYPART=$recovery_part
         export RECOVERYMNT=$RECO_MNT
-        find "$OEM_POSTINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
+        find "$OEM_HEADLESS_INSTALLER_PREINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
+
+        if [ $? != 0 ];then
+        debugshell
+        fi
+     fi
+else
+    # The oem-preinst-hook-dir hook
+    if [ -d $OEM_PREINST_HOOK_DIR ]; then
+        echo "[Factory Restore Prehook] Run scripts in $OEM_PREINST_HOOK_DIR"
+        export RECOVERYTYPE=$recoverytype
+        export RECOVERYPART=$recovery_part
+        export RECOVERYMNT=$RECO_MNT
+        find "$OEM_PREINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
 
         if [ $? != 0 ];then
             debugshell
@@ -181,23 +98,14 @@ if [ $recoverytype != "headless_installer" ]; then
     fi
 fi
 
+# disable subiquity
+COREFILE=$(egrep 'core_[0-9]{1,10}.snap' /root/var/lib/snapd/seed/seed.yaml)
+cat << EOF > /root/var/lib/snapd/seed/seed.yaml
+snaps:
+ - name: core
+   channel: stable
+$COREFILE
+EOF
 
-# The prereboot hook not needed in headless_installer
-if [ $recoverytype != "headless_installer" ]; then
-    if [ $ret != 85 -a -d $OEM_PREREBOOT_HOOK_DIR ]; then
-        echo "[Factory Install Prereboot hook] Run scripts in $OEM_PREREBOOT_HOOK_DIR"
-        export RECOVERYTYPE=$recoverytype
-        export RECOVERYPART=$recovery_part
-        export RECOVERYMNT=$RECO_MNT
-        export RECOVERY_BIN_RETURN=$ret
-        find "$OEM_PREREBOOT_HOOK_DIR" -type f | sort | while read -r filename; do chroot $CHROOT sh "$filename"; done
-    fi
-fi
-# ERESTART is errno 85 which restart system requirest from recovery.bin
-if [ $ret == 0 ] && [ "headless_installer" == $recoverytype ]; then
-    poweroff
-elif [ $ret != 0 ] && [ $ret != 85 ]; then
-    debugshell
-fi
-
-reboot
+mkdir /run/subiquity
+touch /run/subiquity/complete
