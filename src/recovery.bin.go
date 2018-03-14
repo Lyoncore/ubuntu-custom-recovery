@@ -297,6 +297,15 @@ func main() {
 	log.Printf("RECOVERY_LABEL: %s", RecoveryLabel)
 	log.Printf("RECOVERY_OS: %s", RecoveryOS)
 
+	// setup environment for ubuntu server curtin
+	if RecoveryOS == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
+		log.Println("Recovery in ubuntu classic curtin mode.")
+		err := envForUbuntuClassicCurtin()
+		if err != nil {
+			os.Exit(-1)
+		}
+	}
+
 	parseConfigs(CONFIG_YAML)
 
 	// Find boot device, all other partiitons info
