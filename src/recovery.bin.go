@@ -44,7 +44,6 @@ const (
 	ASSERTION_BACKUP_DIR = "/tmp/assert_backup/"
 	RECO_ROOT_DIR        = "/run/recovery/"
 	CONFIG_YAML          = RECO_ROOT_DIR + "recovery/config.yaml"
-	CONFIG_GADGET_YAML   = RECO_ROOT_DIR + "recovery/gadget.yaml"
 	WRITABLE_MNT_DIR     = "/tmp/writableMnt/"
 	SYSBOOT_MNT_DIR      = "/tmp/system-boot/"
 	RECO_TAR_MNT_DIR     = "/tmp/recoMnt/"
@@ -77,7 +76,6 @@ const (
 )
 
 var configs rplib.ConfigRecovery
-var gadgetInfo rplib.GadgetInfo
 var RecoveryType string
 var RecoveryLabel string
 var RecoveryOS string
@@ -103,16 +101,6 @@ func parseConfigs(configFilePath string) {
 	log.Println(configs)
 }
 
-func getSysbootSizeFromYaml(gadgetPath string) (int, error) {
-	// Load config.yaml
-	err := gadgetInfo.Load(gadgetPath)
-	if err != nil {
-		return -1, err
-	}
-
-	return gadgetInfo.GetVolumeSizebyLabel(SysbootLabel)
-}
-
 // easier for function mocking
 var getPartitions = GetPartitions
 var restoreParts = RestoreParts
@@ -128,7 +116,7 @@ func getBootEntryName(recoveryos string) string {
 	return rplib.BOOT_ENTRY_SNAPPY
 }
 
-func preparePartitions(parts *Partitions) {
+func preparePartitions(parts *Partitions, recoveryos string) {
 	// TODO: verify the image
 	// If this is user triggered factory restore (first time is in factory and should happen automatically), ask user for confirm.
 	var timeout int64
@@ -149,7 +137,7 @@ func preparePartitions(parts *Partitions) {
 
 	// rebuild the partitions
 	log.Println("[rebuild the partitions]")
-	restoreParts(parts, configs.Configs.Bootloader, configs.Configs.PartitionType)
+	restoreParts(parts, configs.Configs.Bootloader, configs.Configs.PartitionType, recoveryos)
 
 	//Mount writable for logger and restore data
 	if _, err := os.Stat(WRITABLE_MNT_DIR); err != nil {
@@ -231,6 +219,8 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 		log.Println("[Update fstab]")
 		err = updateFstab(parts, recoveryos)
 		rplib.Checkerr(err)
+	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
+
 	}
 
 	switch RecoveryType {
@@ -281,7 +271,7 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 
 var syscallUnMount = syscall.Unmount
 
-func cleanupPartitions() {
+func cleanupPartitions(recoveryos string) {
 	syscallUnMount(WRITABLE_MNT_DIR, 0)
 	syscallUnMount(SYSBOOT_MNT_DIR, 0)
 }
@@ -333,15 +323,17 @@ func main() {
 		os.Exit(0)
 	}
 
-	sizeMB, err := getSysbootSizeFromYaml(CONFIG_GADGET_YAML)
-	if err == nil {
-		SetPartitionStartEnd(parts, SysbootLabel, sizeMB, configs.Configs.Bootloader)
+	// The bootsize must larger than 50MB
+	if configs.Configs.BootSize >= 50 {
+		SetPartitionStartEnd(parts, SysbootLabel, configs.Configs.BootSize, configs.Configs.Bootloader)
+	} else {
+		log.Println("Invalid bootsize in config.yaml:", configs.Configs.BootSize)
 	}
-	sizeMB, err = strconv.Atoi(configs.Configs.SwapSize)
-	if err == nil {
-		SetPartitionStartEnd(parts, SwapLabel, sizeMB, configs.Configs.Bootloader)
+
+	if configs.Configs.Swap == true && configs.Configs.SwapSize > 0 {
+		SetPartitionStartEnd(parts, SwapLabel, configs.Configs.SwapSize, configs.Configs.Bootloader)
 	}
-	preparePartitions(parts)
-	recoverProcess(parts, RecoveryOS)
-	cleanupPartitions()
+	preparePartitions(parts, RecoveryOS)
+	//recoverProcess(parts, RecoveryOS)
+	cleanupPartitions(RecoveryOS)
 }

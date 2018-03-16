@@ -25,11 +25,13 @@ type ConfigRecovery struct {
 		PartitionType string `yaml:"partition-type"`
 		Bootloader    string `yaml:"bootloader"`
 		Swap          bool
-		SwapSize      string
+		SwapSize      int
+		BootSize      int `yaml:"bootsize"`
+		RootfsSize    int `yaml:"rootfssize,omitempty"`
 	}
 	Recovery struct {
 		Type                       string // one of "field_transition", "factory_install"
-		RecoverySize               string
+		RecoverySize               int
 		FsLabel                    string `yaml:"filesystem-label"`
 		RecoveryDevice             string `yaml:"recovery-device"`
 		SystemDevice               string `yaml:"system-device"`
@@ -106,7 +108,7 @@ func (config *ConfigRecovery) checkConfigs() (err error) {
 		log.Printf(err.Error())
 	}
 
-	if config.Configs.SwapSize == "" {
+	if config.Configs.Swap == true && config.Configs.SwapSize <= 0 {
 		err = errors.New("'configs -> swapsize' field not presented")
 		log.Printf(err.Error())
 	}
@@ -119,8 +121,8 @@ func (config *ConfigRecovery) checkConfigs() (err error) {
 		log.Printf(err.Error())
 	}
 
-	if config.Recovery.RecoverySize == "" {
-		err = errors.New("'recovery -> recoverysize' field not presented")
+	if config.Recovery.RecoverySize <= 0 {
+		err = errors.New("'recovery -> recoverysize' must larger than 0")
 		log.Printf(err.Error())
 	}
 

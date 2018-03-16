@@ -84,7 +84,7 @@ func (s *MainTestSuite) TestpreparePartitions(c *C) {
 	defer func() { getPartitions = origGetPartitions }()
 
 	origRestoreParts := restoreParts
-	restoreParts = func(parts *Partitions, bootloader string, partType string) error {
+	restoreParts = func(parts *Partitions, bootloader string, partType string, recoveryos string) error {
 		// check if RestoreParts is caled correctly with *parts returned
 		c.Assert(parts.SourceDevNode, Equals, "testSrcdevnode")
 		c.Assert(parts.SourceDevPath, Equals, "testSrcdevpath")
