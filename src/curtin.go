@@ -11,6 +11,15 @@ import (
 	rplib "github.com/Lyoncore/ubuntu-custom-recovery/src/rplib"
 )
 
+const (
+	CURTIN_INSTALL_TARGET = "/target/"
+	CURTIN_BOOT_MNT       = CURTIN_INSTALL_TARGET + "boot/efi"
+	NOCLOUDNETDIR         = CURTIN_INSTALL_TARGET + "var/lib/cloud/seed/nocloud-net/"
+	CLOUDMETA             = NOCLOUDNETDIR + "meta-data"
+	CLOUDUSER             = NOCLOUDNETDIR + "user-data"
+	CLOUD_DSIDENTITY      = CURTIN_INSTALL_TARGET + "etc/cloud/ds-identify.cfg"
+)
+
 type CurtinConf struct {
 	Install struct {
 		SaveInstallConfig string `yaml:"save_install_config,omitempty"`
@@ -58,7 +67,7 @@ partitioning_commands:
 install:
   save_install_config: /var/log/recovery/curtin-recovery-cfg.yaml
   save_install_log: /var/log/recovery/curtin-recovery.log
-  target: /target
+  target: ###INSTALL_TARGET###
   unmount: disabled
 reporting:
   recovery-bin:
@@ -77,6 +86,17 @@ storage:
   - {id: mount-boot, type: mount, device: fs-boot, path: /boot/efi, preserve: true}
   version: 1
 verbosity: 3
+`
+const COULD_INIT_DEFALUT_USER_DATA = `
+hostname: ###HOSTNAME###
+users:
+- gecos: ###REALNAME###
+  groups: [adm, cdrom, dip, lpadmin, plugdev, sambashare, debian-tor, libvirtd, lxd,
+    sudo]
+  lock-passwd: false
+  name: ###USERNAME###
+  passwd: ###PASSWDSALTED###
+  shell: /bin/bash
 `
 
 func envForUbuntuClassicCurtin() error {
@@ -100,6 +120,7 @@ func envForUbuntuClassicCurtin() error {
 func generateCurtinConf(parts *Partitions) error {
 	var curtinCfg string
 	curtinCfg = strings.Replace(CURTIN_DEFAULT_CONF_CONTENTS, "###DISK_PATH###", parts.TargetDevPath, -1)
+	curtinCfg = strings.Replace(curtinCfg, "###INSTALL_TARGET###", CURTIN_INSTALL_TARGET, -1)
 	curtinCfg = strings.Replace(curtinCfg, "###RECO_PART_SIZE###", strconv.FormatInt(int64(configs.Recovery.RecoverySize*1024*1024), 10), -1)
 	if configs.Configs.BootSize > 0 {
 		curtinCfg = strings.Replace(curtinCfg, "###BOOT_PART_SIZE###", strconv.FormatInt(int64(configs.Configs.BootSize*1024*1024), 10), -1)
@@ -138,10 +159,66 @@ func runCurtin() error {
 	return nil
 }
 
-func writeCloudInitConf() error {
+/*
+func writeCloudInitConf(parts *Partitions) error {
+	if _, err := os.Stat(NOCLOUDNETDIR); err != nil {
+		err := os.MkdirAll(NOCLOUDNETDIR, 0755)
+		if err != nil {
+			return err
+		}
+	}
+
+	// write meta-data
+	log.Println("writing the cloud-init meta")
+	uuid, err := exec.Command("uuidgen").Output()
+	if err != nil {
+		log.Println("generate uuid failed")
+		return err
+	}
+	meta_data_content := fmt.Sprintf("{instance-id: %s}", uuid)
+	f_meta_data, err := os.Create(CLOUDMETA)
+	if err != nil {
+		fmt.Println("create cloud-init meta file failed, File:", CLOUDMETA)
+		return err
+	}
+	if _, err := f_meta_data.WriteString(meta_data_content); err != nil {
+		fmt.Println("write cloud-init meta file failed, File:", CLOUDMETA)
+		return err
+	}
+
+	// write user-data
+	log.Println("writing the cloud-init user")
+	//FIXME
+	user_data_content := strings.Replace(COULD_INIT_DEFALUT_USER_DATA, "###HOSTNAME###", fixme, -1)
+	user_data_content = strings.Replace(user_data_content, "###REALNAME###", fixme, -1)
+	user_data_content = strings.Replace(user_data_content, "###USERNAME###", fixme, -1)
+	user_data_content = strings.Replace(user_data_content, "###PASSWDSALTED###", fixme, -1)
+	f_user_data, err := os.Create(CLOUDUSER)
+	if err != nil {
+		fmt.Println("create cloud-init user-data file failed, File:", CLOUDUSER)
+		return err
+	}
+	if _, err := f_user_data.WriteString(user_data_content); err != nil {
+		fmt.Println("write cloud-init user-data file failed, File:", CLOUDUSER)
+		return err
+	}
+
+	// write ds-identity
+	f_ds_identity, err := os.Create(CLOUD_DSIDENTITY)
+	if err != nil {
+		fmt.Println("create cloud-init ds-identity file failed, File:", CLOUD_DSIDENTITY)
+		return err
+	}
+	if _, err := f_ds_identity.WriteString("policy: enabled"); err != nil {
+		fmt.Println("write cloud-init ds-identity file failed, File:", CLOUD_DSIDENTIY)
+		return err
+	}
+
+	syscall.Unmount(CURTIN_BOOT_MNT, 0)
+	syscall.Unmount(CURTIN_INSTALL_TARGET, 0)
 	return nil
 }
-
+*/
 // 1. generate curtin config
 // 2. call curtin
 // 3. write cloud-init files

@@ -515,11 +515,9 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 	rplib.Shellexec("udevadm", "settle")
 
 	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, writable_path)
-	// Curtin will handle the partition mounting and partition restore
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
-		err = generateCurtinConf(parts)
-		err = runCurtin()
-		return err
+		// Curtin will handle the partition mounting and partition restore
+		return nil
 	} else {
 		err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
 		rplib.Checkerr(err)

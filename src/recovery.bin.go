@@ -220,7 +220,8 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 		err = updateFstab(parts, recoveryos)
 		rplib.Checkerr(err)
 	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
-
+		// Do nothing here if using curtin
+		return
 	}
 
 	switch RecoveryType {
@@ -334,6 +335,6 @@ func main() {
 		SetPartitionStartEnd(parts, SwapLabel, configs.Configs.SwapSize, configs.Configs.Bootloader)
 	}
 	preparePartitions(parts, RecoveryOS)
-	//recoverProcess(parts, RecoveryOS)
+	recoverProcess(parts, RecoveryOS)
 	cleanupPartitions(RecoveryOS)
 }

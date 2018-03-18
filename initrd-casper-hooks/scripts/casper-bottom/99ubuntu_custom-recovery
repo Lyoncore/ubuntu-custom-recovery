@@ -1,4 +1,4 @@
-#! /bin/sh -ex
+#! /bin/sh -x
 # initramfs casper-bottom script for recovery
 
 # redirect output to serial console, since the HDMI output not enabled
@@ -28,10 +28,7 @@ esac
 
 recoverytype=
 recoveryos=ubuntu_server_curtin
-BASE=/run/initramfs
 RECO_MNT=/root/cdrom
-OSROOTFS=$BASE/osrootfs/
-CHROOT=$BASE/chroot/
 OEM_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/factory-restore-prehook
 OEM_POSTINST_HOOK_DIR=$RECO_MNT/recovery/factory/factory-restore-posthook
 OEM_PREREBOOT_HOOK_DIR=$RECO_MNT/recovery/factory/factory-install-prehook
@@ -80,9 +77,23 @@ if [ $recoverytype == "headless_installer" ]; then
         find "$OEM_HEADLESS_INSTALLER_PREINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
 
         if [ $? != 0 ];then
-        debugshell
+            debugshell
         fi
-     fi
+    fi
+    # disable subiquity
+    COREFILE=$(egrep 'core_[0-9]{1,10}.snap' /root/var/lib/snapd/seed/seed.yaml)
+    cat << EOF > /root/var/lib/snapd/seed/seed.yaml
+snaps:
+ - name: core
+   channel: stable
+$COREFILE
+EOF
+    mkdir /run/subiquity
+    touch /run/subiquity/complete
+
+    # inject systemd service for recovery.bin for headless_installer
+    cp $RECO_MNT/recovery/systemd/ubuntu-custom-recovery.service /root/lib/systemd/system/ubuntu-custom-recovery.service
+    ln -s /lib/systemd/system/ubuntu-custom-recovery.service /root/etc/systemd/system/multi-user.target.wants/ubuntu-custom-recovery.service
 else
     # The oem-preinst-hook-dir hook
     if [ -d $OEM_PREINST_HOOK_DIR ]; then
@@ -96,16 +107,19 @@ else
             debugshell
         fi
     fi
+
+    # workaround for subiquity does not supprot answer for user partition setting
+    # copy the curtin-wrapper to /usr/local/bin/curtin
+    cp $RECO_MNT/recovery/bin/curtin-wrapper /root/usr/local/bin/curtin
+    chmod a+x /root/usr/local/bin/curtin
+
+    # copy the subiquity answer file
+    mkdir /root//subiquity_config/
+    cp $RECO_MNT/recovery/answers.yaml /root/subiquity_config/answers.yaml
+
+    #XXX debug
+    #rm /root/lib/systemd/system/serial-getty@.service.d/subiquity-serial.conf
+    # The curtin-wrapper will edit subiquity curtin config file
+    # Call recovery.bin to do the partitioning
+    # Call the real curtin to do the image installation
 fi
-
-# disable subiquity
-COREFILE=$(egrep 'core_[0-9]{1,10}.snap' /root/var/lib/snapd/seed/seed.yaml)
-cat << EOF > /root/var/lib/snapd/seed/seed.yaml
-snaps:
- - name: core
-   channel: stable
-$COREFILE
-EOF
-
-mkdir /run/subiquity
-touch /run/subiquity/complete
