@@ -31,7 +31,19 @@ if [ -n "$curtin_conf" ]; then
         esac
     done
     LABEL=$(awk -F ": " '/filesystem-label/{print $2 }' /cdrom/recovery/config.yaml)
+
+    # check the swap partition is been enabled
+    # it needs to be off or it cannot do the repartition
+    swapdev=$(swapon --noheadings | cut -d " " -f 1)
+    if [ -n "$swapdev" ]; then
+        swapoff $swapdev
+    fi
+
+    # run the recovery.bin
     /cdrom/recovery/bin/recovery.bin $recoverytype $LABEL $recoveryos
+    if [ $? != 0 ]; then
+        exit 1
+    fi
 fi
 
 # curtin to process the installation
