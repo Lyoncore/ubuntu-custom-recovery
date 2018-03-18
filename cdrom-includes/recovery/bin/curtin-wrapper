@@ -32,6 +32,9 @@ if [ -n "$curtin_conf" ]; then
     done
     LABEL=$(awk -F ": " '/filesystem-label/{print $2 }' /cdrom/recovery/config.yaml)
 
+    # install efibootmgr if it's not been installed by default
+    apt install -y efibootmgr
+
     # check the swap partition is been enabled
     # it needs to be off or it cannot do the repartition
     swapdev=$(swapon --noheadings | cut -d " " -f 1)
@@ -41,7 +44,9 @@ if [ -n "$curtin_conf" ]; then
 
     # run the recovery.bin
     /cdrom/recovery/bin/recovery.bin $recoverytype $LABEL $recoveryos
-    if [ $? != 0 ]; then
+    if [ $? == 85 ]; then
+        reboot
+    elif [ $? != 0 ]; then
         exit 1
     fi
 fi
