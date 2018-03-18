@@ -1,8 +1,8 @@
 project: generic-amd64
 configs:
   arch: amd64
-  swap: off
-  swapsize: 0
+  swap: on
+  swapsize: 256 
   bootsize: 512
   rootfssize: -1
   release: 18
