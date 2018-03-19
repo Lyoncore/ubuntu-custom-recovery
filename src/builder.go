@@ -350,7 +350,17 @@ func releaseDhcp() error {
 	return cmd.Run()
 }
 
-func ConfirmRecovry(in *os.File, timeout int64) bool {
+func ConfirmRecovry(in *os.File, timeout int64, recoveryos string) bool {
+	const (
+		msg1                = "Factory Restore: "
+		msg2                = "Factory Restore will delete all user data, are you sure? [y/N] "
+		msg3                = "(press [y] + [enter] to confirm) "
+		event_start         = "start"
+		event_finish        = "finish"
+		curtin_yaml         = "/var/log/installer/subiquity-curtin-install.conf"
+		subiquity_msgsender = RECO_ROOT_DIR + "recovery/bin/subiquity-msgsender"
+	)
+
 	//Get user input, if in is nil
 	if in == nil {
 		in = os.Stdin
@@ -369,6 +379,13 @@ func ConfirmRecovry(in *os.File, timeout int64) bool {
 	}
 	log.Println("Wait user confirmation timeout:", timeout, "sec")
 	log.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
+
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
+		rplib.Shellexec(subiquity_msgsender, "-c", curtin_yaml, "-m", msg1, "-e", event_start)
+		rplib.Shellexec(subiquity_msgsender, "-c", curtin_yaml, "-m", msg2, "-e", event_start)
+		rplib.Shellexec(subiquity_msgsender, "-c", curtin_yaml, "-m", msg2, "-e", event_finish)
+		rplib.Shellexec(subiquity_msgsender, "-c", curtin_yaml, "-m", msg3, "-e", event_start)
+	}
 
 	tty1, err := os.Open("/dev/tty1")
 	if err != nil {
@@ -395,12 +412,21 @@ func ConfirmRecovry(in *os.File, timeout int64) bool {
 		log.Println("response:", s)
 	case <-time.After(time.Second * time.Duration(timeout)):
 		log.Println("Timeout:", timeout, "sec. Reboot system!")
+		if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
+			rplib.Shellexec(subiquity_msgsender, "-c", curtin_yaml, "-m", "Timeout. Reboot system!", "-e", event_start)
+		}
 	}
 
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("4 4 1 7"), 0644)
 	if configs.Recovery.RestoreConfirmPosthookFile != "" {
 		hooks.RestoreConfirmPosthook.SetPath(HOOKS_DIR + configs.Recovery.RestoreConfirmPosthookFile)
 	}
+
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
+		rplib.Shellexec(subiquity_msgsender, "-c", curtin_yaml, "-m", msg3, "-e", event_finish)
+		rplib.Shellexec(subiquity_msgsender, "-c", curtin_yaml, "-m", msg1, "-e", event_finish)
+	}
+
 	if "y" != input && "Y" != input {
 		if hooks.RestoreConfirmPosthook.IsHookExist() {
 			err := hooks.RestoreConfirmPosthook.Run(RECO_ROOT_DIR, true, "USERCONFIRM", "no")

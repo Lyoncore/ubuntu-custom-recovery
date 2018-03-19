@@ -127,7 +127,7 @@ func preparePartitions(parts *Partitions, recoveryos string) {
 			timeout = 300
 		}
 
-		if ConfirmRecovry(nil, timeout) == false {
+		if ConfirmRecovry(nil, timeout, recoveryos) == false {
 			os.Exit(0x55) //ERESTART
 		}
 
