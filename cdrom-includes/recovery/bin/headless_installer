@@ -14,6 +14,12 @@ systemctl stop serial-getty@ttyS0.service
 systemctl disable serial-getty@ttyS0.service
 systemctl daemon-reload
 
+# check the swap partition is been enabled
+# it needs to be off or it cannot do the repartition
+swapdev=$(swapon --noheadings | cut -d " " -f 1)
+if [ -n "$swapdev" ]; then
+    swapoff $swapdev
+fi
 # trigger headless_installer
 /cdrom/recovery/bin/recovery.bin headless_installer INSTALLER ubuntu_classic_curtin
 
