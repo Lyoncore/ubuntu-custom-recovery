@@ -44,9 +44,10 @@ if [ -n "$curtin_conf" ]; then
 
     # run the recovery.bin
     /cdrom/recovery/bin/recovery.bin $recoverytype $LABEL $recoveryos
-    if [ $? == 85 ]; then
+    ret=$?
+    if [ $ret == 85 ]; then
         reboot
-    elif [ $? != 0 ]; then
+    elif [ $ret != 0 ]; then
         exit 1
     fi
 fi
