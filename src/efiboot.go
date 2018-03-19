@@ -15,6 +15,7 @@ import (
 
 const EFIBOOTMGR = "efibootmgr"
 const LOADER = "\\EFI\\BOOT\\BOOTX64.EFI"
+const SHIMLOADER = "\\EFI\\UBUNTU\\SHIMX64.EFI"
 
 func findSysBootEfi(parts *Partitions) (string, error) {
 	// find out the boot efi name
@@ -30,16 +31,25 @@ func findSysBootEfi(parts *Partitions) (string, error) {
 	var efiFile string
 	err := filepath.Walk(SYSBOOT_MNT_DIR, func(path string, f os.FileInfo, er error) error {
 		if !f.IsDir() {
-			if r, err := regexp.MatchString("(?i)bootx64.efi", f.Name()); err == nil && r {
-				efiFile = strings.Trim(path, SYSBOOT_MNT_DIR)
-				return io.EOF
-			} else if r, err := regexp.MatchString("(?i)shimx64.efi", f.Name()); err == nil && r {
-				efiFile = strings.Trim(path, SYSBOOT_MNT_DIR)
+			if r, err := regexp.MatchString("(?i)shimx64.efi", f.Name()); err == nil && r {
+				efiFile = "/" + strings.Trim(path, SYSBOOT_MNT_DIR)
 				return io.EOF
 			}
 		}
 		return nil
 	})
+
+	if err == nil {
+		err = filepath.Walk(SYSBOOT_MNT_DIR, func(path string, f os.FileInfo, er error) error {
+			if !f.IsDir() {
+				if r, err := regexp.MatchString("(?i)bootx64.efi", f.Name()); err == nil && r {
+					efiFile = "/" + strings.Trim(path, SYSBOOT_MNT_DIR)
+					return io.EOF
+				}
+			}
+			return nil
+		})
+	}
 
 	if err == io.EOF {
 		err = nil

@@ -107,13 +107,11 @@ var restoreParts = RestoreParts
 var syscallMount = syscall.Mount
 
 func getBootEntryName(recoveryos string) string {
-	switch RecoveryOS {
-	case rplib.RECOVERY_OS_UBUNTU_CORE:
+	if RecoveryOS == rplib.RECOVERY_OS_UBUNTU_CORE {
 		return rplib.BOOT_ENTRY_SNAPPY
-	case rplib.RECOVERY_OS_UBUNTU_CLASSIC:
-		return rplib.BOOT_ENTRY_UBUNTU_CLASSIC
 	}
-	return rplib.BOOT_ENTRY_SNAPPY
+
+	return rplib.BOOT_ENTRY_UBUNTU_CLASSIC
 }
 
 func preparePartitions(parts *Partitions, recoveryos string) {
