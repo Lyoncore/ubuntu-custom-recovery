@@ -74,6 +74,9 @@ def process_curtin_yaml(curtin_yaml, recovery_yaml):
 
     # add post-hook for recovery process
     curtin_yaml['late_commands'] = {'recovery_post': '/cdrom/recovery/bin/recovery_post.sh'}
+
+    # grub
+    curtin_yaml['grub'] = {'update_nvram': False}
     print(yaml.dump(curtin_yaml))
 
 def main():
