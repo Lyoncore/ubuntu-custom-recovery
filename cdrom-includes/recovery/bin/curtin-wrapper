@@ -5,6 +5,7 @@ if [ ! -d /var/log/recovery ]; then
 fi
 
 exec &> >(tee -a "/var/log/recovery/curtin-wrapper.log")
+RECO_MNT="/run/recovery"
 
 curtin_conf=""
 while getopts "c:" opt 2> /dev/null; do
@@ -13,6 +14,23 @@ while getopts "c:" opt 2> /dev/null; do
         ;;
     esac
 done
+
+wait_subiquity_and_reboot() {
+    set +x
+    # wait for subiquity finish and reboot system
+    # the log will be created when subiquity finish
+    while [ ! -f "/target/var/log/installer/installer-journal.txt" ]
+    do
+        sleep 1
+    done
+
+    sleep 10
+
+    # if curtin error ocurred, do not reboot
+    if [ ! -f "/var/log/curtin/curtin-error-logs.tar" ]; then
+        reboot
+    fi
+}
 
 if [ -n "$curtin_conf" ]; then
     # curtin-cfe to edit the partition
@@ -43,14 +61,36 @@ if [ -n "$curtin_conf" ]; then
     fi
 
     # run the recovery.bin
-    /cdrom/recovery/bin/recovery.bin $recoverytype $LABEL $recoveryos
-    ret=$?
+    /cdrom/recovery/bin/recovery.bin $recoverytype $LABEL $recoveryos 2>&1 | tee /var/log/recovery/recovery.bin.prelog
+
+    ret=${PIPESTATUS[0]}
     if [ $ret == 85 ]; then
         reboot
     elif [ $ret != 0 ]; then
+        cp /var/log/recovery/recovery.bin.prelog /var/log/recovery/recovery.bin.prelog.err
+        # run the hook if the log needs to be reloaction, please make it in hook
+        # see the pre-reboot-hook-runner.sh code
+        $RECO_MNT/recovery/bin/pre-reboot-hook-runner.sh
         exit 1
     fi
+
+    # schedule a reboot when subiquity complete
+    wait_subiquity_and_reboot &
 fi
 
 # curtin to process the installation
 /usr/bin/curtin $@
+
+ret=$?
+
+
+# the curtin error
+if [ $ret != 0 ]; then
+    cp /var/log/curtin/* /var/log/recovery/
+    cp /var/log/installer/* /var/log/recovery/
+    # run the hook if the log needs to be reloaction, please make it in hook
+    # see the pre-reboot-hook-runner.sh code
+    $RECO_MNT/recovery/bin/pre-reboot-hook-runner.sh
+fi
+
+exit $ret
