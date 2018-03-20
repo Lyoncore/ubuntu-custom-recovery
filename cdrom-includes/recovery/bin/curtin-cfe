@@ -14,7 +14,11 @@ def find_mountdevice(path):
     for l in open("/proc/mounts", "r"):
         mp = l.split(" ")[1]
         dev = l.split(" ")[0]
-        if(mp != "/" and path.find(mp)==0): return dev[:-1] 
+        if(mp != "/" and path.find(mp)==0):
+            if 'mmcblk' in dev:
+                return dev[:-2]
+            else:
+                return dev[:1]
     return None
 
 def process_curtin_yaml(curtin_yaml, recovery_yaml):
