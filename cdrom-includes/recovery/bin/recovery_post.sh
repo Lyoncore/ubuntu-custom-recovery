@@ -32,13 +32,23 @@ del_old_boot_entries() {
 
 rebuild_boot_entries() {
     recovery=$(mount | grep cdrom | cut -d " " -f 1) # it would find cdrom mount
-    recovery_dev=$(echo $recovery | sed 's/.$//')
-    recovery_part=$(echo $recovery | tr -d $recovery_dev)
+    if [[ $recovery = *"mmcblk"* ]]; then
+        recovery_dev=${recovery::-2}
+    else
+        recovery_dev=${recovery::-1}
+    fi
+
+    recovery_part=${recovery: -1}
     efibootmgr -c -d $recovery_dev -p $recovery_part -l "\\EFI\\BOOT\\BOOTX64.EFI" -L $RECOVERY_ENTRY
 
     boot=$(mount | grep boot | cut -d " " -f 1)  # it would find boot/efi mount
-    boot_dev=$(echo $boot | sed 's/.$//')
-    boot_part=$(echo $boot | tr -d $boot_dev)
+    if [[ $boot = *"mmcblk"* ]]; then
+        boot_dev=${boot::-2}
+    else
+        boot_dev=${boot::-1}
+    fi
+
+    boot_part=${boot: -1}
     efibootmgr -c -d $boot_dev -p $boot_part -l "\\EFI\\ubuntu\\shimx64.efi" -L $OS_ENTRY
 }
 
