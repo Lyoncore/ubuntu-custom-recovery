@@ -58,14 +58,6 @@ hookdir=$(grep 'oem-preinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{
 if [ ! -z $hookdir ]; then
     OEM_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/$hookdir
 fi
-hookdir=$(grep 'oem-postinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
-if [ ! -z $hookdir ]; then
-    OEM_POSTINST_HOOK_DIR=$RECO_MNT/recovery/factory/$hookdir
-fi
-hookdir=$(grep 'oem-prereboot-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
-if [ ! -z $hookdir ]; then
-    OEM_PREREBOOT_HOOK_DIR=$RECO_MNT/recovery/factory/$hookdir
-fi
 
 # The oem-headless-installer-preinst-hook-dir hook
 if [ $recoverytype == "headless_installer" ]; then
