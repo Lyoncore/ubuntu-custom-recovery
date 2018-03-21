@@ -88,7 +88,7 @@ menuentry "Factory Restore" {
         echo "[grub.cfg] load factory_restore system"
         search --no-floppy --set --label "$LABEL"
         echo "[grub.cfg] root: \${root}"
-        set cmdline="file=/cdrom/preseed/oem-ubuntu-server.seed boot=casper union=aufs console=tty1 console=ttyS0,115200n8 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=$LABEL recoveryos=ubuntu_classic_curtin"
+        set cmdline="file=/cdrom/preseed/oem-ubuntu-server.seed boot=casper union=aufs console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=$LABEL recoveryos=ubuntu_classic_curtin"
         echo "[grub.cfg] loading kernel..."
         linux (\$root)/casper/vmlinuz \$cmdline
         echo "[grub.cfg] loading initrd..."
