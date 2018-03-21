@@ -18,7 +18,7 @@ def find_mountdevice(path):
             if 'mmcblk' in dev:
                 return dev[:-2]
             else:
-                return dev[:1]
+                return dev[:-1]
     return None
 
 def process_curtin_yaml(curtin_yaml, recovery_yaml):
