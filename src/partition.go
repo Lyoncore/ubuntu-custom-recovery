@@ -517,6 +517,12 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, writable_path)
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
 		// Curtin will handle the partition mounting and partition restore
+		err := generateCurtinConf(parts)
+		rplib.Checkerr(err)
+		err = runCurtin()
+		rplib.Checkerr(err)
+		err = writeCloudInitConf(parts)
+		rplib.Checkerr(err)
 		return nil
 	} else {
 		err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)

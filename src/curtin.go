@@ -2,11 +2,15 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
+
+	"gopkg.in/yaml.v2"
 
 	rplib "github.com/Lyoncore/ubuntu-custom-recovery/src/rplib"
 )
@@ -18,6 +22,7 @@ const (
 	CLOUDMETA             = NOCLOUDNETDIR + "meta-data"
 	CLOUDUSER             = NOCLOUDNETDIR + "user-data"
 	CLOUD_DSIDENTITY      = CURTIN_INSTALL_TARGET + "etc/cloud/ds-identify.cfg"
+	SUBIQUITY_ANSWERS     = RECO_ROOT_DIR + "recovery/answers.yaml"
 )
 
 type CurtinConf struct {
@@ -86,6 +91,10 @@ storage:
   - {id: mount-boot, type: mount, device: fs-boot, path: /boot/efi, preserve: true}
   version: 1
 verbosity: 3
+grub:
+  update_nvram: False
+late_commands:
+  recovery_post: /cdrom/recovery/bin/recovery_post.sh
 `
 const COULD_INIT_DEFALUT_USER_DATA = `
 hostname: ###HOSTNAME###
@@ -159,7 +168,27 @@ func runCurtin() error {
 	return nil
 }
 
-/*
+func findAnswer(answersyaml string, head string, item string) (string, error) {
+	yamlFile, err := ioutil.ReadFile(answersyaml)
+	if err != nil {
+		return "", err
+	}
+
+	m := make(map[interface{}]interface{})
+	err = yaml.Unmarshal(yamlFile, &m)
+
+	for k, v := range m {
+		if k == head {
+			for a, b := range v.(map[interface{}]interface{}) {
+				if a.(string) == item {
+					return b.(string), nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("Answers item not found\n")
+}
+
 func writeCloudInitConf(parts *Partitions) error {
 	if _, err := os.Stat(NOCLOUDNETDIR); err != nil {
 		err := os.MkdirAll(NOCLOUDNETDIR, 0755)
@@ -181,6 +210,7 @@ func writeCloudInitConf(parts *Partitions) error {
 		fmt.Println("create cloud-init meta file failed, File:", CLOUDMETA)
 		return err
 	}
+	defer f_meta_data.Close()
 	if _, err := f_meta_data.WriteString(meta_data_content); err != nil {
 		fmt.Println("write cloud-init meta file failed, File:", CLOUDMETA)
 		return err
@@ -188,16 +218,36 @@ func writeCloudInitConf(parts *Partitions) error {
 
 	// write user-data
 	log.Println("writing the cloud-init user")
-	//FIXME
-	user_data_content := strings.Replace(COULD_INIT_DEFALUT_USER_DATA, "###HOSTNAME###", fixme, -1)
-	user_data_content = strings.Replace(user_data_content, "###REALNAME###", fixme, -1)
-	user_data_content = strings.Replace(user_data_content, "###USERNAME###", fixme, -1)
-	user_data_content = strings.Replace(user_data_content, "###PASSWDSALTED###", fixme, -1)
+	realname, err := findAnswer(SUBIQUITY_ANSWERS, "Identity", "realname")
+	if err != nil {
+		fmt.Println("Finding realname error: ", err)
+		return err
+	}
+	username, err := findAnswer(SUBIQUITY_ANSWERS, "Identity", "username")
+	if err != nil {
+		fmt.Println("Finding username error: ", err)
+		return err
+	}
+	hostname, err := findAnswer(SUBIQUITY_ANSWERS, "Identity", "hostname")
+	if err != nil {
+		fmt.Println("Finding hostname error: ", err)
+		return err
+	}
+	passwd, err := findAnswer(SUBIQUITY_ANSWERS, "Identity", "password")
+	if err != nil {
+		fmt.Println("Finding password error: ", err)
+		return err
+	}
+	user_data_content := strings.Replace(COULD_INIT_DEFALUT_USER_DATA, "###HOSTNAME###", hostname, -1)
+	user_data_content = strings.Replace(user_data_content, "###REALNAME###", realname, -1)
+	user_data_content = strings.Replace(user_data_content, "###USERNAME###", username, -1)
+	user_data_content = strings.Replace(user_data_content, "###PASSWDSALTED###", passwd, -1)
 	f_user_data, err := os.Create(CLOUDUSER)
 	if err != nil {
 		fmt.Println("create cloud-init user-data file failed, File:", CLOUDUSER)
 		return err
 	}
+	defer f_user_data.Close()
 	if _, err := f_user_data.WriteString(user_data_content); err != nil {
 		fmt.Println("write cloud-init user-data file failed, File:", CLOUDUSER)
 		return err
@@ -209,8 +259,9 @@ func writeCloudInitConf(parts *Partitions) error {
 		fmt.Println("create cloud-init ds-identity file failed, File:", CLOUD_DSIDENTITY)
 		return err
 	}
+	defer f_ds_identity.Close()
 	if _, err := f_ds_identity.WriteString("policy: enabled"); err != nil {
-		fmt.Println("write cloud-init ds-identity file failed, File:", CLOUD_DSIDENTIY)
+		fmt.Println("write cloud-init ds-identity file failed, File:", CLOUD_DSIDENTITY)
 		return err
 	}
 
@@ -218,7 +269,7 @@ func writeCloudInitConf(parts *Partitions) error {
 	syscall.Unmount(CURTIN_INSTALL_TARGET, 0)
 	return nil
 }
-*/
+
 // 1. generate curtin config
 // 2. call curtin
 // 3. write cloud-init files
