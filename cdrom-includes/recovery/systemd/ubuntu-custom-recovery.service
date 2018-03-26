@@ -1,9 +1,9 @@
 [Unit]
-Description=The headless_installer for ubuntu-custom-recovery service
+Description=The recovery process for ubuntu-custom-recovery service
 
 [Service]
 StandardOutput=journal+console
-ExecStart=/bin/sh -c '/cdrom/recovery/bin/headless_installer > /dev/console'
+ExecStart=/bin/sh -c '/cdrom/recovery/bin/recovery_process > /dev/console'
 Type=oneshot
 RemainAfterExit=yes
 Environment=TERM=xterm
