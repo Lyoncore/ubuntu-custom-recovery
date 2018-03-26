@@ -17,11 +17,11 @@ import (
 
 const (
 	CURTIN_INSTALL_TARGET = "/target"
-	CURTIN_BOOT_MNT       = CURTIN_INSTALL_TARGET + "boot/efi"
-	NOCLOUDNETDIR         = CURTIN_INSTALL_TARGET + "var/lib/cloud/seed/nocloud-net/"
+	CURTIN_BOOT_MNT       = CURTIN_INSTALL_TARGET + "/boot/efi"
+	NOCLOUDNETDIR         = CURTIN_INSTALL_TARGET + "/var/lib/cloud/seed/nocloud-net/"
 	CLOUDMETA             = NOCLOUDNETDIR + "meta-data"
 	CLOUDUSER             = NOCLOUDNETDIR + "user-data"
-	CLOUD_DSIDENTITY      = CURTIN_INSTALL_TARGET + "etc/cloud/ds-identify.cfg"
+	CLOUD_DSIDENTITY      = CURTIN_INSTALL_TARGET + "/etc/cloud/ds-identify.cfg"
 	SUBIQUITY_ANSWERS     = RECO_ROOT_DIR + "recovery/answers.yaml"
 )
 
@@ -96,8 +96,7 @@ grub:
 late_commands:
   recovery_post: /cdrom/recovery/bin/recovery_post.sh
 `
-const COULD_INIT_DEFALUT_USER_DATA = `
-hostname: ###HOSTNAME###
+const COULD_INIT_DEFALUT_USER_DATA = `hostname: ###HOSTNAME###
 users:
 - gecos: ###REALNAME###
   groups: [adm, cdrom, dip, lpadmin, plugdev, sambashare, debian-tor, libvirtd, lxd,
@@ -204,7 +203,8 @@ func writeCloudInitConf(parts *Partitions) error {
 		log.Println("generate uuid failed")
 		return err
 	}
-	meta_data_content := fmt.Sprintf("{instance-id: %s}", uuid)
+	uuid_s := strings.TrimSuffix(string(uuid), "\n")
+	meta_data_content := fmt.Sprintf("{instance-id: %s}", uuid_s)
 	f_meta_data, err := os.Create(CLOUDMETA)
 	if err != nil {
 		fmt.Println("create cloud-init meta file failed, File:", CLOUDMETA)
