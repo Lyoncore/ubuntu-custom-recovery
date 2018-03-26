@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	CURTIN_INSTALL_TARGET = "/target/"
+	CURTIN_INSTALL_TARGET = "/target"
 	CURTIN_BOOT_MNT       = CURTIN_INSTALL_TARGET + "boot/efi"
 	NOCLOUDNETDIR         = CURTIN_INSTALL_TARGET + "var/lib/cloud/seed/nocloud-net/"
 	CLOUDMETA             = NOCLOUDNETDIR + "meta-data"
