@@ -37,8 +37,8 @@ if [ -n "$swapdev" ]; then
 fi
 # trigger recovery.bin 
 /cdrom/recovery/bin/recovery.bin $recoverytype $recoverylabel ubuntu_classic_curtin
-
-if [ $? -eq 0 ] && [ ! -f /var/log/curtin/curtin-error-logs.tar ]; then
+ret=$?
+if [ $ret -eq 0 ] && [ ! -f /var/log/curtin/curtin-error-logs.tar ]; then
     if [ "$recoverytype" != "headless_installer" ]; then
         #copy the log if success
         LABEL=$(awk -F ": " '/filesystem-label/{print $2 }' /cdrom/recovery/config.yaml)
@@ -51,7 +51,7 @@ if [ $? -eq 0 ] && [ ! -f /var/log/curtin/curtin-error-logs.tar ]; then
     else
         poweroff
     fi
-elif [ $? -eq 85 ]; then
+elif [ $ret -eq 85 ]; then
     reboot
 else
     #stop and generate the log
