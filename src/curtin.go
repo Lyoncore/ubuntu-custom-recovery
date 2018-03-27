@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -188,9 +190,15 @@ func generateCurtinConf(parts *Partitions) error {
 
 	curtYaml.Network.Version = 1
 	for dev := 0; dev < len(netdevs); dev++ {
+		mac := getMacAddr(netdevs[dev].name)
+		if mac == "" {
+			log.Println("Cannot find mac addr of network interface", netdevs[dev].name)
+			return fmt.Errorf("Cannot find mac addr of network interface %s", netdevs[dev].name)
+		}
 		netcfg := NetworkConfigContent{
-			Type: "physical",
-			Name: netdevs[dev].name,
+			Type:     "physical",
+			Name:     netdevs[dev].name,
+			Mac_addr: mac,
 
 			Subnets: SubnetsContent{
 				Type:    netdevs[dev].subnetsType,
@@ -299,6 +307,18 @@ func findNetworkAnswer(answersyaml string) ([]NetworkDevice, error) {
 		}
 	}
 	return netdevs, nil
+}
+
+func getMacAddr(ifname string) string {
+	interfaces, err := net.Interfaces()
+	if err == nil {
+		for _, i := range interfaces {
+			if bytes.Compare(i.HardwareAddr, nil) != 0 && i.Name == ifname {
+				return i.HardwareAddr.String()
+			}
+		}
+	}
+	return ""
 }
 
 func writeCloudInitConf(parts *Partitions) error {
