@@ -44,6 +44,16 @@ type CurtinConf struct {
 	}
 	Reporting map[string]ReportingContent `yaml:"reporting"`
 	Verbosity int                         `yaml: "verbosity,omitempty"`
+	Network   struct {
+		Config  []NetworkConfigContent `yaml:"config"`
+		Version int
+	}
+	Grub struct {
+		Updatenvram bool `yaml:"update_nvram"`
+	} `yaml:"grub"`
+	LateCommands struct {
+		RecoveryPost string `yaml:"recovery_post"`
+	} `yaml:"late_commands"`
 }
 
 type ReportingContent struct {
@@ -63,6 +73,19 @@ type StorageConfigContent struct {
 	Flag       string `yaml:"flag,omitempty"`
 	Fstype     string `yaml:"fstype,omitempty"`
 	Volume     string `yaml:"volume,omitempty"`
+}
+
+type NetworkConfigContent struct {
+	Type     string         `yaml:"type"`
+	Name     string         `yaml:"name"`
+	Mac_addr string         `yaml:"mac_address,omitempty"`
+	Subnets  SubnetsContent `yaml:"subnets"`
+}
+
+type SubnetsContent struct {
+	Type    string `yaml:"type"`
+	Address string `yaml:"address,omitempty"`
+	Gateway string `yaml:"gateway,omitempty"`
 }
 
 const CURTIN_CONF_FILE = "/tmp/curtin-recovery-cfg.yaml"
@@ -149,13 +172,48 @@ func generateCurtinConf(parts *Partitions) error {
 		return fmt.Errorf("Invalid rootfs size configured in config.yaml")
 	}
 
+	// get network configs
+	netdevs := []NetworkDevice{}
+	var err error
+	if netdevs, err = findNetworkAnswer(SUBIQUITY_ANSWERS); err != nil {
+		log.Println("The answers.yaml has wrong network config")
+		return err
+	}
+	curtYaml := CurtinConf{}
+	err = yaml.Unmarshal([]byte(curtinCfg), &curtYaml)
+	if err != nil {
+		log.Println("Curint config format error")
+		return err
+	}
+
+	curtYaml.Network.Version = 1
+	for dev := 0; dev < len(netdevs); dev++ {
+		netcfg := NetworkConfigContent{
+			Type: "physical",
+			Name: netdevs[dev].name,
+
+			Subnets: SubnetsContent{
+				Type:    netdevs[dev].subnetsType,
+				Address: netdevs[dev].address,
+				Gateway: netdevs[dev].gateway,
+			},
+		}
+		curtYaml.Network.Config = append(curtYaml.Network.Config, netcfg)
+	}
+
+	d, err := yaml.Marshal(&curtYaml)
+	if err != nil {
+		log.Println("The curtYaml format error ", err)
+		return err
+	}
+
 	f, err := os.Create(CURTIN_CONF_FILE)
 	if err != nil {
 		return fmt.Errorf("Create curtin conf file failed. File: %s", CURTIN_CONF_FILE)
 	}
 	defer f.Close()
 
-	if _, err := f.WriteString(curtinCfg); err != nil {
+	if _, err := f.WriteString(string(d)); err != nil {
 		return fmt.Errorf("Write curtin conf file failed. File: %s", CURTIN_CONF_FILE)
 	}
 
@@ -187,6 +245,60 @@ func findAnswer(answersyaml string, head string, item string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("Answers item not found\n")
+}
+
+type NetworkDevice struct {
+	name        string
+	subnetsType string
+	address     string
+	gateway     string
+}
+
+func findNetworkAnswer(answersyaml string) ([]NetworkDevice, error) {
+	netdevs := []NetworkDevice{}
+
+	yamlFile, err := ioutil.ReadFile(answersyaml)
+	if err != nil {
+		return nil, nil
+	}
+
+	m := make(map[interface{}]interface{})
+	err = yaml.Unmarshal(yamlFile, &m)
+
+	for k, v := range m {
+		if k == "Network" {
+			for _, a := range v.([]interface{}) {
+				var name, subnetsType, address, gateway string
+				for c, d := range a.(map[interface{}]interface{}) {
+					if c == "name" {
+						name = d.(string)
+					} else if c == "subnets" {
+						for _, e := range d.([]interface{}) {
+							for f, g := range e.(map[interface{}]interface{}) {
+								if f == "type" {
+									subnetsType = g.(string)
+								} else if f == "address" {
+									address = g.(string)
+								} else if f == "gateway" {
+									gateway = g.(string)
+								}
+							}
+						}
+					}
+				}
+				if name != "" && subnetsType != "" {
+					dev := NetworkDevice{
+						name:        name,
+						subnetsType: subnetsType,
+						address:     address,
+						gateway:     gateway,
+					}
+					netdevs = append(netdevs, dev)
+				}
+			}
+		}
+	}
+	return netdevs, nil
 }
 
 func writeCloudInitConf(parts *Partitions) error {
