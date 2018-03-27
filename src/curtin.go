@@ -96,7 +96,8 @@ grub:
 late_commands:
   recovery_post: /cdrom/recovery/bin/recovery_post.sh
 `
-const COULD_INIT_DEFALUT_USER_DATA = `hostname: ###HOSTNAME###
+const COULD_INIT_DEFALUT_USER_DATA = `#cloud-config
+hostname: ###HOSTNAME###
 users:
 - gecos: ###REALNAME###
   groups: [adm, cdrom, dip, lpadmin, plugdev, sambashare, debian-tor, libvirtd, lxd,
