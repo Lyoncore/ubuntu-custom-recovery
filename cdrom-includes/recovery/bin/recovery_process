@@ -41,7 +41,7 @@ if [ -n "$swapdev" ]; then
 fi
 # trigger recovery.bin 
 /cdrom/recovery/bin/recovery.bin $recoverytype $recoverylabel ubuntu_classic_curtin 2>&1 | tee /var/log/recovery/recovery.bin.prelog
-ret=$?
+ret=${PIPESTATUS[0]}
 if [ $ret -eq 0 ] && [ ! -f /var/log/curtin/curtin-error-logs.tar ]; then
     if [ "$recoverytype" != "headless_installer" ]; then
         # remove installer default user
