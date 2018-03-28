@@ -193,7 +193,7 @@ func generateCurtinConf(parts *Partitions) error {
 		mac := getMacAddr(netdevs[dev].name)
 		if mac == "" {
 			log.Println("Cannot find mac addr of network interface", netdevs[dev].name)
-			return fmt.Errorf("Cannot find mac addr of network interface %s", netdevs[dev].name)
+			continue
 		}
 		netcfg := NetworkConfigContent{
 			Type:     "physical",
