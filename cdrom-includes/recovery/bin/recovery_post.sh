@@ -77,7 +77,7 @@ chroot_cmd() {
 
 update_grub_menu() {
     LABEL=$(awk -F ": " '/filesystem-label/{print $2 }' $RECO_MNT/recovery/config.yaml)
-    if [ ! -n "$LABEL"]; then
+    if [ ! -n "$LABEL" ]; then
         exit 1
     fi
 
