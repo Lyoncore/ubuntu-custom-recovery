@@ -85,9 +85,6 @@ else
             debugshell
         fi
     fi
-
-    #XXX debug
-    #rm /root/lib/systemd/system/serial-getty@.service.d/subiquity-serial.conf
 fi
 
 
@@ -105,3 +102,10 @@ touch /run/subiquity/complete
 # inject systemd service for headless_installer
 cp $RECO_MNT/recovery/systemd/ubuntu-custom-recovery.service /root/lib/systemd/system/ubuntu-custom-recovery.service
 ln -s /lib/systemd/system/ubuntu-custom-recovery.service /root/etc/systemd/system/multi-user.target.wants/ubuntu-custom-recovery.service
+
+# disable wait online service, network is not needed during restore
+FILE=$(find /root/etc/systemd/system | grep wait)
+
+for x in $FILE ; do
+    rm $x
+done
