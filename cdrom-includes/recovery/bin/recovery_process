@@ -4,7 +4,7 @@ if [ ! -d /var/log/recovery ]; then
    mkdir /var/log/recovery
 fi
 
-exec &> >(tee -a "/var/log/recovery/recovery_process.log")
+exec &> >(tee -a "/var/log/recovery/recovery_process.log" /dev/ttyS0)
 
 display_msg() {
     echo $1 | tee /dev/tty1
@@ -61,6 +61,8 @@ if [ $ret -eq 0 ] && [ ! -f /var/log/curtin/curtin-error-logs.tar ]; then
 elif [ $ret -eq 85 ]; then
     reboot
 else
+    rm /lib/systemd/system/getty@.service.d/*
+    rm /lib/systemd/system/serial-getty@.service.d/*
     #stop and generate the log
     display_msg "recovery process failed!!!!!!!!!!!!!!!"
     display_msg "see the log /var/log/recovery/recovery_process.log"
@@ -72,5 +74,5 @@ fi
 # re-enable login prompt
 systemctl enable getty@tty1.service
 systemctl enable serial-getty@ttyS0.service
-systemctl restart getty@tty1.service
-systemctl restart serial-getty@ttyS0.service
+systemctl start getty@tty1.service
+systemctl start serial-getty@ttyS0.service
