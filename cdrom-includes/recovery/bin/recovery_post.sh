@@ -106,6 +106,80 @@ move_log_to_rootfs() {
     cp -r /var/log/recovery/* $ROOTFSMNT/var/log/recovery/
 }
 
+install_additional_debs() {
+    DEBS=/cdrom/recovery/factory/debs/
+
+    if [ ! -n "$(ls -A $DEBS/*.deb 2>/dev/null)" ] ;then
+        # no debs file, exit
+        return
+    fi
+
+    mkdir -p $ROOTFSMNT/cdrom
+    mount --bind $RECO_MNT $ROOTFSMNT/cdrom
+
+    cd $ROOTFSMNT/$DEBS
+    apt-ftparchive packages /cdrom/recovery/factory/debs/ | sed "s/^Filename:\ \//Filename:\ /" > $ROOTFSMNT/Packages
+    apt-ftparchive release . 2>/dev/null > $ROOTFSMNT/Release
+
+    mkdir $ROOTFSMNT/etc/apt/sources.list.d.old
+    mv $ROOTFSMNT/etc/apt/sources.list.d/* $ROOTFSMNT/etc/apt/sources.list.d.old/
+
+    cat > $ROOTFSMNT/etc/apt/apt.conf.d/00AllowUnauthenticated << EOF 
+APT::Get::AllowUnauthenticated "true";
+Aptitude::CmdLine::Ignore-Trust-Violations "true";
+EOF
+
+    cat > $ROOTFSMNT/etc/apt/apt.conf.d/00NoMountCDROM << EOF
+APT::CDROM::NoMount "true";
+Acquire::cdrom
+{
+    mount "/cdrom";
+    "/cdrom/"
+    {
+        Mount  "true";
+        UMount "true";
+    };
+    AutoDetect "false";
+};
+EOF
+
+    echo "deb file:/ /" > $ROOTFSMNT/etc/apt/sources.list.d/recovery.list
+    grep "^deb cdrom" /etc/apt/sources.list >> $ROOTFSMNT/etc/apt/sources.list.d/recovery.list
+    mv $ROOTFSMNT/etc/apt/sources.list $ROOTFSMNT/etc/apt/sources.list.ubuntu
+    touch $ROOTFSMNT/etc/apt/sources.list
+
+
+    mount --bind /proc $ROOTFSMNT/proc
+    mount --bind /sys $ROOTFSMNT/sys
+    mount --bind /dev $ROOTFSMNT/dev
+    mount --bind /run $ROOTFSMNT/run
+
+    chroot $ROOTFSMNT apt-cdrom -m add
+    chroot $ROOTFSMNT apt-get -o Acquire::AllowInsecureRepositories=true  update
+
+    for deb in $DEBS/*.deb ; do
+        chroot $ROOTFSMNT apt -y install $deb
+    done
+
+    rm $ROOTFSMNT/Packages
+    rm $ROOTFSMNT/Release
+    rm $ROOTFSMNT/etc/apt/apt.conf.d/00AllowUnauthenticated
+    rm $ROOTFSMNT/etc/apt/apt.conf.d/00NoMountCDROM
+    rm $ROOTFSMNT/etc/apt/sources.list.d/*
+    mv $ROOTFSMNT/etc/apt/sources.list.d.old/* $ROOTFSMNT/etc/apt/sources.list.d/
+    rmdir $ROOTFSMNT/etc/apt/sources.list.d.old/
+    mv $ROOTFSMNT/etc/apt/sources.list.ubuntu $ROOTFSMNT/etc/apt/sources.list
+
+    cd /
+    umount $ROOTFSMNT/cdrom
+    rmdir $ROOTFSMNT/cdrom
+    chroot $ROOTFSMNT apt-get update
+
+    umount $ROOTFSMNT/proc
+    umount $ROOTFSMNT/sys
+    umount $ROOTFSMNT/dev
+    umount $ROOTFSMNT/run
+}
 
 
 apt install -y efibootmgr
@@ -143,6 +217,7 @@ if [ ! -z $recoverytype ] && [ $recoverytype != "headless_installer" ]; then
     fi
 fi
 
+install_additional_debs
 move_log_to_rootfs
 
 $RECO_MNT/recovery/bin/pre-reboot-hook-runner.sh
