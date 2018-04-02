@@ -188,6 +188,7 @@ del_old_boot_entries
 rebuild_boot_entries
 set_next_bootentry
 update_grub_menu
+install_additional_debs
 
 # Check the recovery type
 for x in $(cat /proc/cmdline); do
@@ -217,7 +218,6 @@ if [ ! -z $recoverytype ] && [ $recoverytype != "headless_installer" ]; then
     fi
 fi
 
-install_additional_debs
 move_log_to_rootfs
 
 $RECO_MNT/recovery/bin/pre-reboot-hook-runner.sh
