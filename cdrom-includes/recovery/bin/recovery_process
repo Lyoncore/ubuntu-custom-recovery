@@ -4,7 +4,12 @@ if [ ! -d /var/log/recovery ]; then
    mkdir /var/log/recovery
 fi
 
-exec &> >(tee -a "/var/log/recovery/recovery_process.log" /dev/ttyS0)
+if [ -e /dev/ttyS0 ]; then
+    stty -F /dev/ttyS0 115200
+    exec &> >(tee -a "/var/log/recovery/recovery_process.log" /dev/ttyS0)
+else
+    exec &> >(tee -a "/var/log/recovery/recovery_process.log")
+fi
 
 display_msg() {
     echo $1 | tee /dev/tty1
