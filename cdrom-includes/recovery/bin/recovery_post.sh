@@ -77,7 +77,7 @@ chroot_cmd() {
 
 update_grub_menu() {
     LABEL=$(awk -F ": " '/filesystem-label/{print $2 }' $RECO_MNT/recovery/config.yaml)
-    if [ ! -n "$LABEL"]; then
+    if [ ! -n "$LABEL" ]; then
         exit 1
     fi
 
@@ -158,7 +158,7 @@ EOF
     chroot $ROOTFSMNT apt-get -o Acquire::AllowInsecureRepositories=true  update
 
     for deb in $DEBS/*.deb ; do
-        chroot $ROOTFSMNT apt -y install $deb
+        chroot $ROOTFSMNT apt -y install $deb || true
     done
 
     rm $ROOTFSMNT/Packages
@@ -214,7 +214,15 @@ if [ ! -z $recoverytype ] && [ $recoverytype != "headless_installer" ]; then
         echo "[Factory Restore Posthook] Run scripts in $OEM_POSTINST_HOOK_DIR"
         export RECOVERYTYPE=$recoverytype
         export RECOVERYMNT=$RECO_MNT
-        find "$OEM_POSTINST_HOOK_DIR" -type f | sort | while read -r filename; do bash "$filename"; done
+        find "$OEM_POSTINST_HOOK_DIR" -type f | sort | while read -r filename;
+        do
+            bash "$filename" 2>&1 | tee -a /var/log/recovery/postinst_hooks.log
+            ret=${PIPESTATUS[0]}
+            if [ $ret -ne 0 ];then
+	            echo "Hook return error in $filename , return=$ret" >> /var/log/recovery/postinst_hooks.err
+            fi
+            echo "\n" >> /var/log/recovery/postinst_hooks.log
+        done
     fi
 fi
 
