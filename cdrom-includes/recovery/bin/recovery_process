@@ -67,6 +67,11 @@ else
     if [ -f /var/log/curtin/curtin-error-logs.tar ]; then
         display_msg "see the log /var/log/curtin/curtin-error-logs.tar"
     fi
+
+    cp /var/log/recovery/recovery.bin.prelog /var/log/recovery/recovery.bin.prelog.err
+    # run the hook if the log needs to be reloaction, please make it in hook
+    # see the pre-reboot-hook-runner.sh code
+    /cdrom/recovery/bin/pre-reboot-hook-runner.sh
 fi
 
 # re-enable login prompt
