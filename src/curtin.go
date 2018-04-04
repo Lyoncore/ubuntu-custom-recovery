@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -50,6 +51,9 @@ type CurtinConf struct {
 		Config  []NetworkConfigContent `yaml:"config"`
 		Version int
 	}
+	Swap struct {
+		Size int `yaml:"size"`
+	} `yaml:"swap"`
 	Grub struct {
 		Updatenvram bool `yaml:"update_nvram"`
 	} `yaml:"grub"`
@@ -109,13 +113,16 @@ storage:
   - {id: disk-0, type: disk, ptable: gpt, path: ###DISK_PATH###, grub_device: true, preserve: true}
   - {id: part-recovery, type: partition, number: 1, device: disk-0, size: ###RECO_PART_SIZE###, preserve: true}
   - {id: part-boot, type: partition, number: 2, device: disk-0, size: ###BOOT_PART_SIZE###, flag: boot, preserve: true}
-  - {id: part-rootfs, type: partition, number: 3, device: disk-0, size: ###ROOTFS_PART_SIZE###, preserve: true}
+  - {id: part-swap, type: partition, number: ###SWAP_PART_NUMBER###, device: disk-0, size: ###SWAP_PART_SIZE###, preserve: true}
+  - {id: part-rootfs, type: partition, number: ###ROOTFS_PART_NUMBER###, device: disk-0, size: ###ROOTFS_PART_SIZE###, preserve: true}
   - {id: fs-boot, type: format, fstype: fat32, volume: part-boot, preserve: true}
   - {id: fs-rootfs, type: format, fstype: ext4, volume: part-rootfs, preserve: true}
   - {id: mount-rootfs, type: mount, device: fs-rootfs, path: /, preserve: true}
   - {id: mount-boot, type: mount, device: fs-boot, path: /boot/efi, preserve: true}
   version: 1
 verbosity: 3
+swap:
+  size: 0
 grub:
   update_nvram: False
 late_commands:
@@ -161,6 +168,13 @@ func generateCurtinConf(parts *Partitions) error {
 	} else {
 		return fmt.Errorf("Invalid boot size configured in config.yaml")
 	}
+	if configs.Configs.Swap == true && configs.Configs.SwapSize > 0 {
+		curtinCfg = strings.Replace(curtinCfg, "###SWAP_PART_NUMBER###", strconv.FormatInt(int64(parts.Swap_nr), 10), -1)
+		curtinCfg = strings.Replace(curtinCfg, "###SWAP_PART_SIZE###", strconv.FormatInt(int64(configs.Configs.SwapSize*1024*1024), 10), -1)
+	} else {
+		re := regexp.MustCompile("(?m)[\r\n]+^.*part-swap.*$")
+		curtinCfg = re.ReplaceAllString(curtinCfg, "")
+	}
 	if configs.Configs.RootfsSize > 0 {
 		curtinCfg = strings.Replace(curtinCfg, "###ROOTFS_PART_SIZE###", strconv.FormatInt(int64(configs.Configs.RootfsSize*1024*1024), 10), -1)
 	} else if configs.Configs.RootfsSize < 0 {
@@ -173,6 +187,7 @@ func generateCurtinConf(parts *Partitions) error {
 	} else {
 		return fmt.Errorf("Invalid rootfs size configured in config.yaml")
 	}
+	curtinCfg = strings.Replace(curtinCfg, "###ROOTFS_PART_NUMBER###", strconv.FormatInt(int64(parts.Writable_nr), 10), -1)
 
 	// get network configs
 	netdevs := []NetworkDevice{}
