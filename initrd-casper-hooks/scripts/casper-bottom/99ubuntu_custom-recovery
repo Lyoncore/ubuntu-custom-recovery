@@ -109,3 +109,12 @@ FILE=$(find /root/etc/systemd/system | grep wait)
 for x in $FILE ; do
     rm $x
 done
+
+# disable swap mount if systemd has included
+FILE=$(find /root/etc/systemd/system/ | grep swap)
+
+for x in $FILE ; do
+    if [ -f $x ]; then
+        rm -f $x
+    fi
+done
