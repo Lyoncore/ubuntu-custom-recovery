@@ -262,7 +262,15 @@ func findAnswer(answersyaml string, head string, item string) (string, error) {
 		if k == head {
 			for a, b := range v.(map[interface{}]interface{}) {
 				if a.(string) == item {
-					return b.(string), nil
+					switch t := b.(type) {
+					case int:
+						return strconv.Itoa(b.(int)), nil
+					case string:
+						return b.(string), nil
+					default:
+						_ = t
+						return "", fmt.Errorf("Unknown type")
+					}
 				}
 			}
 		}
@@ -386,6 +394,7 @@ func writeCloudInitConf(parts *Partitions) error {
 		fmt.Println("Finding password error: ", err)
 		return err
 	}
+	hostname = "\"" + hostname + "\""
 	user_data_content := strings.Replace(COULD_INIT_DEFALUT_USER_DATA, "###HOSTNAME###", hostname, -1)
 	user_data_content = strings.Replace(user_data_content, "###REALNAME###", realname, -1)
 	user_data_content = strings.Replace(user_data_content, "###USERNAME###", username, -1)
