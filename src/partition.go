@@ -370,6 +370,7 @@ func CopyRecoveryPart(parts *Partitions) error {
 		"name", fmt.Sprintf("%v", parts.Recovery_nr), configs.Recovery.FsLabel,
 		"set", fmt.Sprintf("%v", parts.Recovery_nr), "boot", "on",
 		"print")
+	rplib.Shellexec("partprobe")
 	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", configs.Recovery.FsLabel, recovery_path)
 
 	// Copy recovery data
@@ -457,6 +458,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 	}
 	rplib.Shellexec("udevadm", "settle")
 
+	rplib.Shellexec("partprobe")
 	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", SysbootLabel, sysboot_path)
 	err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
 	if err != nil {
@@ -513,6 +515,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 	}
 
 	rplib.Shellexec("udevadm", "settle")
+	rplib.Shellexec("partprobe")
 
 	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, writable_path)
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
