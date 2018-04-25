@@ -186,10 +186,35 @@ func FindTargetParts(parts *Partitions, recoveryType string) error {
 				}
 			}
 
+			// target disk might be nvme disk
+			if devPath == "" {
+				blockArray, _ := filepath.Glob("/sys/block/nvme*")
+				for _, block := range blockArray {
+					dat := []byte("")
+					dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
+					if err != nil {
+						return err
+					}
+					dat_str := strings.TrimSpace(string(dat))
+					blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
+
+					if blockDevice != parts.SourceDevPath {
+						devPath = blockDevice
+						break
+					}
+				}
+			}
+
 			if devPath != "" {
-				// The devPath is with partiion /dev/sdX1 or /dev/mmcblkXp1
+				// The devPath is with partiion for /dev/sdX1 or /dev/mmcblkXp1
+				// but without partition for /dev/nvmeXnX
 				// Here to remove the partition information
 				for {
+					if true == strings.Contains(devPath, "nvme") {
+						parts.TargetDevPath = devPath
+						parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
+						break
+					}
 					if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
 						devPath = devPath[:len(devPath)-1]
 					} else {
@@ -371,6 +396,7 @@ func CopyRecoveryPart(parts *Partitions) error {
 		"set", fmt.Sprintf("%v", parts.Recovery_nr), "boot", "on",
 		"print")
 	rplib.Shellexec("partprobe")
+	rplib.Shellexec("sleep", "2") //wait the partition presents
 	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", configs.Recovery.FsLabel, recovery_path)
 
 	// Copy recovery data
@@ -459,6 +485,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 	rplib.Shellexec("udevadm", "settle")
 
 	rplib.Shellexec("partprobe")
+	rplib.Shellexec("sleep", "2") //wait the partition presents
 	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", SysbootLabel, sysboot_path)
 	err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
 	if err != nil {
