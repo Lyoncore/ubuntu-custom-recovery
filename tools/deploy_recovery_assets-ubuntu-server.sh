@@ -2,7 +2,7 @@
 
 print_help()
 {
-    echo "usage: $0 --u-c-r=<path to ubuntu-custom-recovery> --assets-src=<path to recovery assets> --oem-cdimage-script=<path to oem-cdimage-script> --oem-livecd-rootfs=<path to oem-livecd-rootfs> [--hook=<path to post hook>]"
+    echo "usage: $0 --u-c-r=<path to ubuntu-custom-recovery> --assets-src=<path to recovery assets> --oem-cdimage-script=<path to oem-cdimage-script> --ubuntu-cdimage=<path to ubuntu-cdimage> --oem-livecd-rootfs=<path to oem-livecd-rootfs> [--hook=<path to post hook>]"
 }
 
 # Handle commandline parameters
@@ -14,6 +14,9 @@ while [ -n "$1" ]; do
         --oem-cdimage-script=*)
             CDIMAGE_SCRIPT=${1#*=}
             ;;
+		--ubuntu-cdimage=*)
+			CDIMAGE_DIR=${1#*=}
+			;;
         --oem-livecd-rootfs=*)
             LIVECD_ROOTFS=${1#*=}
             ;;
@@ -36,7 +39,7 @@ while [ -n "$1" ]; do
     shift
 done
 
-if [ -z $ASSETS_SRC ] || [ -z $CDIMAGE_SCRIPT ] || [ -z $LIVECD_ROOTFS ] || [ -z $U_C_R ]; then
+if [ -z $ASSETS_SRC ] || [ -z $CDIMAGE_SCRIPT ] || [ -z $CDIMAGE_DIR ] || [ -z $LIVECD_ROOTFS ] || [ -z $U_C_R ]; then
     print_help
     exit 1
 fi
@@ -47,6 +50,10 @@ if [ ! -d $U_C_R ]; then
 fi
 if [ ! -d $CDIMAGE_SCRIPT ]; then
 	echo "oem-cdimage-script dir not found ($CDIMAGE_SCRIPT)"
+	exit 1
+fi
+if [ ! -d $CDIMAGE_DIR ]; then
+	echo "ubuntu-cdimage dir not found ($CDIMAGE_DIR)"
 	exit 1
 fi
 
@@ -78,6 +85,12 @@ cp -r $ASSETS_SRC/* $CDIMAGE_SCRIPT/recovery
 #copy grub config files
 rm -rf $CDIMAGE_SCRIPT/boot/*
 cp -r $U_C_R/grub-includes/boot/* $CDIMAGE_SCRIPT/boot/
+#### Workaround for grub.cfg ####
+cat << EOF >> $CDIMAGE_DIR/debian-cd/tools/boot/bionic/boot-amd64
+echo "WORKAROUND grub.cfg replacement"
+mv \$CDDIR/boot/grub/recovery-grub.cfg \$CDDIR/boot/grub/grub.cfg
+EOF
+
 
 #copy initrd files
 cp $U_C_R/initrd-casper-hooks/scripts/casper-bottom/99ubuntu_custom-recovery $LIVECD_ROOTFS/live-build/ubuntu-server/includes.binary/
