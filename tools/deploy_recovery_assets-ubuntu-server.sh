@@ -60,7 +60,7 @@ if [ ! -d $ASSETS_SRC ]; then
 	exit 1
 fi
 
-if [ -f $U_C_R/recovery-includes/recovery/bin/recovery.bin ]; then
+if [ ! -f $U_C_R/recovery-includes/recovery/bin/recovery.bin ]; then
     echo "$U_C_R/recovery-includes/recovery/bin/recovery.bin not found. not compiled yet?"
     exit 1
 fi
