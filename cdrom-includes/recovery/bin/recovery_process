@@ -44,6 +44,14 @@ swapdev=$(swapon --noheadings | cut -d " " -f 1)
 if [ -n "$swapdev" ]; then
     swapoff $swapdev
 fi
+
+# enable watchdog if watchdog package installed
+if [ -f /etc/default/watchdog ] && [ -f /usr/sbin/watchdog ];then
+    . /etc/default/watchdog
+    [ -z "${watchdog_module}" ] || [ "${watchdog_module}" = "none" ] || /sbin/modprobe $watchdog_module
+    /usr/sbin/watchdog
+fi
+
 # trigger recovery.bin 
 /cdrom/recovery/bin/recovery.bin $recoverytype $recoverylabel ubuntu_classic_curtin 2>&1 | tee /var/log/recovery/recovery.bin.prelog
 ret=${PIPESTATUS[0]}
