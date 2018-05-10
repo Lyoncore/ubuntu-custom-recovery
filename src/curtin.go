@@ -57,6 +57,9 @@ type CurtinConf struct {
 	Grub struct {
 		Updatenvram bool `yaml:"update_nvram"`
 	} `yaml:"grub"`
+	Kernel struct {
+		Package string `yaml:"package"`
+	}
 	LateCommands struct {
 		RecoveryPost string `yaml:"recovery_post"`
 	} `yaml:"late_commands"`
@@ -125,6 +128,8 @@ swap:
   size: 0
 grub:
   update_nvram: False
+kernel:
+  package: linux-generic
 late_commands:
   recovery_post: /cdrom/recovery/bin/recovery_post.sh
 `
@@ -188,6 +193,9 @@ func generateCurtinConf(parts *Partitions) error {
 		return fmt.Errorf("Invalid rootfs size configured in config.yaml")
 	}
 	curtinCfg = strings.Replace(curtinCfg, "###ROOTFS_PART_NUMBER###", strconv.FormatInt(int64(parts.Writable_nr), 10), -1)
+	if configs.Configs.KernelPackage != "" {
+		curtinCfg = strings.Replace(curtinCfg, "linux-generic", configs.Configs.KernelPackage, -1)
+	}
 
 	// get network configs
 	netdevs := []NetworkDevice{}

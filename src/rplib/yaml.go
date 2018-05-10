@@ -26,8 +26,9 @@ type ConfigRecovery struct {
 		Bootloader    string `yaml:"bootloader"`
 		Swap          bool
 		SwapSize      int
-		BootSize      int `yaml:"bootsize"`
-		RootfsSize    int `yaml:"rootfssize,omitempty"`
+		BootSize      int    `yaml:"bootsize"`
+		RootfsSize    int    `yaml:"rootfssize,omitempty"`
+		KernelPackage string `yaml:"kernelpackage,omitempty"`
 	}
 	Recovery struct {
 		Type                       string // one of "field_transition", "factory_install"
