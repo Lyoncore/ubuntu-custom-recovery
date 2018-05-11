@@ -234,7 +234,7 @@ build_cdimage() {
 
     mkdir $OUTDIR || true
     cd $TOP_DIR
-    git describe --tags > $WORKDIR/recovery-assets.version
+    git describe --always > $WORKDIR/recovery-assets.version
     mv $CDIMAGE_DIR/scratch/ubuntu-server/bionic/daily-live/debian-cd/amd64/bionic-live-server-amd64.raw $OUTDIR/$ISO
 
     # make it as image
