@@ -146,9 +146,6 @@ EOF
 }
 
 build_recovery_partition() {
-    cd $WORKDIR
-    git clone https://github.com/Lyoncore/ubuntu-custom-recovery.git -b ubuntu-server-bionic $UBUNTURECOVERY
-
     cd $UBUNTURECOVERY
 
     git describe --always > $WORKDIR/ubuntu-custom-recovery.version
