@@ -238,7 +238,8 @@ build_cdimage() {
     mv $CDIMAGE_DIR/scratch/ubuntu-server/bionic/daily-live/debian-cd/amd64/bionic-live-server-amd64.raw $OUTDIR/$ISO
 
     # make it as image
-    fallocate -l 1G $OUTDIR/$IMAGE
+    fallocate -l 1G $IMAGE
+    mv $IMAGE $OUTDIR/$IMAGE
     parted -ms -a optimal $OUTDIR/$IMAGE unit MiB mklabel gpt mkpart primary  fat32 4 1020 name 1 INSTALLER print
     parted -ms $OUTDIR/$IMAGE set 1 boot on
     LOOP_IMG=$(sudo losetup --find --show $OUTDIR/$IMAGE | xargs basename)
