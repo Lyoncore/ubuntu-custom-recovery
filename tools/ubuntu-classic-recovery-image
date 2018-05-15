@@ -106,6 +106,10 @@ EOF
             sudo apt install -y gnupg1
         fi
 	    GPG=gpg1
+        if [[ -z "$GPGKEY" ]];then
+            #import gpg2 key to gpg1
+            gpg --export-secret-keys $GPGKEY | gpg1 --import
+        fi
     else
 	    GPG=gpg
     fi
