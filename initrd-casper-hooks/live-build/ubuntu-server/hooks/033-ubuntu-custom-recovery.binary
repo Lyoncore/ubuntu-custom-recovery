@@ -54,6 +54,3 @@ teardown_mountpoint "$SQUASH_ROOT"
 
 # Then unmount the overlay
 umount "$SQUASH_ROOT"
-
-# workaround for initrd uncompressed
-cp $SQUASH_ROOT/boot/initrd.img-* binary/casper/
