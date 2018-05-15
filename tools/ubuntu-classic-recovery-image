@@ -243,10 +243,9 @@ build_cdimage() {
 
     # make it as image
     fallocate -l 1G $IMAGE
-    mv $IMAGE $OUTDIR/$IMAGE
-    parted -ms -a optimal $OUTDIR/$IMAGE unit MiB mklabel gpt mkpart primary  fat32 4 1020 name 1 INSTALLER print
-    parted -ms $OUTDIR/$IMAGE set 1 boot on
-    LOOP_IMG=$(sudo losetup --find --show $OUTDIR/$IMAGE | xargs basename)
+    parted -ms -a optimal $IMAGE unit MiB mklabel gpt mkpart primary  fat32 4 1020 name 1 INSTALLER print
+    parted -ms $IMAGE set 1 boot on
+    LOOP_IMG=$(sudo losetup --find --show $IMAGE | xargs basename)
     sudo kpartx -avs /dev/$LOOP_IMG
     sudo mkfs.vfat -F 32 -n INSTALLER /dev/mapper/${LOOP_IMG}p1
     sudo fatlabel /dev/mapper/${LOOP_IMG}p1 INSTALLER
@@ -268,6 +267,7 @@ build_cdimage() {
     sudo umount $MNT
     sudo kpartx -ds /dev/$LOOP_IMG
     sudo losetup -d /dev/$LOOP_IMG
+    mv $IMAGE $OUTDIR/$IMAGE
     rmdir $ISOMNT
     rmdir $MNT
     rm $OUTDIR/$ISO
