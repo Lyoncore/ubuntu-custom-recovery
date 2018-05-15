@@ -93,8 +93,8 @@ EOF
 
 
 #copy initrd files
-cp $U_C_R/initrd-casper-hooks/scripts/casper-bottom/99ubuntu_custom-recovery $LIVECD_ROOTFS/live-build/ubuntu-server/includes.binary/
-cp $U_C_R/initrd-casper-hooks/live-build/ubuntu-server/hooks/033-ubuntu-custom-recovery.binary $LIVECD_ROOTFS/live-build/ubuntu-server/hooks/
+cp $U_C_R/initrd-casper-hooks/scripts/casper-bottom/* $LIVECD_ROOTFS/live-build/ubuntu-server/includes.binary/
+cp $U_C_R/initrd-casper-hooks/live-build/ubuntu-server/hooks/* $LIVECD_ROOTFS/live-build/ubuntu-server/hooks/
 
 if [ -f $HOOK ];then
     $HOOK
