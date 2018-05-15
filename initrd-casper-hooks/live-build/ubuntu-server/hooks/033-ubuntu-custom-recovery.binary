@@ -5,7 +5,7 @@
 
 set -x
 
-echo "025-ubuntu-custom-recovery.binary"
+echo "033-ubuntu-custom-recovery.binary"
 
 case $IMAGE_TARGETS in
 	""|*squashfs*)
