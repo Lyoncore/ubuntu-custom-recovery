@@ -93,28 +93,28 @@ func (s *BuilderSuite) TestConfirmRecovery(c *C) {
 	//input 'y'
 	io.WriteString(in, "y\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool := reco.ConfirmRecovry(in, 300)
+	ret_bool := reco.ConfirmRecovery(300)
 	c.Check(ret_bool, Equals, true)
 
 	//input 'Y'
 	in.Seek(0, os.SEEK_SET)
 	io.WriteString(in, "Y\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool = reco.ConfirmRecovry(in, 300)
+	ret_bool = reco.ConfirmRecovery(300)
 	c.Check(ret_bool, Equals, true)
 
 	//input 'n'
 	in.Seek(0, os.SEEK_SET)
 	io.WriteString(in, "n\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool = reco.ConfirmRecovry(in, 300)
+	ret_bool = reco.ConfirmRecovery(300)
 	c.Check(ret_bool, Equals, false)
 
 	//input 'N'
 	in.Seek(0, os.SEEK_SET)
 	io.WriteString(in, "N\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool = reco.ConfirmRecovry(in, 300)
+	ret_bool = reco.ConfirmRecovery(300)
 	c.Check(ret_bool, Equals, false)
 }
 
