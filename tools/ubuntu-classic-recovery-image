@@ -69,11 +69,14 @@ EOF
     sudo cp $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/etc/buildstamp $WORKDIR/ubuntu-cdimage/oem-cdimage-script/
     sudo chmod 666 $WORKDIR/ubuntu-cdimage/oem-cdimage-script/buildstamp
 
+    INITRD_COMPRESS=lzma
     cp -a $WORKDIR/oem-livecd-rootfs/live-build/auto $FILESYS
     if [ "$OEM_KERNEL" == "true" ];then
         sed -i "s/linux-signed-generic/linux-oem/g" $FILESYS/auto/config
         sed -i "s/linux-signed-image-generic/linux-image-oem/g" $FILESYS/auto/build
-	export LB_LINUX_FLAVOURS="oem"
+        export LB_LINUX_FLAVOURS="oem"
+        export LB_INITRAMFS_COMPRESSION="gzip"
+        INITRD_COMPRESS=gzip
     fi
 
     cd $FILESYS
@@ -92,7 +95,7 @@ EOF
     fi
     export OEM_PROJECT_ROOT=$WORKDIR/oem-livecd-rootfs
     export PROJECT=ubuntu-server SUBPROJECT=live
-    lb config --initramfs-compression=lzma
+    lb config --initramfs-compression=$INITRD_COMPRESS
 
     sudo -E lb build
 
