@@ -92,7 +92,13 @@ menuentry "Factory Restore" {
         echo "[grub.cfg] loading kernel..."
         linux (\$root)/casper/vmlinuz \$cmdline
         echo "[grub.cfg] loading initrd..."
-        initrd (\$root)/casper/initrd.lz
+        if [ -f ($root)/casper/initrd.lz ];then
+            initrd  ($root)/casper/initrd.lz
+        elif [ -f ($root)/casper/initrd.gz ];then
+            initrd  ($root)/casper/initrd.gz
+        else
+            initrd  ($root)/casper/initrd
+        fi
         echo "[grub.cfg] boot..."
         boot
 }
