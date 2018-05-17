@@ -51,7 +51,10 @@ live_build_rootfs() {
     cd $WORKDIR
     cp -rf $TOP_DIR/live-build/ubuntu-server/* $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/
     if [ -f $TOP_DIR/internal-development-mirror.list ];then
-        cp $TOP_DIR/internal-development-mirror.list $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/caracalla
+        if [ ! -d $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/$PROJECT ]; then
+            mkdir $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/$PROJECT
+        fi
+        cp $TOP_DIR/internal-development-mirror.list $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/$PROJECT
     fi
 
     echo "Generating buildstamp"
