@@ -47,13 +47,17 @@ setup_mountpoint binary/boot/squashfs.dir
 mv binary/99ubuntu_custom-recovery $OVERLAY_ROOT/usr/share/initramfs-tools/scripts/casper-bottom/
 
 # Disable intel-microcode in the build time
-echo "IUCODE_TOOL_INITRAMFS=no" >> $SQUASH_ROOT/etc/default/intel-microcode
+if [ -f $SQUASH_ROOT/etc/default/intel-microcode ];then
+    echo "IUCODE_TOOL_INITRAMFS=no" >> $SQUASH_ROOT/etc/default/intel-microcode
+fi
 
 # Installing casper means we need a new initramfs
 UPDATE_INITRAMFS_OPTIONS=CASPER_GENERATE_UUID=1 recreate_initramfs $SQUASH_ROOT
 
 # Clean the intel-microcode config
-sed -i "$ d" $SQUASH_ROOT/etc/default/intel-microcode
+if [ -f $SQUASH_ROOT/etc/default/intel-microcode ];then
+    sed -i "$ d" $SQUASH_ROOT/etc/default/intel-microcode
+fi
 
 teardown_mountpoint "$SQUASH_ROOT"
 
