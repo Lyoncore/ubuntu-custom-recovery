@@ -113,8 +113,10 @@ EOF
         fi
 	    GPG=gpg1
         if [[ ! -z "$GPGKEY" ]];then
-            #import gpg2 key to gpg1
-            gpg --export-secret-keys $GPGKEY | gpg1 --import
+            if ! gpg1 --list-key $GPGKEY 2>/dev/null ; then
+                #import gpg2 key to gpg1
+                gpg --export-secret-keys $GPGKEY | gpg1 --import
+            fi
         fi
     else
 	    GPG=gpg
