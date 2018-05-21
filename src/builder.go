@@ -49,9 +49,9 @@ menuentry "Factory Restore" {
 		load_env -f (${root})/###EFI_DIR###/ubuntu/grubenv
         set cmdline="recovery=LABEL=###RECO_PARTITION_LABEL### ro init=/lib/systemd/systemd console=tty1 panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=###RECO_PARTITION_LABEL### snap_core=${recovery_core} snap_kernel=${recovery_kernel} recoveryos=###RECO_OS###"
         echo "[grub.cfg] loading kernel..."
-        linux ($root)/###RECO_BOOTIMG_PATH###kernel.img $cmdline
+        linuxefi ($root)/###RECO_BOOTIMG_PATH###kernel.img $cmdline
         echo "[grub.cfg] loading initrd..."
-        initrd ($root)/###RECO_BOOTIMG_PATH###initrd.img
+        initrdefi ($root)/###RECO_BOOTIMG_PATH###initrd.img
         echo "[grub.cfg] boot..."
         boot
 }
