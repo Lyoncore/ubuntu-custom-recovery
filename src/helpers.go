@@ -32,7 +32,7 @@ func mib2Blocks(size int) int {
 
 func fmtPartPath(devPath string, nr int) string {
 	var partPath string
-	if strings.Contains(devPath, "mmcblk") || strings.Contains(devPath, "mapper/") {
+	if strings.Contains(devPath, "mmcblk") || strings.Contains(devPath, "mapper/") || strings.Contains(devPath, "nvme") {
 		partPath = fmt.Sprintf("%sp%d", devPath, nr)
 	} else {
 		partPath = fmt.Sprintf("%s%d", devPath, nr)

@@ -20,6 +20,7 @@
 package main_test
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -31,10 +32,9 @@ import (
 	"strings"
 	"syscall"
 
-	rplib "github.com/Lyoncore/ubuntu-custom-recovery-rplib"
 	reco "github.com/Lyoncore/ubuntu-custom-recovery/src"
+	rplib "github.com/Lyoncore/ubuntu-custom-recovery/src/rplib"
 	uenv "github.com/mvo5/uboot-go/uenv"
-	"github.com/snapcore/snapd/logger"
 
 	. "gopkg.in/check.v1"
 )
@@ -44,7 +44,6 @@ type BuilderSuite struct{}
 var _ = Suite(&BuilderSuite{})
 
 func (s *BuilderSuite) SetUpSuite(c *C) {
-	logger.SimpleSetup()
 	//Create a MBR image
 	rplib.Shellexec("dd", "if=/dev/zero", fmt.Sprintf("of=%s", MBRimage), fmt.Sprintf("bs=%d", part_size), "count=1")
 
@@ -94,28 +93,28 @@ func (s *BuilderSuite) TestConfirmRecovery(c *C) {
 	//input 'y'
 	io.WriteString(in, "y\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool := reco.ConfirmRecovry(in)
+	ret_bool := reco.ConfirmRecovry(in, 300)
 	c.Check(ret_bool, Equals, true)
 
 	//input 'Y'
 	in.Seek(0, os.SEEK_SET)
 	io.WriteString(in, "Y\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool = reco.ConfirmRecovry(in)
+	ret_bool = reco.ConfirmRecovry(in, 300)
 	c.Check(ret_bool, Equals, true)
 
 	//input 'n'
 	in.Seek(0, os.SEEK_SET)
 	io.WriteString(in, "n\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool = reco.ConfirmRecovry(in)
+	ret_bool = reco.ConfirmRecovry(in, 300)
 	c.Check(ret_bool, Equals, false)
 
 	//input 'N'
 	in.Seek(0, os.SEEK_SET)
 	io.WriteString(in, "N\n")
 	in.Seek(0, os.SEEK_SET)
-	ret_bool = reco.ConfirmRecovry(in)
+	ret_bool = reco.ConfirmRecovry(in, 300)
 	c.Check(ret_bool, Equals, false)
 }
 
@@ -142,7 +141,7 @@ func (s *BuilderSuite) TestBackupAssertions(c *C) {
 	syscall.Unmount(gptMnt, 0)
 
 	// Find boot device, all other partiitons info
-	parts, err := reco.GetPartitions(RecoveryLabel)
+	parts, err := reco.GetPartitions(RecoveryLabel, rplib.FACTORY_RESTORE)
 	c.Assert(err, IsNil)
 	err = reco.BackupAssertions(parts)
 	c.Assert(err, IsNil)
@@ -205,7 +204,7 @@ func (s *BuilderSuite) TestEnableLogger(c *C) {
 	//Create testing files
 	wdata := []byte("hello logger\n")
 
-	err := reco.EnableLogger()
+	err := reco.EnableLogger(CORE_LOG_PATH)
 	c.Assert(err, IsNil)
 
 	log.Printf("%s", wdata)
@@ -268,7 +267,7 @@ func (s *BuilderSuite) TestCopySnapsAsserts(c *C) {
 
 func (s *BuilderSuite) TestAddFirstBootService(c *C) {
 	//Create testing files
-	var RecoveryType = "recovery"
+	var RecoveryType = rplib.FACTORY_RESTORE
 	var RecoveryLabel = "recovery"
 	var EtcPath = "etc/systemd/system"
 	err := os.MkdirAll(reco.RECO_FACTORY_DIR, 0755)
@@ -346,6 +345,56 @@ func (s *BuilderSuite) TestUpdateUbootEnv(c *C) {
 	c.Check(env.Get("recovery_core"), Equals, CORE_SNAP)
 	c.Check(env.Get("recovery_kernel"), Equals, KERNEL_SNAP)
 	c.Check(env.Get("recovery_label"), Equals, fmt.Sprintf("LABEL=%s", configs.Recovery.FsLabel))
+
+	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
+}
+
+func (s *BuilderSuite) TestUpdateGrubCfg(c *C) {
+	var configs rplib.ConfigRecovery
+	//Create testing files
+	err := os.MkdirAll(reco.SYSBOOT_MNT_DIR, 0755)
+	c.Assert(err, IsNil)
+
+	err = rplib.FileCopy("tests/grub.cfg", reco.SYSBOOT_MNT_DIR)
+	c.Assert(err, IsNil)
+
+	err = rplib.FileCopy("tests/grubenv", reco.SYSBOOT_MNT_DIR)
+	c.Assert(err, IsNil)
+
+	err = configs.Load("tests/config.yaml")
+	c.Assert(err, IsNil)
+
+	err = reco.UpdateGrubCfg(configs.Recovery.FsLabel, filepath.Join(reco.SYSBOOT_MNT_DIR, "grub.cfg"), filepath.Join(reco.SYSBOOT_MNT_DIR, "grubenv"), rplib.RECOVERY_OS_UBUNTU_CORE)
+	c.Assert(err, IsNil)
+
+	// Verify
+	f, err := os.Open(filepath.Join(reco.SYSBOOT_MNT_DIR, "grubenv"))
+	c.Assert(err, IsNil)
+
+	scanner := bufio.NewScanner(f)
+	var foundKeyWd = false
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "recovery_type=factory_restore") {
+			foundKeyWd = true
+			break
+		}
+	}
+	c.Check(foundKeyWd, Equals, true)
+	f.Close()
+
+	f, err = os.Open(filepath.Join(reco.SYSBOOT_MNT_DIR, "grub.cfg"))
+	c.Assert(err, IsNil)
+
+	scanner = bufio.NewScanner(f)
+	foundKeyWd = false
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "Factory Restore") {
+			foundKeyWd = true
+			break
+		}
+	}
+	c.Check(foundKeyWd, Equals, true)
+	f.Close()
 
 	os.RemoveAll(reco.SYSBOOT_MNT_DIR)
 }
