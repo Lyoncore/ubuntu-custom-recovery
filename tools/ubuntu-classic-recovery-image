@@ -40,7 +40,7 @@ clone_sources() {
     git clone --depth 1 https://github.com/Lyoncore/oem-ubuntu-cdimage.git -b oem-bionic-base $CDIMAGE_DIR
     cd $CDIMAGE_DIR
     git clone --depth 1 https://github.com/Lyoncore/oem-debian-cd.git -b oem-bionic-base debian-cd
-    git clone --depth 1 https://github.com/Lyoncore/oem-cdimage-script.git  -b bionic-server oem-cdimage-script
+    git clone --depth 1 https://github.com/Lyoncore/oem-cdimage-script.git -b bionic-server oem-cdimage-script
     git clone --depth 1 https://github.com/Lyoncore/germinate.git -b oem-bionic-base germinate
     cd $TOP_DIR
 }
