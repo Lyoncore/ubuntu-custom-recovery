@@ -25,11 +25,14 @@ type ConfigRecovery struct {
 		PartitionType string `yaml:"partition-type"`
 		Bootloader    string `yaml:"bootloader"`
 		Swap          bool
-		SwapSize      string
+		SwapSize      int
+		BootSize      int    `yaml:"bootsize"`
+		RootfsSize    int    `yaml:"rootfssize,omitempty"`
+		KernelPackage string `yaml:"kernelpackage,omitempty"`
 	}
 	Recovery struct {
 		Type                       string // one of "field_transition", "factory_install"
-		RecoverySize               string
+		RecoverySize               int
 		FsLabel                    string `yaml:"filesystem-label"`
 		RecoveryDevice             string `yaml:"recovery-device"`
 		SystemDevice               string `yaml:"system-device"`
@@ -52,31 +55,11 @@ func (config *ConfigRecovery) checkConfigs() (err error) {
 		log.Printf(err.Error())
 	}
 
-	if config.Snaps.Kernel == "" {
-		err = errors.New("'snaps -> kernel' field not presented")
-		log.Printf(err.Error())
-	}
-
-	if config.Snaps.Os == "" {
-		err = errors.New("'snaps -> os' field not presented")
-		log.Printf(err.Error())
-	}
-
-	if config.Snaps.Gadget == "" {
-		err = errors.New("'snaps -> gadget' field not presented")
-		log.Printf(err.Error())
-	}
-
 	if config.Configs.Arch == "" {
 		err = errors.New("'configs -> arch' field not presented")
 		log.Printf(err.Error())
 	} else if config.Configs.Arch != "amd64" && config.Configs.Arch != "arm" && config.Configs.Arch != "arm64" && config.Configs.Arch != "armhf" {
 		err = errors.New("'recovery -> arch' only accept \"amd64\" or \"arm\" or \"arm64\" or \"amdhf\"")
-		log.Printf(err.Error())
-	}
-
-	if config.Configs.BaseImage == "" {
-		err = errors.New("'configs -> baseimage' field not presented")
 		log.Printf(err.Error())
 	}
 
@@ -106,7 +89,7 @@ func (config *ConfigRecovery) checkConfigs() (err error) {
 		log.Printf(err.Error())
 	}
 
-	if config.Configs.SwapSize == "" {
+	if config.Configs.Swap == true && config.Configs.SwapSize <= 0 {
 		err = errors.New("'configs -> swapsize' field not presented")
 		log.Printf(err.Error())
 	}
@@ -119,8 +102,8 @@ func (config *ConfigRecovery) checkConfigs() (err error) {
 		log.Printf(err.Error())
 	}
 
-	if config.Recovery.RecoverySize == "" {
-		err = errors.New("'recovery -> recoverysize' field not presented")
+	if config.Recovery.RecoverySize <= 0 {
+		err = errors.New("'recovery -> recoverysize' must larger than 0")
 		log.Printf(err.Error())
 	}
 

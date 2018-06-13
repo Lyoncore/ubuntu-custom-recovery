@@ -84,6 +84,7 @@ type Partitions struct {
 	Sysboot_start, Sysboot_end                                  int64
 	Swap_start, Swap_end                                        int64
 	Writable_start, Writable_end                                int64
+	TargetSize                                                  int64
 }
 
 const (
@@ -185,10 +186,35 @@ func FindTargetParts(parts *Partitions, recoveryType string) error {
 				}
 			}
 
+			// target disk might be nvme disk
+			if devPath == "" {
+				blockArray, _ := filepath.Glob("/sys/block/nvme*")
+				for _, block := range blockArray {
+					dat := []byte("")
+					dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
+					if err != nil {
+						return err
+					}
+					dat_str := strings.TrimSpace(string(dat))
+					blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
+
+					if blockDevice != parts.SourceDevPath {
+						devPath = blockDevice
+						break
+					}
+				}
+			}
+
 			if devPath != "" {
-				// The devPath is with partiion /dev/sdX1 or /dev/mmcblkXp1
+				// The devPath is with partiion for /dev/sdX1 or /dev/mmcblkXp1
+				// but without partition for /dev/nvmeXnX
 				// Here to remove the partition information
 				for {
+					if true == strings.Contains(devPath, "nvme") {
+						parts.TargetDevPath = devPath
+						parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
+						break
+					}
 					if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
 						devPath = devPath[:len(devPath)-1]
 					} else {
@@ -224,7 +250,7 @@ var parts Partitions
 func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, error) {
 	var err error
 	const OLD_PARTITION = "/tmp/old-partition.txt"
-	parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, 0, 20479, -1, -1, -1, -1, -1, -1}
+	parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, 0, 20479, -1, -1, -1, -1, -1, -1, -1}
 
 	//The Sourec device which must has a recovery partition
 	parts.SourceDevNode, parts.SourceDevPath, parts.Recovery_nr, err = FindPart(recoveryLabel)
@@ -236,7 +262,7 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 	err = FindTargetParts(&parts, recoveryType)
 	if err != nil {
 		err = errors.New(fmt.Sprintf("Target install partition not found"))
-		parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, 0, 20479, -1, -1, -1, -1, -1, -1}
+		parts = Partitions{"", "", "", "", -1, -1, -1, -1, -1, 0, 20479, -1, -1, -1, -1, -1, -1, -1}
 		return nil, err
 	}
 
@@ -276,6 +302,16 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 	for scanner.Scan() {
 		line := scanner.Text()
 		fields := strings.Split(line, ":")
+
+		// get disk size
+		if strings.Contains(fields[0], "/dev/") == true {
+			parts.TargetSize, err = strconv.ParseInt(strings.TrimRight(fields[1], "B"), 10, 64)
+			if err != nil {
+				fmt.Errorf("Parsing disk size failed")
+			}
+			continue
+		}
+
 		nr, err := strconv.Atoi(fields[0])
 		if err != nil { //ignore the line don't neeed
 			continue
@@ -345,11 +381,10 @@ func CopyRecoveryPart(parts *Partitions) error {
 
 	parts.Recovery_nr = 1
 	recoveryBegin := 4
-	recoverySize, err := strconv.Atoi(configs.Recovery.RecoverySize)
-	if err != nil {
-		return err
+	if configs.Recovery.RecoverySize <= 0 {
+		return fmt.Errorf("Invalid recovery size: %d", configs.Recovery.RecoverySize)
 	}
-	recoveryEnd := recoveryBegin + recoverySize
+	recoveryEnd := recoveryBegin + configs.Recovery.RecoverySize
 
 	// Build Recovery Partition
 	recovery_path := fmtPartPath(parts.TargetDevPath, parts.Recovery_nr)
@@ -360,10 +395,12 @@ func CopyRecoveryPart(parts *Partitions) error {
 		"name", fmt.Sprintf("%v", parts.Recovery_nr), configs.Recovery.FsLabel,
 		"set", fmt.Sprintf("%v", parts.Recovery_nr), "boot", "on",
 		"print")
+	rplib.Shellexec("partprobe")
+	rplib.Shellexec("sleep", "2") //wait the partition presents
 	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", configs.Recovery.FsLabel, recovery_path)
 
 	// Copy recovery data
-	err = os.MkdirAll(RECO_TAR_MNT_DIR, 0755)
+	err := os.MkdirAll(RECO_TAR_MNT_DIR, 0755)
 	if err != nil {
 		return err
 	}
@@ -387,7 +424,7 @@ func CopyRecoveryPart(parts *Partitions) error {
 	return nil
 }
 
-func RestoreParts(parts *Partitions, bootloader string, partType string) error {
+func RestoreParts(parts *Partitions, bootloader string, partType string, recoveryos string) error {
 	var dev_path string = strings.Replace(parts.TargetDevPath, "mapper/", "", -1)
 	part_nr := parts.Last_part_nr
 	if bootloader == "u-boot" {
@@ -447,6 +484,8 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	}
 	rplib.Shellexec("udevadm", "settle")
 
+	rplib.Shellexec("partprobe")
+	rplib.Shellexec("sleep", "2") //wait the partition presents
 	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", SysbootLabel, sysboot_path)
 	err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
 	if err != nil {
@@ -503,19 +542,31 @@ func RestoreParts(parts *Partitions, bootloader string, partType string) error {
 	}
 
 	rplib.Shellexec("udevadm", "settle")
+	rplib.Shellexec("partprobe")
 
 	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, writable_path)
-	err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
-	rplib.Checkerr(err)
-	err = syscall.Mount(writable_path, WRITABLE_MNT_DIR, "ext4", 0, "")
-	rplib.Checkerr(err)
-	defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
-	// Here to support install rootfs from squashfs file
-	// If the writable tarball file not exists, just ignore it and unsquashfs the squashfs file
-	if _, err := os.Stat(WRITABLE_TARBALL); !os.IsNotExist(err) {
-		rplib.Shellexec("tar", "--xattrs", "-xJvpf", WRITABLE_TARBALL, "-C", WRITABLE_MNT_DIR)
-	} else if _, err := os.Stat(ROOTFS_SQUASHFS); !os.IsNotExist(err) {
-		rplib.Shellexec("unsquashfs", "-d", WRITABLE_MNT_DIR, "-f", ROOTFS_SQUASHFS)
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
+		// Curtin will handle the partition mounting and partition restore
+		err := generateCurtinConf(parts)
+		rplib.Checkerr(err)
+		err = runCurtin()
+		rplib.Checkerr(err)
+		err = writeCloudInitConf(parts)
+		rplib.Checkerr(err)
+		return nil
+	} else {
+		err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
+		rplib.Checkerr(err)
+		err = syscall.Mount(writable_path, WRITABLE_MNT_DIR, "ext4", 0, "")
+		rplib.Checkerr(err)
+		defer syscall.Unmount(WRITABLE_MNT_DIR, 0)
+		// Here to support install rootfs from squashfs file
+		// If the writable tarball file not exists, just ignore it and unsquashfs the squashfs file
+		if _, err := os.Stat(WRITABLE_TARBALL); !os.IsNotExist(err) {
+			rplib.Shellexec("tar", "--xattrs", "-xJvpf", WRITABLE_TARBALL, "-C", WRITABLE_MNT_DIR)
+		} else if _, err := os.Stat(ROOTFS_SQUASHFS); !os.IsNotExist(err) {
+			rplib.Shellexec("unsquashfs", "-d", WRITABLE_MNT_DIR, "-f", ROOTFS_SQUASHFS)
+		}
 	}
 
 	return nil

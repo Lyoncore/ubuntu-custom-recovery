@@ -1,0 +1,120 @@
+#! /bin/sh -x
+# initramfs casper-bottom script for recovery
+
+# redirect output to serial console, since the HDMI output not enabled
+# FIXME, the output console should be selectable
+exec </dev/console >/dev/console 2>&1
+console="/dev/console"
+
+PREREQ=""
+
+# Output pre-requisites
+prereqs()
+{
+    echo "$PREREQ"
+}
+
+debugshell()
+{
+    PS1='debugshell> ' /bin/sh -i <$console >$console 2>&1 # XXX: debug
+}
+
+case "$1" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+recoverytype=
+recoveryos=ubuntu_server_curtin
+RECO_MNT=/root/cdrom
+OEM_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/factory-restore-prehook
+OEM_POSTINST_HOOK_DIR=$RECO_MNT/recovery/factory/factory-restore-posthook
+OEM_PREREBOOT_HOOK_DIR=$RECO_MNT/recovery/factory/factory-install-prehook
+
+# Check the recovery type
+for x in $(cat /proc/cmdline); do
+	case ${x} in
+		recoverytype=*)
+			recoverytype=${x#*=}
+		;;
+		recoveryos=*)
+			recoveryos=${x#*=}
+		;;
+     esac
+done
+
+if [ ! -n "$recoverytype" ] || [ "$recoverytype" == "subiquity" ]; then
+    exit 0 # fall back to subiquity
+fi
+
+# Parsing the hook dir if in config.yaml
+hookdir=$(grep 'oem-headless-installer-preinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
+if [ ! -z $hookdir ]; then
+    OEM_HEADLESS_INSTALLER_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/$hookdir
+fi
+hookdir=$(grep 'oem-preinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
+if [ ! -z $hookdir ]; then
+    OEM_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/$hookdir
+fi
+
+# The oem-headless-installer-preinst-hook-dir hook
+if [ $recoverytype == "headless_installer" ]; then
+    if [ -d $OEM_HEADLESS_INSTALLER_PREINST_HOOK_DIR ]; then
+        echo "[Factory Restore Prehook] Run scripts in $OEM_HEADLESS_INSTALLER_PREINST_HOOK_DIR"
+        export RECOVERYTYPE=$recoverytype
+        export RECOVERYPART=$recovery_part
+        export RECOVERYMNT=$RECO_MNT
+        find "$OEM_HEADLESS_INSTALLER_PREINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
+
+        if [ $? != 0 ];then
+            debugshell
+        fi
+    fi
+else
+    # The oem-preinst-hook-dir hook
+    if [ -d $OEM_PREINST_HOOK_DIR ]; then
+        echo "[Factory Restore Prehook] Run scripts in $OEM_PREINST_HOOK_DIR"
+        export RECOVERYTYPE=$recoverytype
+        export RECOVERYPART=$recovery_part
+        export RECOVERYMNT=$RECO_MNT
+        find "$OEM_PREINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
+
+        if [ $? != 0 ];then
+            debugshell
+        fi
+    fi
+fi
+
+
+# disable subiquity
+COREFILE=$(egrep 'core_[0-9]{1,10}.snap' /root/var/lib/snapd/seed/seed.yaml)
+cat << EOF > /root/var/lib/snapd/seed/seed.yaml
+snaps:
+ - name: core
+   channel: stable
+$COREFILE
+EOF
+mkdir /run/subiquity
+touch /run/subiquity/complete
+
+# inject systemd service for headless_installer
+cp $RECO_MNT/recovery/systemd/ubuntu-custom-recovery.service /root/lib/systemd/system/ubuntu-custom-recovery.service
+ln -s /lib/systemd/system/ubuntu-custom-recovery.service /root/etc/systemd/system/multi-user.target.wants/ubuntu-custom-recovery.service
+
+# disable wait online service, network is not needed during restore
+FILE=$(find /root/etc/systemd/system | grep wait)
+
+for x in $FILE ; do
+    rm $x
+done
+
+# disable swap mount if systemd has included
+FILE=$(find /root/etc/systemd/system/ | grep swap)
+
+for x in $FILE ; do
+    if [ -f $x ]; then
+        rm -f $x
+    fi
+done

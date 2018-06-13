@@ -1,0 +1,65 @@
+#!/bin/bash -ex
+# vi: ts=4 noexpandtab
+#
+# Adding ubuntu-custom-recovery into recovery squashfs and initramfs
+
+set -x
+
+echo "033-ubuntu-custom-recovery.binary"
+
+case $IMAGE_TARGETS in
+	""|*squashfs*)
+		;;
+	*)
+		echo "Skipping squashfs build"
+		exit 0
+		;;
+esac
+
+if [ -n "$SUBARCH" ]; then
+	echo "Skipping rootfs build for subarch flavor build"
+	exit 0
+fi
+
+case $PROJECT:$SUBPROJECT in
+	ubuntu-server:live)
+		;;
+	*)
+		echo "Skipping rootfs build for non-live build"
+		exit 0
+		;;
+esac
+
+. config/functions
+. config/common
+
+SQUASH_ROOT=binary/boot/squashfs.dir
+OVERLAY_ROOT=binary/overlay
+
+mkdir -p "$OVERLAY_ROOT"
+
+# Create an recovery squashfs layer
+mount_overlay "$SQUASH_ROOT/" "$OVERLAY_ROOT/" "$SQUASH_ROOT/"
+
+setup_mountpoint binary/boot/squashfs.dir
+
+#copy capser-bottom hook
+mv binary/99ubuntu_custom-recovery $OVERLAY_ROOT/usr/share/initramfs-tools/scripts/casper-bottom/
+
+# Disable intel-microcode in the build time
+if [ -f $SQUASH_ROOT/etc/default/intel-microcode ];then
+    echo "IUCODE_TOOL_INITRAMFS=no" >> $SQUASH_ROOT/etc/default/intel-microcode
+fi
+
+# Installing casper means we need a new initramfs
+UPDATE_INITRAMFS_OPTIONS=CASPER_GENERATE_UUID=1 recreate_initramfs $SQUASH_ROOT
+
+# Clean the intel-microcode config
+if [ -f $SQUASH_ROOT/etc/default/intel-microcode ];then
+    sed -i "$ d" $SQUASH_ROOT/etc/default/intel-microcode
+fi
+
+teardown_mountpoint "$SQUASH_ROOT"
+
+# Then unmount the overlay
+umount "$SQUASH_ROOT"

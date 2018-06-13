@@ -10,6 +10,7 @@ const BOOT_ENTRY_SNAPPY = "ubuntu_core"
 const BOOT_ENTRY_UBUNTU_CLASSIC = "ubuntu"
 
 const (
-	RECOVERY_OS_UBUNTU_CORE    = "ubuntu_core"
-	RECOVERY_OS_UBUNTU_CLASSIC = "ubuntu_classic"
+	RECOVERY_OS_UBUNTU_CORE           = "ubuntu_core"
+	RECOVERY_OS_UBUNTU_CLASSIC        = "ubuntu_classic"
+	RECOVERY_OS_UBUNTU_CLASSIC_CURTIN = "ubuntu_classic_curtin"
 )

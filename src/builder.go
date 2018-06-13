@@ -350,11 +350,15 @@ func releaseDhcp() error {
 	return cmd.Run()
 }
 
-func ConfirmRecovry(in *os.File, timeout int64) bool {
-	//Get user input, if in is nil
-	if in == nil {
-		in = os.Stdin
-	}
+func ConfirmRecovery(timeout int64, recoveryos string) bool {
+	const (
+		msg1         = "Factory Restore: "
+		msg2         = "Factory Restore will delete all user data, are you sure? [y/N] "
+		msg3         = "(press [y] + [enter] to confirm) "
+		event_start  = "start"
+		event_finish = "finish"
+		curtin_yaml  = "/var/log/installer/subiquity-curtin-install.conf"
+	)
 
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 
@@ -370,29 +374,30 @@ func ConfirmRecovry(in *os.File, timeout int64) bool {
 	log.Println("Wait user confirmation timeout:", timeout, "sec")
 	log.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
 
-	tty1, err := os.Open("/dev/tty1")
-	if err != nil {
-		panic(err)
-	}
-	ttyS0, err := os.Open("/dev/ttyS0")
+	// disable input buffering
+	exec.Command("stty", "-F", "/dev/tty1", "cbreak", "min", "1").Run()
+	// do not display entered characters on the screen
+	exec.Command("stty", "-F", "/dev/tty1", "-echo").Run()
+	defer exec.Command("stty", "-F", "/dev/tty1", "echo").Run()
+	tty, err := os.Open("/dev/tty1")
 	if err != nil {
 		panic(err)
 	}
 
-	var input string
-	response := make(chan string)
+	var b []byte = make([]byte, 1)
+	response := make(chan []byte)
 	go func() {
-		fmt.Fscanf(tty1, "%s\n", &input)
-		response <- input
-	}()
-	go func() {
-		fmt.Fscanf(ttyS0, "%s\n", &input)
-		response <- input
+		for {
+			tty.Read(b)
+			if string(b) == "y" || string(b) == "Y" || string(b) == "n" || string(b) == "N" {
+				response <- b
+			}
+		}
 	}()
 
 	select {
 	case s := <-response:
-		log.Println("response:", s)
+		log.Println("response:", string(s))
 	case <-time.After(time.Second * time.Duration(timeout)):
 		log.Println("Timeout:", timeout, "sec. Reboot system!")
 	}
@@ -401,7 +406,8 @@ func ConfirmRecovry(in *os.File, timeout int64) bool {
 	if configs.Recovery.RestoreConfirmPosthookFile != "" {
 		hooks.RestoreConfirmPosthook.SetPath(HOOKS_DIR + configs.Recovery.RestoreConfirmPosthookFile)
 	}
-	if "y" != input && "Y" != input {
+
+	if "y" != string(b) && "Y" != string(b) {
 		if hooks.RestoreConfirmPosthook.IsHookExist() {
 			err := hooks.RestoreConfirmPosthook.Run(RECO_ROOT_DIR, true, "USERCONFIRM", "no")
 			if err != nil {

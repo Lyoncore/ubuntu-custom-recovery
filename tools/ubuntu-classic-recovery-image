@@ -1,0 +1,305 @@
+#!/bin/bash
+
+set -ex
+
+SYNC_FTP=$1
+UBUNTURECOVERY=$2
+OUTDIR=$3
+
+TOP_DIR=$PWD
+WORKDIR=$PWD/workdir
+FILESYS=$WORKDIR/filesys
+CDIMAGE_DIR=$WORKDIR/ubuntu-cdimage
+ROOTFS_SQUASHFS=$FILESYS/livecd.ubuntu-server.squashfs
+CHROOT=$WORKDIR/chroot
+UBUNTURECOVERY=$WORKDIR/ubuntu-custom-recovery
+
+if lsb_release -c | grep bionic ;then
+    BUILD_IN_BIONIC=true
+elif lsb_release -c | grep xenial ;then
+    BUILD_IN_BIONIC=false
+else
+    echo "Unsupport build environment"
+    exit 1    
+fi
+
+. build.cfg
+IMG_NAME=$PROJECT-$UBUNTU_EDITION-$UBUNTU_VERSION-$(date +"%Y%m%d")
+if [ $MILESTONE ]; then
+    IMG_NAME=$IMG_NAME-$MILESTONE
+fi
+if [ $BUILD_ID ]; then
+    IMG_NAME=$IMG_NAME-$BUILD_ID
+fi
+
+
+clone_sources() {
+    mkdir -p $WORKDIR || true
+    cd $WORKDIR
+    git clone --depth 1 https://github.com/Lyoncore/oem-livecd-rootfs.git -b oem-bionic-base oem-livecd-rootfs
+    git clone --depth 1 https://github.com/Lyoncore/oem-ubuntu-cdimage.git -b oem-bionic-base $CDIMAGE_DIR
+    cd $CDIMAGE_DIR
+    git clone --depth 1 https://github.com/Lyoncore/oem-debian-cd.git -b oem-bionic-base debian-cd
+    git clone --depth 1 https://github.com/Lyoncore/oem-cdimage-script.git -b bionic-server oem-cdimage-script
+    git clone --depth 1 https://github.com/Lyoncore/germinate.git -b oem-bionic-base germinate
+    cd $TOP_DIR
+}
+
+live_build_rootfs() {
+    mkdir -p $FILESYS
+
+    cd $WORKDIR
+    cp -rf $TOP_DIR/live-build/ubuntu-server/* $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/
+    if [ -f $TOP_DIR/internal-development-mirror.list ];then
+        if [ ! -d $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/$PROJECT ]; then
+            mkdir $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/$PROJECT
+        fi
+        cp $TOP_DIR/internal-development-mirror.list $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/$PROJECT
+    fi
+
+    echo "Generating buildstamp"
+    #/writable/system-data/etc/media-info
+    sudo mkdir -p $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/etc/
+    sudo touch $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/etc/buildstamp
+    sudo chmod 666 $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/etc/buildstamp
+
+    sudo cat > $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/etc/buildstamp << EOF
+BuildDate=$(date -R)
+IMAGE=$IMG_NAME
+EOF
+
+    echo "Adding buildstamp to binary image"
+    sudo cp $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/etc/buildstamp $WORKDIR/ubuntu-cdimage/oem-cdimage-script/
+    sudo chmod 666 $WORKDIR/ubuntu-cdimage/oem-cdimage-script/buildstamp
+
+    INITRD_COMPRESS=lzma
+    cp -a $WORKDIR/oem-livecd-rootfs/live-build/auto $FILESYS
+    if [ "$OEM_KERNEL" == "true" ];then
+        sed -i "s/linux-signed-generic/linux-oem/g" $FILESYS/auto/config
+        sed -i "s/linux-signed-image-generic/linux-image-oem/g" $FILESYS/auto/build
+        export LB_LINUX_FLAVOURS="oem"
+        export LB_INITRAMFS_COMPRESSION="gzip"
+        INITRD_COMPRESS=gzip
+    fi
+
+    cd $FILESYS
+    export SUITE=bionic
+    export ARCH=amd64
+    if [[ ! -z "$MIRROR" ]]; then
+        export MIRROR=$MIRROR
+    else
+        export MIRROR=http://archive.ubuntu.com/ubuntu/
+    fi
+
+    if [ "$BUILD_IN_BIONIC" == "true" ] ;then
+    	export LB_SYSLINUX_THEME=ubuntu-bionic
+    else
+        export LB_SYSLINUX_THEME=ubuntu-xenial
+    fi
+    export OEM_PROJECT_ROOT=$WORKDIR/oem-livecd-rootfs
+    export PROJECT=ubuntu-server SUBPROJECT=live
+    lb config --initramfs-compression=$INITRD_COMPRESS
+
+    sudo -E lb build
+
+    export USERID=$(id -un)
+    export GROUPID=$(id -gn)
+    sudo -E chown -R $USERID:$GROUPID $FILESYS/livecd.ubuntu-server*
+
+    # sign rootfs
+    if [ "$BUILD_IN_BIONIC" == "true" ] ;then
+	    if [ ! -f /usr/bin/gpg1 ];then
+            sudo apt install -y gnupg1
+        fi
+	    GPG=gpg1
+        if [[ ! -z "$GPGKEY" ]];then
+            if ! gpg1 --list-key $GPGKEY 2>/dev/null ; then
+                #import gpg2 key to gpg1
+                gpg --export-secret-keys $GPGKEY | gpg1 --import
+            fi
+        fi
+    else
+	    GPG=gpg
+    fi
+    if [[ -z "$GPGKEY" ]];then
+        if [ ! -f /usr/sbin/haveged ];then
+            sudo apt update
+            sudo apt install -y haveged
+        fi
+        $GPG --list-keys temp-key || $GPG --batch --gen-key $TOP_DIR/tools/gen-key-script
+        GPGKEY=$($GPG --list-key temp-key | sed -n '1p' | cut -c 13-20)
+    fi
+    sed -i "s/SIGNING_KEYID='FBB75451 EFE21092'/SIGNING_KEYID='$GPGKEY'/g" $CDIMAGE_DIR/etc/config
+    sed -i "s/SIGNING_KEYID=C5986B4F1257FFA86632CBA746181433FBB75451/SIGNING_KEYID=$GPGKEY/g" $CDIMAGE_DIR/debian-cd/CONF.sh
+    sed -i "s/SIGNING_KEYID=843938DF228D22F7B3742BC0D94AA3F0EFE21092/SIGNING_KEYID=$GPGKEY/g" $CDIMAGE_DIR/debian-cd/CONF.sh
+    #### Copy GPG key ####
+    echo "Copy GPG key..."
+    # download keyring
+    cd $WORKDIR
+    apt source ubuntu-keyring
+    KEYRINGS_DIR=$(find $WORKDIR -maxdepth 1 -type d -name 'ubuntu-keyring*')
+    cd $KEYRINGS_DIR/keyrings
+    $GPG --import < ubuntu-archive-keyring.gpg
+    $GPG --export C0B21F32 EFE21092 $GPGKEY > ubuntu-archive-keyring.gpg
+
+    mkdir -p $CDIMAGE_DIR/secret/dot-gnupg || true
+    cp -R ~/.gnupg/* $CDIMAGE_DIR/secret/dot-gnupg
+    if [ ! -f $CDIMAGE_DIR/secret/dot-gnupg/gpg.conf ];then
+        cat > $CDIMAGE_DIR/secret/dot-gnupg/gpg.conf << EOF
+keyserver hkp://keys.gnupg.net
+EOF
+    fi
+    cp $CDIMAGE_DIR/sign-fs.sh $FILESYS/
+    cd $FILESYS
+    KEYRINGS_DIR_BASE=$(basename $KEYRINGS_DIR)
+    sed -i "s@ubuntu-keyring-2012.05.19@$KEYRINGS_DIR_BASE@g" sign-fs.sh
+    ./sign-fs.sh livecd.ubuntu-server.squashfs $WORKDIR
+    cd $TOP_DIR
+}
+
+build_recovery_partition() {
+    cd $UBUNTURECOVERY
+
+    git describe --always > $WORKDIR/ubuntu-custom-recovery.version
+
+    export GOPATH=$WORKDIR/gocode
+    export PATH="$PATH:$GOPATH/bin"
+    go get launchpad.net/godeps 
+    godeps -t -u dependencies.tsv || true
+
+    mkdir $WORKDIR/gocode/src/github.com/Lyoncore/
+    ln -s $UBUNTURECOVERY $WORKDIR/gocode/src/github.com/Lyoncore/ubuntu-custom-recovery
+    go run build.go build
+    cd $TOP_DIR
+
+    if [ "$OEM_KERNEL" == "true" ];then
+        if [ -f $TOP_DIR/recovery-assets/config.yaml ];then
+            if grep -r kernelpackage $TOP_DIR/recovery-assets/config.yaml ; then
+                sed -i "/kernelpackage/d" $TOP_DIR/recovery-assets/config.yaml
+            fi
+            sed -i "/bootloader:/a \ \ kernelpackage: linux-oem" $TOP_DIR/recovery-assets/config.yaml
+        fi
+    fi
+    if [ -f $TOP_DIR/deploy_recovery/hook.sh ]; then
+        export WORKDIR=$WORKDIR
+        export UBUNTURECOVERY=$UBUNTURECOVERY
+        export TOP_DIR=$TOP_DIR
+        export CDIMAGE_DIR=$CDIMAGE_DIR
+        $UBUNTURECOVERY/tools/deploy_recovery_assets-ubuntu-server.sh --assets-src=$TOP_DIR/recovery-assets/ --oem-cdimage-script=$WORKDIR/ubuntu-cdimage/oem-cdimage-script/ --ubuntu-cdimage=$WORKDIR/ubuntu-cdimage/ --oem-livecd-rootfs=$WORKDIR/oem-livecd-rootfs/ --u-c-r=$UBUNTURECOVERY --hook=$TOP_DIR/deploy_recovery/hook.sh
+    else
+        $UBUNTURECOVERY/tools/deploy_recovery_assets-ubuntu-server.sh --assets-src=$TOP_DIR/recovery-assets/ --oem-cdimage-script=$WORKDIR/ubuntu-cdimage/oem-cdimage-script/ --ubuntu-cdimage=$WORKDIR/ubuntu-cdimage/ --oem-livecd-rootfs=$WORKDIR/oem-livecd-rootfs/ --u-c-r=$UBUNTURECOVERY
+    fi
+}
+
+sync_ftp() {
+    ORIG_DIR=$PWD
+    cd $CDIMAGE_DIR/preloadftp
+    if [ "$BUILD_IN_BIONIC" == "ture" ]; then
+        set +e
+        ./merge-packagelist.sh
+        set -e
+    fi
+    if [[ ! -z "$ANONFTPSYN_MIRROR" ]]; then
+        sed -i "s/RSYNC_SRC=archive.ubuntu.com::ubuntu/RSYNC_SRC=$ANONFTPSYN_MIRROR/" $CDIMAGE_DIR/etc/anonftpsync
+    fi
+    $CDIMAGE_DIR/bin/anonftpsync --packagelist bionic-classic.list
+
+    cd $ORIG_DIR
+}
+
+build_cdimage() {
+    IMAGE=${IMG_NAME}.img
+    ISO=${IMG_NAME}.iso
+    cd $CDIMAGE_DIR
+
+    # sync ftp
+    if [ ! -d ~/ftp ];then
+	mkdir ~/ftp
+    fi
+    if [ ! -e $CDIMAGE_DIR/ftp ]; then
+        ln -s ~/ftp $CDIMAGE_DIR/ftp
+    fi
+    if [ "$SYNC_FTP" == "true" ]; then
+        sync_ftp
+    fi
+
+    if [ "$BUILD_IN_BIONIC" == "true" ]; then
+        sed -i "s@Dir::Etc=\$APTTMP/\$CODENAME-\$FULLARCH/apt/@Dir::Etc::SourceList=\$APTTMP/\$CODENAME-\$FULLARCH/apt/sources.list@g" $CDIMAGE_DIR/debian-cd/tools/apt-selection
+        sed -i "s@gpg \$GPGKEYRINGOPTS@gpg1 \$GPGKEYRINGOPTS@g" $CDIMAGE_DIR/debian-cd/tools/add_secured
+        sed -i "s@\"gpg\"@\"gpg1\"@g" $CDIMAGE_DIR/lib/cdimage/sign.py
+    fi
+
+    if [ "$OEM_KERNEL" == "true" ];then
+        # the ubuntu-cdimage still expects the kernel and initrd flavor as "generic"
+        # here we just make is as "oem" kernel
+        sed -i "s/kernel-generic/kernel-oem/g" $CDIMAGE_DIR/lib/cdimage/livefs.py
+        sed -i "s/initrd-generic/initrd-oem/g" $CDIMAGE_DIR/lib/cdimage/livefs.py
+        sed -i "s/FLAVOUR=generic/FLAVOUR=oem/g" $CDIMAGE_DIR/debian-cd/tools/boot/bionic/boot-amd64
+    fi
+
+    CDIMAGE_INCLUDES="recovery buildstamp"
+    if [[ ! -z $EXTRA_CDROM_INCLUDES ]];then
+        CDIMAGE_INCLUDES="$CDIMAGE_INCLUDES $EXTRA_CDROM_INCLUDES"
+    fi
+    # start a build
+    env LIVECD="http://cdimage.ubuntu.com/ubuntu" DEBUG=1 VERBOSE=3 CDIMAGE_NOSYNC=1 OEM_HWE_KERNEL=generic OEMPROJECT=OEM DIST=bionic ARCHES=amd64 PROJECT=ubuntu-server SUBPROJECT=live CAPPROJECT=Ubuntu-server OEMPROJECT_SRC="$CDIMAGE_INCLUDES" BINVOLID=INSTALLER bin/cron.daily-live --oem --livefs $FILESYS 2>&1 | tee build.log
+
+    mkdir $OUTDIR || true
+    cd $TOP_DIR
+    git describe --always > $WORKDIR/recovery-assets.version
+    mv $CDIMAGE_DIR/scratch/ubuntu-server/bionic/daily-live/debian-cd/amd64/bionic-live-server-amd64.raw $OUTDIR/$ISO
+
+    # make it as image
+    fallocate -l 1G $IMAGE
+    parted -ms -a optimal $IMAGE unit MiB mklabel gpt mkpart primary  fat32 4 1020 name 1 INSTALLER print
+    parted -ms $IMAGE set 1 boot on
+    LOOP_IMG=$(sudo losetup --find --show $IMAGE | xargs basename)
+    sudo kpartx -avs /dev/$LOOP_IMG
+    sudo mkfs.vfat -F 32 -n INSTALLER /dev/mapper/${LOOP_IMG}p1
+    sudo fatlabel /dev/mapper/${LOOP_IMG}p1 INSTALLER
+    MNT=$OUTDIR/mnt
+    mkdir $MNT
+    sudo mount /dev/mapper/${LOOP_IMG}p1 $MNT
+
+    ISOMNT=$OUTDIR/isomnt
+    mkdir $ISOMNT
+    if [ ! -f /usr/bin/fuseiso ];then
+        sudo apt update
+        sudo apt install -y fuseiso
+    fi
+    sudo fuseiso $OUTDIR/$ISO $ISOMNT
+
+    sudo rsync -aH $ISOMNT/ $MNT || true
+
+    #update installer uuid in grub
+    INSTALLER_UUID=$(sudo blkid -s UUID -o value /dev/mapper/${LOOP_IMG}p1)
+    sudo sed -i "s/###INSTALLER_UUID###/$INSTALLER_UUID/g" $MNT/boot/grub/grub.cfg
+
+    sudo umount $ISOMNT
+    sudo umount $MNT
+    sudo kpartx -ds /dev/$LOOP_IMG
+    sudo losetup -d /dev/$LOOP_IMG
+    mv $IMAGE $OUTDIR/$IMAGE
+    rmdir $ISOMNT
+    rmdir $MNT
+    rm $OUTDIR/$ISO
+
+    xz -9 $OUTDIR/$IMAGE
+    md5sum $OUTDIR/$IMAGE".xz" > $OUTDIR/$IMAGE".xz.md5sum"
+    sha1sum $OUTDIR/$IMAGE".xz" > $OUTDIR/$IMAGE".xz.sha1sum"
+    sha256sum $OUTDIR/$IMAGE".xz" > $OUTDIR/$IMAGE".xz.sha256sum"
+
+    mv $WORKDIR/filesys/*.manifest $OUTDIR
+    mv $WORKDIR/filesys/livecd.ubuntu-server.squashfs $OUTDIR
+    mv $WORKDIR/filesys/livecd.ubuntu-server.installer.squashfs $OUTDIR
+    mv $WORKDIR/*.version $OUTDIR
+    echo "[Output image: $OUTDIR/$IMAGE".xz"]"
+}
+
+if [ -f $TOP_DIR/deploy_recovery/extra_includes ]; then
+    . $TOP_DIR/deploy_recovery/extra_includes
+fi
+clone_sources
+build_recovery_partition
+live_build_rootfs
+build_cdimage

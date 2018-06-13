@@ -1,0 +1,23 @@
+project: generic-amd64
+configs:
+  arch: amd64
+  swap: on
+  swapsize: 256 
+  bootsize: 512
+  rootfssize: -1
+  release: 18
+  partition-type: gpt
+  bootloader: grub
+recovery:
+  type: factory_install
+  installerfslabel: INSTALLER
+  recoverysize: 768
+  filesystem-label: ESP
+  oem-preinst-hook-dir: OEM_pre_install_hook
+  oem-postinst-hook-dir: OEM_post_install_hook
+  oem-prereboot-hook-dir: OEM_pre_reboot_hook
+  oem-headless-installer-preinst-hook-dir: OEM_hi_preinst_hook
+  oemlogdir: MFGMEDIA
+  restore-confirm-prehook-file: restore_confirm/prehook.sh
+  restore-confirm-posthook-file: restore_confirm/posthook.sh
+  restore-confirm-timeout: 30

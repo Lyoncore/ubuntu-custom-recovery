@@ -1,0 +1,12 @@
+[Unit]
+Description=The recovery process for ubuntu-custom-recovery service
+
+[Service]
+StandardOutput=journal+console
+ExecStart=/bin/sh -c '/cdrom/recovery/bin/recovery_process > /dev/console'
+Type=oneshot
+RemainAfterExit=yes
+Environment=TERM=xterm
+
+[Install]
+WantedBy=multi-user.target

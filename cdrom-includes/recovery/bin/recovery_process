@@ -1,0 +1,89 @@
+#!/bin/bash
+set -x
+if [ ! -d /var/log/recovery ]; then
+   mkdir /var/log/recovery
+fi
+
+if [ -e /dev/ttyS0 ]; then
+    stty -F /dev/ttyS0 115200
+    exec &> >(tee -a "/var/log/recovery/recovery_process.log" /dev/ttyS0)
+else
+    exec &> >(tee -a "/var/log/recovery/recovery_process.log")
+fi
+
+display_msg() {
+    echo $1 | tee /dev/tty1
+    echo $1 | tee /dev/ttyS0
+}
+
+#disable login prompt
+systemctl stop getty@tty1.service
+systemctl disable getty@tty1.service
+systemctl stop serial-getty@ttyS0.service
+systemctl disable serial-getty@ttyS0.service
+systemctl daemon-reload
+
+# Check the recovery type
+for x in $(cat /proc/cmdline); do
+    case ${x} in
+        recoverytype=*)
+            recoverytype=${x#*=}
+        ;;
+        recoveryos=*)
+            recoveryos=${x#*=}
+        ;;
+        recoverylabel=*)
+            recoverylabel=${x#*=}
+        ;;
+    esac
+done
+
+# check the swap partition is been enabled
+# it needs to be off or it cannot do the repartition
+swapdev=$(swapon --noheadings | cut -d " " -f 1)
+if [ -n "$swapdev" ]; then
+    swapoff $swapdev
+fi
+
+# enable watchdog if watchdog package installed
+if [ -f /etc/default/watchdog ] && [ -f /usr/sbin/watchdog ];then
+    . /etc/default/watchdog
+    [ -z "${watchdog_module}" ] || [ "${watchdog_module}" = "none" ] || /sbin/modprobe $watchdog_module
+    /usr/sbin/watchdog
+fi
+
+# trigger recovery.bin 
+/cdrom/recovery/bin/recovery.bin $recoverytype $recoverylabel ubuntu_classic_curtin 2>&1 | tee /var/log/recovery/recovery.bin.prelog
+ret=${PIPESTATUS[0]}
+if [ $ret -eq 0 ] && [ ! -f /var/log/curtin/curtin-error-logs.tar ]; then
+    if [ "$recoverytype" != "headless_installer" ]; then
+        # remove installer default user
+        usr=$(cat /target/etc/passwd | grep 1000 | cut -d ":" -f 1)
+        chroot /target userdel -rf $usr
+        reboot
+    else
+        poweroff
+    fi
+elif [ $ret -eq 85 ]; then
+    reboot
+else
+    rm /lib/systemd/system/getty@.service.d/*
+    rm /lib/systemd/system/serial-getty@.service.d/*
+    #stop and generate the log
+    display_msg "recovery process failed!!!!!!!!!!!!!!!"
+    display_msg "see the log /var/log/recovery/recovery_process.log"
+    if [ -f /var/log/curtin/curtin-error-logs.tar ]; then
+        display_msg "see the log /var/log/curtin/curtin-error-logs.tar"
+    fi
+
+    cp /var/log/recovery/recovery.bin.prelog /var/log/recovery/recovery.bin.prelog.err
+    # run the hook if the log needs to be reloaction, please make it in hook
+    # see the pre-reboot-hook-runner.sh code
+    /cdrom/recovery/bin/pre-reboot-hook-runner.sh
+fi
+
+# re-enable login prompt
+systemctl enable getty@tty1.service
+systemctl enable serial-getty@ttyS0.service
+systemctl start getty@tty1.service
+systemctl start serial-getty@ttyS0.service
