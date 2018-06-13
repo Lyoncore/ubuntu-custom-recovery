@@ -284,6 +284,11 @@ build_cdimage() {
     rmdir $MNT
     rm $OUTDIR/$ISO
 
+    # hook for post image build
+    if [ -f $TOP_DIR/deploy_recovery/post-image-hook.sh ]; then
+        bash $TOP_DIR/deploy_recovery/post-image-hook.sh
+    fi
+
     xz -9 $OUTDIR/$IMAGE
     md5sum $OUTDIR/$IMAGE".xz" > $OUTDIR/$IMAGE".xz.md5sum"
     sha1sum $OUTDIR/$IMAGE".xz" > $OUTDIR/$IMAGE".xz.sha1sum"
