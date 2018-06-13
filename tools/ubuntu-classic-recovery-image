@@ -286,6 +286,8 @@ build_cdimage() {
 
     # hook for post image build
     if [ -f $TOP_DIR/deploy_recovery/post-image-hook.sh ]; then
+        export OUTDIR=$OUTDIR
+        export IMAGE_NAME=$IMAGE
         bash $TOP_DIR/deploy_recovery/post-image-hook.sh
     fi
 
