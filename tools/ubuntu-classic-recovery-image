@@ -194,7 +194,7 @@ build_recovery_partition() {
 sync_ftp() {
     ORIG_DIR=$PWD
     cd $CDIMAGE_DIR/preloadftp
-    if [ "$BUILD_IN_BIONIC" == "ture" ]; then
+    if [ "$BUILD_IN_BIONIC" == "true" ]; then
         set +e
         ./merge-packagelist.sh
         set -e
