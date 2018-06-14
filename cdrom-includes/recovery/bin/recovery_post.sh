@@ -164,7 +164,10 @@ EOF
     chroot $ROOTFSMNT apt-get -o Acquire::AllowInsecureRepositories=true  update
 
     for deb in $DEBS/*.deb ; do
-        chroot $ROOTFSMNT apt -y install $deb || true
+        chroot $ROOTFSMNT apt -y install $deb
+        if [ $? -ne 0 ];then
+            echo "$deb install failed!!!" >> /var/log/recovery/recovery_post.log.err
+        fi
     done
 
     rm $ROOTFSMNT/Packages
