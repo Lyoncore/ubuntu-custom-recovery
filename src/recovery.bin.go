@@ -157,7 +157,6 @@ func preparePartitions(parts *Partitions, recoveryos string) {
 // easier for function mocking
 var enableLogger = EnableLogger
 var copySnapsAsserts = CopySnapsAsserts
-var addFirstBootService = AddFirstBootService
 var restoreAsserions = RestoreAsserions
 var updateUbootEnv = UpdateUbootEnv
 var updateGrubCfg = UpdateGrubCfg
@@ -198,11 +197,6 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 		// Copy snaps
 		log.Println("[Add additional snaps/asserts]")
 		err = copySnapsAsserts()
-		rplib.Checkerr(err)
-
-		// add firstboot service for ubuntu core
-		log.Println("[Add FIRSTBOOT service]")
-		err = addFirstBootService(RecoveryType, RecoveryLabel)
 		rplib.Checkerr(err)
 
 		// Ubuntu core default is using EFI directory for boot partition

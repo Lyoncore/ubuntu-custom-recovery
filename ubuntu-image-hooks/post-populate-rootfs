@@ -70,12 +70,6 @@ backup_snaps() {
     cp $KERNEL $UNPACK_GADGET/recovery-assets/backup_snaps/$(basename $KERNEL)
 }
 
-prepare_writable_squashfs() {
-    echo "prepare writable squashfs"
-    mksquashfs $UNPACK_GADGET/writable-includes $UNPACK_GADGET/recovery-assets/recovery/writable-includes.squashfs -all-root
-    rm -rf $UNPACK_GADGET/writable-includes
-}
-
 _parse_yaml() {
     # $1: the yaml file path
     # $2: the first key header
@@ -178,6 +172,5 @@ backup_writable
 backup_bootfs
 populate_recovery_initrd_kernel
 backup_snaps
-prepare_writable_squashfs
 update_bootloader_cfg
 update_recovery_assets

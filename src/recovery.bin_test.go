@@ -122,14 +122,6 @@ func (s *MainTestSuite) TestrecoverProcess(c *C) {
 	copySnapsAsserts = func() error { return nil }
 	defer func() { copySnapsAsserts = origCopySnaps }()
 
-	origAddFirstBootService := addFirstBootService
-	addFirstBootService = func(recoType, recoLabel string) error {
-		c.Assert(recoType, Equals, "factory_restore")
-		c.Assert(recoLabel, Equals, "recovery")
-		return nil
-	}
-	defer func() { addFirstBootService = origAddFirstBootService }()
-
 	origRestoreAsserions := restoreAsserions
 	var restoreAsserionsCalled = false
 	restoreAsserions = func() error {
