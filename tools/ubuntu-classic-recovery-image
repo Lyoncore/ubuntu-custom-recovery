@@ -291,7 +291,7 @@ build_cdimage() {
         bash $TOP_DIR/deploy_recovery/post-image-hook.sh
     fi
 
-    pxz -9 $OUTDIR/$IMAGE
+    pxz $OUTDIR/$IMAGE
     md5sum $OUTDIR/$IMAGE".xz" > $OUTDIR/$IMAGE".xz.md5sum"
     sha1sum $OUTDIR/$IMAGE".xz" > $OUTDIR/$IMAGE".xz.sha1sum"
     sha256sum $OUTDIR/$IMAGE".xz" > $OUTDIR/$IMAGE".xz.sha256sum"
