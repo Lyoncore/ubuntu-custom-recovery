@@ -551,8 +551,13 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 		rplib.Checkerr(err)
 		err = runCurtin()
 		rplib.Checkerr(err)
-		err = writeCloudInitConf(parts)
-		rplib.Checkerr(err)
+		// If the image is deployed by maas, there will be a curtin/ directory in recovery partition
+		// The nocloud-net config files are not needed, which using maas cloud-init config files
+		// Or we write a nocloud-net config for user config, hostname config ... etc
+		if _, err = os.Stat(RECO_ROOT_DIR + "curtin/"); os.IsNotExist(err) {
+			err = writeCloudInitConf(parts)
+			rplib.Checkerr(err)
+		}
 		return nil
 	} else {
 		err = os.MkdirAll(WRITABLE_MNT_DIR, 0755)
