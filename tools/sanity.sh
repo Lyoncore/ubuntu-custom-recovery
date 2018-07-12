@@ -169,6 +169,10 @@ if [ ! -f /usr/lib/shim/shimx64.efi.signed ];then
 fi
 sudo cp /usr/lib/shim/shimx64.efi.signed img_mnt/EFI/UBUNTU/
 
+# Cheat curtin in maas that is a ubuntu core image
+# Create a /system-data/var/lib/snapd/ dir here
+sudo mkdir -p img_mnt/system-data/var/lib/snapd/
+
 sudo umount img_mnt
 rmdir img_mnt
 
