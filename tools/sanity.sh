@@ -161,7 +161,7 @@ fi
 
 # The maas needs boot from EFI/UBUNTU/shimx64.efi, but recovery doesn't
 # Here to create an EFI/UBUNTU/ boot assets
-mkidr img_mnt/EFI/UBUNTU/
+mkdir img_mnt/EFI/UBUNTU/
 cp img_mnt/EFI/BOOT/* img_mnt/EFI/UBUNTU/
 if [ ! -f /usr/lib/shim/shimx64.efi.signed ];then
     apt update
