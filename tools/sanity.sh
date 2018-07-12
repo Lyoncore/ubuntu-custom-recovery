@@ -161,13 +161,13 @@ fi
 
 # The maas needs boot from EFI/UBUNTU/shimx64.efi, but recovery doesn't
 # Here to create an EFI/UBUNTU/ boot assets
-mkdir img_mnt/EFI/UBUNTU/
-cp img_mnt/EFI/BOOT/* img_mnt/EFI/UBUNTU/
+sudo mkdir img_mnt/EFI/UBUNTU/
+sudo cp img_mnt/EFI/BOOT/* img_mnt/EFI/UBUNTU/
 if [ ! -f /usr/lib/shim/shimx64.efi.signed ];then
-    apt update
-    apt install -y shim-signed
+    sudo apt update
+    sudo apt install -y shim-signed
 fi
-cp /usr/lib/shim/shimx64.efi.signed img_mnt/EFI/UBUNTU/
+sudo cp /usr/lib/shim/shimx64.efi.signed img_mnt/EFI/UBUNTU/
 
 sudo umount img_mnt
 rmdir img_mnt
@@ -180,7 +180,7 @@ if [ ! -d $OUTDIR ]; then
     mkdir $OUTDIR
 fi
 mv $MAAS_IMG $OUTDIR/$MAAS_IMG
-pxz -9 $OUTDIR/$MAAS_IMG
+pxz $OUTDIR/$MAAS_IMG
 sha256sum $OUTDIR/$MAAS_IMG_XZ > $OUTDIR/$MAAS_IMG".xz.sha256sum"
 
 # generate a maas.env for jenkins
