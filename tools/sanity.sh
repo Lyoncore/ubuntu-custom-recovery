@@ -167,7 +167,7 @@ if [ ! -f /usr/lib/shim/shimx64.efi.signed ];then
     sudo apt update
     sudo apt install -y shim-signed
 fi
-sudo cp /usr/lib/shim/shimx64.efi.signed img_mnt/EFI/UBUNTU/
+sudo cp /usr/lib/shim/shimx64.efi.signed img_mnt/EFI/UBUNTU/shimx64.efi
 
 # Cheat curtin in maas that is a ubuntu core image
 # Create a /system-data/var/lib/snapd/ dir here
