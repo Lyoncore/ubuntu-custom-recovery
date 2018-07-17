@@ -360,6 +360,9 @@ func ConfirmRecovery(timeout int64, recoveryos string) bool {
 		curtin_yaml  = "/var/log/installer/subiquity-curtin-install.conf"
 	)
 
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
+		rplib.Shellexec("plymouth", "hide-splash")
+	}
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 
 	if configs.Recovery.RestoreConfirmPrehookFile != "" {
