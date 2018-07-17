@@ -360,8 +360,9 @@ func ConfirmRecovery(timeout int64, recoveryos string) bool {
 		curtin_yaml  = "/var/log/installer/subiquity-curtin-install.conf"
 	)
 
-	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
-		rplib.Shellexec("plymouth", "hide-splash")
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
+		exec.Command("plymouth", "quit").Run()
+		time.Sleep(1 * time.Second)
 	}
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 
