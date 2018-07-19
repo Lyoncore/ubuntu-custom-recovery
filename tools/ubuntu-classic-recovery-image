@@ -271,10 +271,6 @@ build_cdimage() {
 
     sudo rsync -aH $ISOMNT/ $MNT || true
 
-    #update installer uuid in grub
-    INSTALLER_UUID=$(sudo blkid -s UUID -o value /dev/mapper/${LOOP_IMG}p1)
-    sudo sed -i "s/###INSTALLER_UUID###/$INSTALLER_UUID/g" $MNT/boot/grub/grub.cfg
-
     sudo umount $ISOMNT
     sudo umount $MNT
     sudo kpartx -ds /dev/$LOOP_IMG
