@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -146,24 +147,43 @@ func FindTargetParts(parts *Partitions, recoveryType string) error {
 			parts.TargetDevPath = configs.Recovery.RecoveryDevice
 			parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
 		} else {
-			// target disk might be emmc
-			blockArray, _ := filepath.Glob("/sys/block/mmcblk*")
-			for _, block := range blockArray {
+			// target disk might raid devices (/dev/md126)
+			if _, err := os.Stat("/sys/block/md126/dev"); err == nil {
+				log.Println("found raid devices enabled in BIOS")
 				dat := []byte("")
-				dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
+				dat, err := ioutil.ReadFile("/sys/block/md126/dev")
 				if err != nil {
 					return err
 				}
 				dat_str := strings.TrimSpace(string(dat))
 				blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
 				if blockDevice != parts.SourceDevPath {
-					devPath = blockDevice
-					if devPath == "/dev/mmcblk0" {
-						parts.TargetDevPath = devPath
-						parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
-						return nil
+					parts.TargetDevPath = blockDevice
+					parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
+					return nil
+				}
+			}
+
+			// target disk might be emmc
+			if devPath == "" {
+				blockArray, _ := filepath.Glob("/sys/block/mmcblk*")
+				for _, block := range blockArray {
+					dat := []byte("")
+					dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
+					if err != nil {
+						return err
 					}
-					break
+					dat_str := strings.TrimSpace(string(dat))
+					blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
+					if blockDevice != parts.SourceDevPath {
+						devPath = blockDevice
+						if devPath == "/dev/mmcblk0" {
+							parts.TargetDevPath = devPath
+							parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
+							return nil
+						}
+						break
+					}
 				}
 			}
 
@@ -226,6 +246,7 @@ func FindTargetParts(parts *Partitions, recoveryType string) error {
 						break
 					}
 				}
+				log.Println("debug: ", parts.TargetDevPath, parts.TargetDevNode)
 			} else {
 				return fmt.Errorf("No target disk found")
 			}
@@ -395,7 +416,7 @@ func CopyRecoveryPart(parts *Partitions) error {
 		"name", fmt.Sprintf("%v", parts.Recovery_nr), configs.Recovery.FsLabel,
 		"set", fmt.Sprintf("%v", parts.Recovery_nr), "boot", "on",
 		"print")
-	rplib.Shellexec("partprobe")
+	exec.Command("partprobe").Run()
 	rplib.Shellexec("sleep", "2") //wait the partition presents
 	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", configs.Recovery.FsLabel, recovery_path)
 
@@ -484,7 +505,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 	}
 	rplib.Shellexec("udevadm", "settle")
 
-	rplib.Shellexec("partprobe")
+	exec.Command("partprobe").Run()
 	rplib.Shellexec("sleep", "2") //wait the partition presents
 	rplib.Shellexec("mkfs.vfat", "-F", "32", "-n", SysbootLabel, sysboot_path)
 	err := os.MkdirAll(SYSBOOT_MNT_DIR, 0755)
@@ -542,7 +563,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 	}
 
 	rplib.Shellexec("udevadm", "settle")
-	rplib.Shellexec("partprobe")
+	exec.Command("partprobe").Run()
 
 	rplib.Shellexec("mkfs.ext4", "-F", "-L", WritableLabel, writable_path)
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {

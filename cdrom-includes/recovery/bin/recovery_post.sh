@@ -32,7 +32,7 @@ del_old_boot_entries() {
 
 rebuild_boot_entries() {
     recovery=$(mount | grep cdrom | cut -d " " -f 1) # it would find cdrom mount
-    if [[ $recovery = *"mmcblk"* ]]; then
+    if [[ $recovery = *"mmcblk"* ]] || [[ $recovery = *"nvme"* ]] || [[ $recovery = *"md126"* ]]; then
         recovery_dev=${recovery::-2}
     else
         recovery_dev=${recovery::-1}
@@ -42,7 +42,7 @@ rebuild_boot_entries() {
     efibootmgr -c -d $recovery_dev -p $recovery_part -l "\\EFI\\BOOT\\BOOTX64.EFI" -L $RECOVERY_ENTRY
 
     boot=$(mount | grep boot | cut -d " " -f 1)  # it would find boot/efi mount
-    if [[ $boot = *"mmcblk"* ]]; then
+    if [[ $boot = *"mmcblk"* ]] || [[ $boot = *"nvme"* ]] || [[ $boot = *"md126"* ]]; then
         boot_dev=${boot::-2}
     else
         boot_dev=${boot::-1}
@@ -88,7 +88,7 @@ menuentry "Factory Restore" {
         echo "[grub.cfg] load factory_restore system"
         search --no-floppy --set --label "$LABEL"
         echo "[grub.cfg] root: \${root}"
-        set cmdline="file=/cdrom/preseed/oem-ubuntu-server.seed boot=casper union=aufs quiet splash panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=$LABEL recoveryos=ubuntu_classic_curtin"
+        set cmdline="file=/cdrom/preseed/oem-ubuntu-server.seed boot=casper union=aufs quiet splash panic=-1 fixrtc -- recoverytype=factory_restore recoverylabel=$LABEL recoveryos=ubuntu_classic_curtin live-media=/dev/disk/by-label/$LABEL"
         echo "[grub.cfg] loading kernel..."
         linux (\$root)/casper/vmlinuz \$cmdline
         echo "[grub.cfg] loading initrd..."
