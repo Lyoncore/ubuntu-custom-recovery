@@ -21,7 +21,12 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"os/exec"
 	"strings"
+
+	rplib "github.com/Lyoncore/ubuntu-custom-recovery/src/rplib"
 )
 
 func mib2Blocks(size int) int {
@@ -38,4 +43,28 @@ func fmtPartPath(devPath string, nr int) string {
 		partPath = fmt.Sprintf("%s%d", devPath, nr)
 	}
 	return partPath
+}
+
+func usbhid() {
+	log.Println("Load hid-generic and usbhid drivers for usb keyboard")
+
+	// insert module if not exist
+	cmd := exec.Command("sh", "-c", "lsmod | grep usbhid")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+
+	if err != nil {
+		rplib.Shellexec("modprobe", "usbhid")
+	}
+
+	// insert module if not exist
+	cmd = exec.Command("sh", "-c", "lsmod | grep hid_generic")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+
+	if err != nil {
+		rplib.Shellexec("modprobe", "hid-generic")
+	}
 }

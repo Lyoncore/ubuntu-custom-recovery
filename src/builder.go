@@ -360,6 +360,8 @@ func ConfirmRecovery(timeout int64, recoveryos string) bool {
 		curtin_yaml  = "/var/log/installer/subiquity-curtin-install.conf"
 	)
 
+	usbhid()
+
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
 		exec.Command("plymouth", "quit").Run()
 		time.Sleep(1 * time.Second)
