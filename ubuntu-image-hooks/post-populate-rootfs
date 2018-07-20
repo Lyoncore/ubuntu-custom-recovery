@@ -52,6 +52,27 @@ populate_recovery_initrd_kernel () {
         cp $UNPACK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
         sed -i '1i/scripts/local-premount/00_recovery \"$@\"' scripts/local-premount/ORDER
         find | cpio --quiet -o -H newc | gzip -9 > $UNPACK_GADGET/recovery-assets/$KERNEL/initrd.img
+    elif file $INITRD | grep cpio; then
+        # the microcode included
+        NEW_INITRD=/tmp/initrd_sep
+        TMP2=$(mktemp -d)
+        (cd $TMP2 ; cpio -id ; dd of=$NEW_INITRD) < $INITRD
+        rm -rf $TMP2
+
+        cd $TMPDIR
+        if file $NEW_INITRD | grep 'LZMA \| XZ'; then
+            unxz < $NEW_INITRD | cpio -i
+            cp $UNPACK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
+            sed -i '1i/scripts/local-premount/00_recovery \"$@\"' scripts/local-premount/ORDER
+            find | cpio --quiet -o -H newc | xz -c9 --check=crc32 > $UNPACK_GADGET/recovery-assets/$KERNEL/initrd.img
+        elif file $NEW_INITRD | grep gzip; then
+            gunzip < $NEW_INITRD | cpio -i
+            cp $UNPACK_GADGET/recovery-assets/initrd-hooks/scripts/local-premount/00_recovery scripts/local-premount/
+            sed -i '1i/scripts/local-premount/00_recovery \"$@\"' scripts/local-premount/ORDER
+            find | cpio --quiet -o -H newc | gzip -9 > $UNPACK_GADGET/recovery-assets/$KERNEL/initrd.img
+        fi
+
+        rm $NEW_INITRD
     fi
 
 	cp $KERNEL_IMG $UNPACK_GADGET/recovery-assets/$KERNEL/
