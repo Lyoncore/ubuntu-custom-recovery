@@ -75,7 +75,8 @@ populate_recovery_initrd_kernel () {
         rm $NEW_INITRD
     fi
 
-	cp $KERNEL_IMG $UNPACK_GADGET/recovery-assets/$KERNEL/
+    rm -rf $UNPACK_GADGET/recovery-assets/initrd-hooks/
+    cp $KERNEL_IMG $UNPACK_GADGET/recovery-assets/$KERNEL/
 
     cd $cdir
     rm -rf $TMPDIR $SQUASH_TMPDIR
