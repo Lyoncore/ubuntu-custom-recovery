@@ -68,8 +68,6 @@ const (
 	SYSBOOT_UBOOT_ENV = SYSBOOT_MNT_DIR + "uboot.env"
 	BACKUP_SNAP_PATH  = "/backup_snaps/"
 
-	WRITABLE_INCLUDES_SQUASHFS = RECO_ROOT_DIR + "recovery/writable-includes.squashfs"
-
 	// Ubuntu classic specific
 	WRITABLE_ETC_FSTAB      = WRITABLE_MNT_DIR + "etc/fstab"
 	WRITABLE_GRUB_40_CUSTOM = WRITABLE_MNT_DIR + "etc/grub.d/40_custom"
