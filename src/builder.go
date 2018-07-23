@@ -360,6 +360,12 @@ func ConfirmRecovery(timeout int64, recoveryos string) bool {
 		curtin_yaml  = "/var/log/installer/subiquity-curtin-install.conf"
 	)
 
+	usbhid()
+
+	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
+		exec.Command("plymouth", "quit").Run()
+		time.Sleep(1 * time.Second)
+	}
 	ioutil.WriteFile("/proc/sys/kernel/printk", []byte("0 0 0 0"), 0644)
 
 	if configs.Recovery.RestoreConfirmPrehookFile != "" {
@@ -374,15 +380,16 @@ func ConfirmRecovery(timeout int64, recoveryos string) bool {
 	log.Println("Wait user confirmation timeout:", timeout, "sec")
 	log.Println("Factory Restore will delete all user data, are you sure? [y/N] ")
 
+	tty, err := os.Open("/dev/tty1")
+	if err != nil {
+		panic(err)
+	}
+
 	// disable input buffering
 	exec.Command("stty", "-F", "/dev/tty1", "cbreak", "min", "1").Run()
 	// do not display entered characters on the screen
 	exec.Command("stty", "-F", "/dev/tty1", "-echo").Run()
 	defer exec.Command("stty", "-F", "/dev/tty1", "echo").Run()
-	tty, err := os.Open("/dev/tty1")
-	if err != nil {
-		panic(err)
-	}
 
 	var b []byte = make([]byte, 1)
 	response := make(chan []byte)
