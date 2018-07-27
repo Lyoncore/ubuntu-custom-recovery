@@ -83,9 +83,9 @@ mount --bind /proc \$ROOTFSMNT/proc
 mount --bind /dev \$ROOTFSMNT/dev
 mount --bind /run \$ROOTFSMNT/run
 
-#chroot \$ROOTFSMNT adduser --quiet --disabled-password --shell /bin/bash --home /home/test --gecos "test" test
-#chroot \$ROOTFSMNT sudo usermod -aG sudo test
-#chroot \$ROOTFSMNT sh -c "echo test:test | chpasswd"
+chroot \$ROOTFSMNT adduser --quiet --disabled-password --shell /bin/bash --home /home/test --gecos "test" test
+chroot \$ROOTFSMNT sudo usermod -aG sudo test
+chroot \$ROOTFSMNT sh -c "echo test:test | chpasswd"
 
 #USER_ID=\$(chroot \$ROOTFSMNT id -u test)
 #GROUP_ID=\$(chroot \$ROOTFSMNT id -g test)
