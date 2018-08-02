@@ -45,7 +45,7 @@ populate_recovery_initrd_kernel () {
     TMPDIR=$(mktemp -d)
     SQUASH_TMPDIR=$(mktemp -d)
     cd $SQUASH_TMPDIR
-    unsquashfs $cdir/$ROOTFS_PATH/system-data/var/lib/snapd/snaps/$KERNEL
+    unsquashfs $ROOTFS_PATH/system-data/var/lib/snapd/snaps/$KERNEL
     INITRD=$SQUASH_TMPDIR/squashfs-root/initrd.img
 	KERNEL_IMG=$SQUASH_TMPDIR/squashfs-root/kernel.img
     cd $TMPDIR
