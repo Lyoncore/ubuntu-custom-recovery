@@ -5,8 +5,13 @@ exec 2>&1
 
 set -ex
 
-UNPACK_GADGET=$PWD/$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/gadget
-UNPACK_BOOT=$PWD/$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/image/boot/
+if [ "${UBUNTU_IMAGE_HOOK_ROOTFS:0:1}" = "/" ]; then
+    UNPACK_GADGET=$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/gadget
+    UNPACK_BOOT=$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/image/boot/
+else
+    UNPACK_GADGET=$PWD/$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/gadget
+    UNPACK_BOOT=$PWD/$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/image/boot/
+fi
 EFI="EFI"
 
 backup_writable () {
