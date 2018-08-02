@@ -8,16 +8,18 @@ set -ex
 if [ "${UBUNTU_IMAGE_HOOK_ROOTFS:0:1}" = "/" ]; then
     UNPACK_GADGET=$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/gadget
     UNPACK_BOOT=$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/image/boot/
+    ROOTFS_PATH=$UBUNTU_IMAGE_HOOK_ROOTFS
 else
     UNPACK_GADGET=$PWD/$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/gadget
     UNPACK_BOOT=$PWD/$UBUNTU_IMAGE_HOOK_ROOTFS/../unpack/image/boot/
+    ROOTFS_PATH=$PWD/$UBUNTU_IMAGE_HOOK_ROOTFS
 fi
 EFI="EFI"
 
 backup_writable () {
     echo "backup writable.tar.xz"
     mkdir $UNPACK_GADGET/recovery-assets/recovery/factory/ || true
-    tar --xattrs -Jcpf $UNPACK_GADGET/recovery-assets/recovery/factory/writable.tar.xz -C $PWD/$UBUNTU_IMAGE_HOOK_ROOTFS .
+    tar --xattrs -Jcpf $UNPACK_GADGET/recovery-assets/recovery/factory/writable.tar.xz -C $ROOTFS_PATH .
 }
 
 backup_bootfs () {
@@ -37,13 +39,13 @@ backup_bootfs () {
 
 populate_recovery_initrd_kernel () {
     echo "populate recovery initrd"
-    KERNEL=$(find $UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/ -name '*kernel_*.snap' | xargs basename)
+    KERNEL=$(find $ROOTFS_PATH/system-data/var/lib/snapd/snaps/ -name '*kernel_*.snap' | xargs basename)
     mkdir -p $UNPACK_GADGET/recovery-assets/$KERNEL || true
     cdir=$PWD
     TMPDIR=$(mktemp -d)
     SQUASH_TMPDIR=$(mktemp -d)
     cd $SQUASH_TMPDIR
-    unsquashfs $cdir/$UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/$KERNEL
+    unsquashfs $cdir/$ROOTFS_PATH/system-data/var/lib/snapd/snaps/$KERNEL
     INITRD=$SQUASH_TMPDIR/squashfs-root/initrd.img
 	KERNEL_IMG=$SQUASH_TMPDIR/squashfs-root/kernel.img
     cd $TMPDIR
@@ -89,8 +91,8 @@ populate_recovery_initrd_kernel () {
 
 backup_snaps() {
     echo "backup snaps"
-    CORE=$(find $UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/ -name 'core_*.snap')
-    KERNEL=$(find $UBUNTU_IMAGE_HOOK_ROOTFS/system-data/var/lib/snapd/snaps/ -name '*kernel_*.snap')
+    CORE=$(find $ROOTFS_PATH/system-data/var/lib/snapd/snaps/ -name 'core_*.snap')
+    KERNEL=$(find $ROOTFS_PATH/system-data/var/lib/snapd/snaps/ -name '*kernel_*.snap')
 
     mkdir $UNPACK_GADGET/recovery-assets/backup_snaps
     cp $CORE $UNPACK_GADGET/recovery-assets/backup_snaps/$(basename $CORE)
