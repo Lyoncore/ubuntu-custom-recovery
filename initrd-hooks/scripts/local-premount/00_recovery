@@ -92,7 +92,7 @@ if [ -d $OEM_PREINST_HOOK_DIR ]; then
     export RECOVERYTYPE=$recoverytype
     export RECOVERYPART=$recovery_part
     export RECOVERYMNT=$RECO_MNT
-    find "$OEM_PREINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
+    find "$OEM_PREINST_HOOK_DIR" -type f -not -name ".gitkeep" | sort | while read -r filename; do sh "$filename"; done
 
     if [ $? != 0 ];then
         debugshell
@@ -170,7 +170,7 @@ if [ $recoverytype != "headless_installer" ]; then
         export RECOVERYTYPE=$recoverytype
         export RECOVERYPART=$recovery_part
         export RECOVERYMNT=$RECO_MNT
-        find "$OEM_POSTINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
+        find "$OEM_POSTINST_HOOK_DIR" -type f -not -name ".gitkeep" | sort | while read -r filename; do sh "$filename"; done
 
         if [ $? != 0 ];then
             debugshell
@@ -187,7 +187,7 @@ if [ $recoverytype != "headless_installer" ]; then
         export RECOVERYPART=$recovery_part
         export RECOVERYMNT=$RECO_MNT
         export RECOVERY_BIN_RETURN=$ret
-        find "$OEM_PREREBOOT_HOOK_DIR" -type f | sort | while read -r filename; do chroot $CHROOT sh "$filename"; done
+        find "$OEM_PREREBOOT_HOOK_DIR" -type f -not -name ".gitkeep" | sort | while read -r filename; do chroot $CHROOT sh "$filename"; done
     fi
 fi
 # ERESTART is errno 85 which restart system requirest from recovery.bin
