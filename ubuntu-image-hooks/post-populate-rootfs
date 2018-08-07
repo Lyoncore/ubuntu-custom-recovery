@@ -91,7 +91,7 @@ populate_recovery_initrd_kernel () {
 
 backup_snaps() {
     echo "backup snaps"
-    CORE=$(find $ROOTFS_PATH/system-data/var/lib/snapd/snaps/ -name 'core_*.snap')
+    CORE=$(find $ROOTFS_PATH/system-data/var/lib/snapd/snaps/ -name 'core*.snap')
     KERNEL=$(find $ROOTFS_PATH/system-data/var/lib/snapd/snaps/ -name '*kernel_*.snap')
 
     mkdir $UNPACK_GADGET/recovery-assets/backup_snaps
