@@ -430,7 +430,7 @@ func CopyRecoveryPart(parts *Partitions) error {
 		return err
 	}
 	defer syscall.Unmount(RECO_TAR_MNT_DIR, 0)
-	rplib.Shellcmd(fmt.Sprintf("cp -a %s/. %s", RECO_ROOT_DIR, RECO_TAR_MNT_DIR))
+	rplib.Shellcmd(fmt.Sprintf("cd %s ; cp -a `ls | grep -v NvVars` %s", RECO_ROOT_DIR, RECO_TAR_MNT_DIR))
 	rplib.Shellexec("sync")
 
 	// set target grubenv to factory_restore
