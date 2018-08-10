@@ -155,22 +155,11 @@ mount --bind /dev $CHROOT/dev
 mount --bind /run $CHROOT/run
 mount --bind /tmp $CHROOT/tmp
 mount --bind $RECO_MNT $CHROOT/$RECO_MNT
-mkdir $CHROOT/tmp/sbin
-mount --bind /sbin $CHROOT/tmp/sbin
-mkdir $CHROOT/tmp/bin
-mount --bind /bin $CHROOT/tmp/bin
-mkdir -p $CHROOT/tmp/usr/bin
-mount --bind /usr/bin $CHROOT/tmp/usr/bin
-#FIXME: to support ARM
-mkdir $CHROOT/tmp/lib
-mount --bind /lib/x86_64-linux-gnu/ $CHROOT/tmp/lib
-mkdir -p $CHROOT/tmp/usr/lib
-mount --bind /usr/lib/x86_64-linux-gnu/ $CHROOT/tmp/usr/lib
 
 echo "[chroot execute recovery.bin]"
 
 set +e
-/bin/chroot $CHROOT env RECO_MNT=$RECO_MNT recoverytype=$recoverytype recoverylabel=$recoverylabel recoveryos=$recoveryos bash -c 'LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/tmp/lib:/tmp/usr/lib:$RECO_MNT/recovery/lib PATH=$PATH:/tmp/sbin:/tmp/bin:/tmp/usr/bin:$RECO_MNT/recovery/bin recovery.bin $recoverytype $recoverylabel $recoveryos'
+/bin/chroot $CHROOT env RECO_MNT=$RECO_MNT recoverytype=$recoverytype recoverylabel=$recoverylabel recoveryos=$recoveryos bash -c 'LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$RECO_MNT/recovery/lib PATH=$PATH:$RECO_MNT/recovery/bin recovery.bin $recoverytype $recoverylabel $recoveryos'
 ret=$?
 set -e
 
