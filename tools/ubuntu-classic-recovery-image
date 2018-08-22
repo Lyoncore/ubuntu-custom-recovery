@@ -13,6 +13,7 @@ CDIMAGE_DIR=$WORKDIR/ubuntu-cdimage
 ROOTFS_SQUASHFS=$FILESYS/livecd.ubuntu-server.squashfs
 CHROOT=$WORKDIR/chroot
 UBUNTURECOVERY=$WORKDIR/ubuntu-custom-recovery
+KERNEL_FLAVOURS=generic
 
 if lsb_release -c | grep bionic ;then
     BUILD_IN_BIONIC=true
@@ -72,15 +73,13 @@ EOF
     sudo cp $WORKDIR/oem-livecd-rootfs/live-build/ubuntu-server/includes.chroot/etc/buildstamp $WORKDIR/ubuntu-cdimage/oem-cdimage-script/
     sudo chmod 666 $WORKDIR/ubuntu-cdimage/oem-cdimage-script/buildstamp
 
-    INITRD_COMPRESS=lzma
+    #INITRD_COMPRESS=lzma
     cp -a $WORKDIR/oem-livecd-rootfs/live-build/auto $FILESYS
-    if [ "$OEM_KERNEL" == "true" ];then
-        sed -i "s/linux-signed-generic/linux-oem/g" $FILESYS/auto/config
-        sed -i "s/linux-signed-image-generic/linux-image-oem/g" $FILESYS/auto/build
-        export LB_LINUX_FLAVOURS="oem"
-        export LB_INITRAMFS_COMPRESSION="gzip"
-        INITRD_COMPRESS=gzip
-    fi
+    sed -i "s/linux-signed-generic/linux-$KERNEL_FLAVOURS/g" $FILESYS/auto/config
+    sed -i "s/linux-signed-image-generic/linux-image-$KERNEL_FLAVOURS/g" $FILESYS/auto/build
+    export LB_LINUX_FLAVOURS="$KERNEL_FLAVOURS"
+    export LB_INITRAMFS_COMPRESSION="gzip"
+    INITRD_COMPRESS=gzip
 
     cd $FILESYS
     export SUITE=bionic
@@ -172,14 +171,13 @@ build_recovery_partition() {
     go run build.go build
     cd $TOP_DIR
 
-    if [ "$OEM_KERNEL" == "true" ];then
-        if [ -f $TOP_DIR/recovery-assets/config.yaml ];then
-            if grep -r kernelpackage $TOP_DIR/recovery-assets/config.yaml ; then
-                sed -i "/kernelpackage/d" $TOP_DIR/recovery-assets/config.yaml
-            fi
-            sed -i "/bootloader:/a \ \ kernelpackage: linux-oem" $TOP_DIR/recovery-assets/config.yaml
+    if [ -f $TOP_DIR/recovery-assets/config.yaml ];then
+        if grep -r kernelpackage $TOP_DIR/recovery-assets/config.yaml ; then
+            sed -i "/kernelpackage/d" $TOP_DIR/recovery-assets/config.yaml
         fi
+        sed -i "/bootloader:/a \ \ kernelpackage: linux-$KERNEL_FLAVOURS" $TOP_DIR/recovery-assets/config.yaml
     fi
+
     if [ -f $TOP_DIR/deploy_recovery/hook.sh ]; then
         export WORKDIR=$WORKDIR
         export UBUNTURECOVERY=$UBUNTURECOVERY
@@ -229,13 +227,11 @@ build_cdimage() {
         sed -i "s@\"gpg\"@\"gpg1\"@g" $CDIMAGE_DIR/lib/cdimage/sign.py
     fi
 
-    if [ "$OEM_KERNEL" == "true" ];then
-        # the ubuntu-cdimage still expects the kernel and initrd flavor as "generic"
-        # here we just make is as "oem" kernel
-        sed -i "s/kernel-generic/kernel-oem/g" $CDIMAGE_DIR/lib/cdimage/livefs.py
-        sed -i "s/initrd-generic/initrd-oem/g" $CDIMAGE_DIR/lib/cdimage/livefs.py
-        sed -i "s/FLAVOUR=generic/FLAVOUR=oem/g" $CDIMAGE_DIR/debian-cd/tools/boot/bionic/boot-amd64
-    fi
+    # the ubuntu-cdimage still expects the kernel and initrd flavor as "generic"
+    # here we just make is as "$KERNEL_FLAVOURS" kernel
+    sed -i "s/kernel-generic/kernel-$KERNEL_FLAVOURS/g" $CDIMAGE_DIR/lib/cdimage/livefs.py
+    sed -i "s/initrd-generic/initrd-$KERNEL_FLAVOURS/g" $CDIMAGE_DIR/lib/cdimage/livefs.py
+    sed -i "s/FLAVOUR=generic/FLAVOUR=$KERNEL_FLAVOURS/g" $CDIMAGE_DIR/debian-cd/tools/boot/bionic/boot-amd64
 
     CDIMAGE_INCLUDES="recovery buildstamp"
     if [[ ! -z $EXTRA_CDROM_INCLUDES ]];then
