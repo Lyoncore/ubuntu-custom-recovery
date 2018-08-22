@@ -75,8 +75,10 @@ EOF
 
     #INITRD_COMPRESS=lzma
     cp -a $WORKDIR/oem-livecd-rootfs/live-build/auto $FILESYS
-    sed -i "s/linux-signed-generic/linux-$KERNEL_FLAVOURS/g" $FILESYS/auto/config
-    sed -i "s/linux-signed-image-generic/linux-image-$KERNEL_FLAVOURS/g" $FILESYS/auto/build
+    if [ "$KERNEL_FLAVOURS" != "generic" ]; then
+        sed -i "s/linux-signed-generic/linux-$KERNEL_FLAVOURS/g" $FILESYS/auto/config
+        sed -i "s/linux-signed-image-generic/linux-image-$KERNEL_FLAVOURS/g" $FILESYS/auto/build
+    fi
     export LB_LINUX_FLAVOURS="$KERNEL_FLAVOURS"
     export LB_INITRAMFS_COMPRESSION="gzip"
     INITRD_COMPRESS=gzip
