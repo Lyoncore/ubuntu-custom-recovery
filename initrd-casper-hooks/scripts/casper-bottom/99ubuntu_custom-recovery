@@ -29,9 +29,6 @@ esac
 recoverytype=
 recoveryos=ubuntu_server_curtin
 RECO_MNT=/root/cdrom
-OEM_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/factory-restore-prehook
-OEM_POSTINST_HOOK_DIR=$RECO_MNT/recovery/factory/factory-restore-posthook
-OEM_PREREBOOT_HOOK_DIR=$RECO_MNT/recovery/factory/factory-install-prehook
 
 # Check the recovery type
 for x in $(cat /proc/cmdline); do
@@ -54,10 +51,6 @@ hookdir=$(grep 'oem-headless-installer-preinst-hook-dir:' "$RECO_MNT"/recovery/c
 if [ ! -z $hookdir ]; then
     OEM_HEADLESS_INSTALLER_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/$hookdir
 fi
-hookdir=$(grep 'oem-preinst-hook-dir:' "$RECO_MNT"/recovery/config.yaml | awk '{print $2}')
-if [ ! -z $hookdir ]; then
-    OEM_PREINST_HOOK_DIR=$RECO_MNT/recovery/factory/$hookdir
-fi
 
 # The oem-headless-installer-preinst-hook-dir hook
 if [ $recoverytype == "headless_installer" ]; then
@@ -67,19 +60,6 @@ if [ $recoverytype == "headless_installer" ]; then
         export RECOVERYPART=$recovery_part
         export RECOVERYMNT=$RECO_MNT
         find "$OEM_HEADLESS_INSTALLER_PREINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
-
-        if [ $? != 0 ];then
-            debugshell
-        fi
-    fi
-else
-    # The oem-preinst-hook-dir hook
-    if [ -d $OEM_PREINST_HOOK_DIR ]; then
-        echo "[Factory Restore Prehook] Run scripts in $OEM_PREINST_HOOK_DIR"
-        export RECOVERYTYPE=$recoverytype
-        export RECOVERYPART=$recovery_part
-        export RECOVERYMNT=$RECO_MNT
-        find "$OEM_PREINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
 
         if [ $? != 0 ];then
             debugshell

@@ -52,6 +52,9 @@ if [ -f /etc/default/watchdog ] && [ -f /usr/sbin/watchdog ];then
     /usr/sbin/watchdog
 fi
 
+# run the preinstall hook if not in headless_installer
+[ "$recoverytype" = "headless_installer" ] || /cdrom/recovery/bin/pre-install-hook-runner.sh
+
 # trigger recovery.bin 
 /cdrom/recovery/bin/recovery.bin $recoverytype $recoverylabel ubuntu_classic_curtin 2>&1 | tee /var/log/recovery/recovery.bin.prelog
 ret=${PIPESTATUS[0]}
