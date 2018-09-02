@@ -1,5 +1,7 @@
 [Unit]
 Description=The recovery process for ubuntu-custom-recovery service
+After=plymouth-quit-wait.service systemd-user-sessions.service
+After=rc-local.service
 
 [Service]
 StandardOutput=journal+console
