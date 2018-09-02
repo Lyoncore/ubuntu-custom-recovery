@@ -83,6 +83,10 @@ touch /run/subiquity/complete
 cp $RECO_MNT/recovery/systemd/ubuntu-custom-recovery.service /root/lib/systemd/system/ubuntu-custom-recovery.service
 ln -s /lib/systemd/system/ubuntu-custom-recovery.service /root/etc/systemd/system/multi-user.target.wants/ubuntu-custom-recovery.service
 
+# disable autologin for debugging
+# if any error occuring during installation, it would popup a login prompt
+sed -i 's/--autologin ubuntu-server //' /root/lib/systemd/system/getty@.service.d/autologin.conf
+
 # disable wait online service, network is not needed during restore
 FILE=$(find /root/etc/systemd/system | grep wait)
 
