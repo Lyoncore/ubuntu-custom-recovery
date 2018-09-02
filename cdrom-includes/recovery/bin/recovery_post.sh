@@ -223,9 +223,9 @@ if [ ! -z $recoverytype ] && [ $recoverytype != "headless_installer" ]; then
         echo "[Factory Restore Posthook] Run scripts in $OEM_POSTINST_HOOK_DIR"
         export RECOVERYTYPE=$recoverytype
         export RECOVERYMNT=$RECO_MNT
-        find "$OEM_POSTINST_HOOK_DIR" -type f | sort | while read -r filename;
+        find "$OEM_POSTINST_HOOK_DIR" -type f ! -name ".gitkeep" | sort | while read -r filename;
         do
-            bash "$filename" 2>&1 | tee -a /var/log/recovery/postinst_hooks.log
+            bash "$filename" 2>&1 | (tee -a /var/log/recovery/postinst_hooks.log &)
             ret=${PIPESTATUS[0]}
             if [ $ret -ne 0 ];then
 	            echo "Hook return error in $filename , return=$ret" >> /var/log/recovery/postinst_hooks.err
