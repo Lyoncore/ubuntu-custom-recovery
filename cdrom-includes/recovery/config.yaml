@@ -21,3 +21,4 @@ recovery:
   restore-confirm-prehook-file: restore_confirm/prehook.sh
   restore-confirm-posthook-file: restore_confirm/posthook.sh
   restore-confirm-timeout: 30
+  serial-console: ttyS0

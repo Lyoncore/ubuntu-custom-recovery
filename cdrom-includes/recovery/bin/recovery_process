@@ -4,23 +4,32 @@ if [ ! -d /var/log/recovery ]; then
    mkdir /var/log/recovery
 fi
 
-if [ -e /dev/ttyS0 ]; then
-    stty -F /dev/ttyS0 115200
-    exec &> >(tee -a "/var/log/recovery/recovery_process.log" /dev/ttyS0)
+SERIAL_CONSOLE=ttyS0
+if [ -f /cdrom/recovery/config.yaml ]; then
+    CONSOLE=$(awk -F ": " '/serial-console/{print $2 }' /cdrom/recovery/config.yaml)
+    if [[ "$CONSOLE" == ttyS* ]] || [ "$CONSOLE" == "null" ] ; then
+        SERIAL_CONSOLE=$CONSOLE
+    fi
+fi
+if [ -e /dev/$SERIAL_CONSOLE ]; then
+    stty -F /dev/$SERIAL_CONSOLE 115200 || true
+    exec &> >(tee -a "/var/log/recovery/recovery_process.log" /dev/$SERIAL_CONSOLE)
 else
     exec &> >(tee -a "/var/log/recovery/recovery_process.log")
 fi
 
 display_msg() {
     echo $1 | tee /dev/tty1
-    echo $1 | tee /dev/ttyS0
+    echo $1 | tee /dev/$SERIAL_CONSOLE
 }
 
 #disable login prompt
 systemctl stop getty@tty1.service
 systemctl disable getty@tty1.service
-systemctl stop serial-getty@ttyS0.service
-systemctl disable serial-getty@ttyS0.service
+if [[ "$SERIAL_CONSOLE" == ttyS* ]]; then
+    systemctl stop serial-getty@$SERIAL_CONSOLE.service
+    systemctl disable serial-getty@$SERIAL_CONSOLE.service
+fi
 systemctl daemon-reload
 
 # Check the recovery type
@@ -87,6 +96,9 @@ fi
 
 # re-enable login prompt
 systemctl enable getty@tty1.service
-systemctl enable serial-getty@ttyS0.service
 systemctl start getty@tty1.service
-systemctl start serial-getty@ttyS0.service
+
+if [[ "$SERIAL_CONSOLE" == ttyS* ]]; then
+    systemctl enable serial-getty@$SERIAL_CONSOLE.service
+    systemctl start serial-getty@$SERIAL_CONSOLE.service
+fi
