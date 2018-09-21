@@ -168,11 +168,15 @@ mkdir -p $CHROOT/tmp/usr/lib
 mount --bind /usr/lib/x86_64-linux-gnu/ $CHROOT/tmp/usr/lib
 
 echo "[chroot execute recovery.bin]"
-
-set +e
-/bin/chroot $CHROOT env RECO_MNT=$RECO_MNT recoverytype=$recoverytype recoverylabel=$recoverylabel recoveryos=$recoveryos bash -c 'LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/tmp/lib:/tmp/usr/lib:$RECO_MNT/recovery/lib PATH=$PATH:/tmp/sbin:/tmp/bin:/tmp/usr/bin:$RECO_MNT/recovery/bin recovery.bin $recoverytype $recoverylabel $recoveryos'
-ret=$?
-set -e
+if [ $recoverytype == "headless_installer" ]; then
+    /bin/chroot $CHROOT env RECO_MNT=$RECO_MNT recoverytype=$recoverytype recoverylabel=$recoverylabel recoveryos=$recoveryos bash -c 'LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/tmp/lib:/tmp/usr/lib:$RECO_MNT/recovery/lib PATH=$PATH:/tmp/sbin:/tmp/bin:/tmp/usr/bin:$RECO_MNT/recovery/bin oem-image-installer $recoverylabel'
+    ret=$?
+else
+    set +e
+    /bin/chroot $CHROOT env RECO_MNT=$RECO_MNT recoverytype=$recoverytype recoverylabel=$recoverylabel recoveryos=$recoveryos bash -c 'LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/tmp/lib:/tmp/usr/lib:$RECO_MNT/recovery/lib PATH=$PATH:/tmp/sbin:/tmp/bin:/tmp/usr/bin:$RECO_MNT/recovery/bin recovery.bin $recoverytype $recoverylabel $recoveryos'
+    ret=$?
+    set -e
+fi
 
 # The factory_restore posthook not needed in headless_installer
 if [ $recoverytype != "headless_installer" ]; then

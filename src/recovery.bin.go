@@ -305,15 +305,6 @@ func main() {
 		}
 	}
 
-	// Headless_installer just copy the recovery partition
-	if RecoveryType == rplib.HEADLESS_INSTALLER {
-		err := CopyRecoveryPart(parts)
-		if err != nil {
-			os.Exit(-1)
-		}
-		os.Exit(0)
-	}
-
 	// The bootsize must larger than 50MB
 	if configs.Configs.BootSize >= 50 {
 		SetPartitionStartEnd(parts, SysbootLabel, configs.Configs.BootSize, configs.Configs.Bootloader)

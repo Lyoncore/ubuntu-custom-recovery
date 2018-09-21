@@ -21,8 +21,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -134,134 +132,19 @@ func FindPart(Label string) (devNode string, devPath string, partNr int, err err
 }
 
 func FindTargetParts(parts *Partitions, recoveryType string) error {
-	var devPath string
 	if parts.SourceDevNode == "" || parts.SourceDevPath == "" || parts.Recovery_nr == -1 {
 		return fmt.Errorf("Missing source recovery data")
 	}
 
-	if recoveryType == rplib.HEADLESS_INSTALLER {
-		// If config.yaml has set the specific recovery device,
-		// it would use is as recovery device.
-		// Or it would find out the recovery device
-		if configs.Recovery.RecoveryDevice != "" {
-			parts.TargetDevPath = configs.Recovery.RecoveryDevice
-			parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
-		} else {
-			// target disk might raid devices (/dev/md126)
-			if _, err := os.Stat("/sys/block/md126/dev"); err == nil {
-				log.Println("found raid devices enabled in BIOS")
-				dat := []byte("")
-				dat, err := ioutil.ReadFile("/sys/block/md126/dev")
-				if err != nil {
-					return err
-				}
-				dat_str := strings.TrimSpace(string(dat))
-				blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
-				if blockDevice != parts.SourceDevPath {
-					parts.TargetDevPath = blockDevice
-					parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
-					return nil
-				}
-			}
-
-			// target disk might be emmc
-			if devPath == "" {
-				blockArray, _ := filepath.Glob("/sys/block/mmcblk*")
-				for _, block := range blockArray {
-					dat := []byte("")
-					dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
-					if err != nil {
-						return err
-					}
-					dat_str := strings.TrimSpace(string(dat))
-					blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
-					if blockDevice != parts.SourceDevPath {
-						devPath = blockDevice
-						if devPath == "/dev/mmcblk0" {
-							parts.TargetDevPath = devPath
-							parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
-							return nil
-						}
-						break
-					}
-				}
-			}
-
-			// target disk might be scsi disk
-			if devPath == "" {
-				blockArray, _ := filepath.Glob("/sys/block/sd*")
-				for _, block := range blockArray {
-					dat := []byte("")
-					dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
-					if err != nil {
-						return err
-					}
-					dat_str := strings.TrimSpace(string(dat))
-					blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
-
-					if blockDevice != parts.SourceDevPath {
-						devPath = blockDevice
-						break
-					}
-				}
-			}
-
-			// target disk might be nvme disk
-			if devPath == "" {
-				blockArray, _ := filepath.Glob("/sys/block/nvme*")
-				for _, block := range blockArray {
-					dat := []byte("")
-					dat, err := ioutil.ReadFile(filepath.Join(block, "dev"))
-					if err != nil {
-						return err
-					}
-					dat_str := strings.TrimSpace(string(dat))
-					blockDevice := rplib.Realpath(fmt.Sprintf("/dev/block/%s", dat_str))
-
-					if blockDevice != parts.SourceDevPath {
-						devPath = blockDevice
-						break
-					}
-				}
-			}
-
-			if devPath != "" {
-				// The devPath is with partiion for /dev/sdX1 or /dev/mmcblkXp1
-				// but without partition for /dev/nvmeXnX
-				// Here to remove the partition information
-				for {
-					if true == strings.Contains(devPath, "nvme") {
-						parts.TargetDevPath = devPath
-						parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
-						break
-					}
-					if _, err := strconv.Atoi(string(devPath[len(devPath)-1])); err == nil {
-						devPath = devPath[:len(devPath)-1]
-					} else {
-						if devPath[len(devPath)-1] == 'p' {
-							devPath = devPath[:len(devPath)-1]
-						}
-						parts.TargetDevPath = devPath
-						parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
-						break
-					}
-				}
-				log.Println("debug: ", parts.TargetDevPath, parts.TargetDevNode)
-			} else {
-				return fmt.Errorf("No target disk found")
-			}
-		}
+	// If config.yaml has set the specific system device,
+	// it would use is as system device.
+	// Or it would assume the system device is same as recovery device
+	if configs.Recovery.SystemDevice != "" {
+		parts.TargetDevPath = configs.Recovery.SystemDevice
+		parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
 	} else {
-		// If config.yaml has set the specific system device,
-		// it would use is as system device.
-		// Or it would assume the system device is same as recovery device
-		if configs.Recovery.SystemDevice != "" {
-			parts.TargetDevPath = configs.Recovery.SystemDevice
-			parts.TargetDevNode = filepath.Base(parts.TargetDevPath)
-		} else {
-			parts.TargetDevNode = parts.SourceDevNode
-			parts.TargetDevPath = parts.SourceDevPath
-		}
+		parts.TargetDevNode = parts.SourceDevNode
+		parts.TargetDevPath = parts.SourceDevPath
 	}
 	return nil
 }
@@ -288,12 +171,9 @@ func GetPartitions(recoveryLabel string, recoveryType string) (*Partitions, erro
 	}
 
 	//system-boot partition info
-	devnode, _, sysboot_nr, err := FindPart(SysbootLabel)
+	_, _, sysboot_nr, err := FindPart(SysbootLabel)
 	if err == nil {
-		if (recoveryType != rplib.HEADLESS_INSTALLER) || (recoveryType == rplib.HEADLESS_INSTALLER && parts.SourceDevNode != devnode) {
-			//Target system-boot found and must not source device in headless_installer mode
-			parts.Sysboot_nr = sysboot_nr
-		}
+		parts.Sysboot_nr = sysboot_nr
 	}
 
 	//swap partition info
