@@ -70,8 +70,87 @@ sudo fatlabel /dev/mapper/${LOOP_IMG}p1 ESP
 
 mkdir img_mnt || true
 sudo mount /dev/mapper/${LOOP_IMG}p1 img_mnt
-# Adding a post install hook for maas 
-sudo bash -c 'cat > img_mnt/recovery/factory/OEM_post_install_hook/60-maas-hook.sh << EEF
+
+# detect image is Ubuntu Core or Ubuntu Server
+# the Ubuntu Core includes *.snap in recovery partition
+UC=$(ls img_mnt/*.snap 2>/dev/null) || true
+
+if [ "$UC" != "" ]; then
+    #the hook script for Ubuntu Core
+    sudo bash -c 'cat > img_mnt/recovery/factory/OEM_post_install_hook/60-maas-hook.sh << EEF
+#!/bin/bash
+
+set -x
+RECOVERYMNT="/run/recovery"
+ROOTFSMNT="/writable/system-data"
+
+# copy maas cloud-init config files
+if [ ! -d $ROOTFSMNT/etc/cloud/cloud.cfg.d/ ]; then
+    mkdir -p $ROOTFSMNT/etc/cloud/cloud.cfg.d
+fi
+
+if [ -d \$RECOVERYMNT/system-data/etc/cloud/cloud.cfg.d ]; then
+    cp \$RECOVERYMNT/system-data/etc/cloud/cloud.cfg.d/* \$ROOTFSMNT/etc/cloud/cloud.cfg.d/
+fi
+
+# move ubuntu and factory restore boot entries the last two
+IN=\$(LD_LIBRARY_PATH=\$RECOVERYMNT/recovery/lib efibootmgr | grep BootOrder | cut -d ':' -f 2 | tr -d '[:space:]')
+OLDIFS=\$IFS
+IFS=","
+
+# remove the unsed bootentries for maas image
+ENTRY=\$(LD_LIBRARY_PATH=\$RECOVERYMNT/recovery/lib efibootmgr | grep factory_restore | cut -d "*" -f 1)
+if [ ! -z "\$ENTRY" ]; then
+    FACTORY_RESTORE_BOOT_ENTRY=\${ENTRY#Boot}
+fi
+ENTRY=\$(LD_LIBRARY_PATH=\$RECOVERYMNT/recovery/lib efibootmgr | grep -i ubuntu | cut -d "*" -f 1)
+if [ ! -z "\$ENTRY" ]; then
+    UBUNTU_BOOT_ENTRY=\${ENTRY#Boot}
+fi
+
+for x in \$IN
+do
+        if [ "\$x" != "\$FACTORY_RESTORE_BOOT_ENTRY" ] && [ "\$x" != "\$UBUNTU_BOOT_ENTRY" ]; then
+            if [ "\$new_boot" = "" ]; then
+                new_boot=\$x
+            else
+                new_boot="\$new_boot,\$x"
+            fi
+        fi
+done
+
+if [ "\$UBUNTU_BOOT_ENTRY" != "" ]; then
+    new_boot="\$new_boot,\$UBUNTU_BOOT_ENTRY"
+fi
+if [ \$FACTORY_RESTORE_BOOT_ENTRY != "" ]; then
+    new_boot="\$new_boot,\$FACTORY_RESTORE_BOOT_ENTRY"
+fi
+
+IFS=\$OLDIFS`
+
+LD_LIBRARY_PATH=\$RECOVERYMNT/recovery/lib efibootmgr -o \$new_boot
+
+# workaround: not using networkmanager for cloud-init, or it will not get IP before cloud-init-local.service
+sed -i "s/renderer: NetworkManager/renderer: networkd/g" \$ROOTFSMNT/etc/netplan/00-default-nm-renderer.yaml
+# set networkmanager back after cloud-init complete
+cat > \$ROOTFSMNT/etc/cloud/cloud.cfg.d/90-workaound-back-to-nm.cfg << EOF
+runcmd:
+ - [ sed, -i, "s/renderer: networkd/renderer: NetworkManager/g", /etc/netplan/00-default-nm-renderer.yaml ]
+ - [ netplan, generate ]
+ - [ systemctl, restart, snap.network-manager.networkmanager.service ]
+ - [ netplan, apply ]
+EOF
+chmod a+x \$ROOTFSMNT/etc/cloud/cloud.cfg.d/90-workaound-back-to-nm.cfg
+
+# the boot partition needs modification for maas bootup
+mkdir /tmp/boot
+mount /dev/disk/by-label/system-boot /tmp/boot
+cp /tmp/boot/EFI/BOOT/* /tmp/boot/EFI/UBUNTU/
+umount /tmp/boot
+EEF'
+else
+    # Adding a post install hook for maas
+    sudo bash -c 'cat > img_mnt/recovery/factory/OEM_post_install_hook/60-maas-hook.sh << EEF
 #!/bin/sh
 
 set -x
@@ -153,6 +232,7 @@ umount \$ROOTFSMNT/dev
 umount $ROOTFSMNT/run
 
 EEF'
+fi
 
 # copy the maas assets
 if [ -d maas-assets/ ]; then
@@ -161,19 +241,31 @@ fi
 
 # The maas needs boot from EFI/UBUNTU/shimx64.efi, but recovery doesn't
 # Here to create an EFI/UBUNTU/ boot assets
-sudo mkdir img_mnt/EFI/UBUNTU/
-sudo cp img_mnt/EFI/BOOT/* img_mnt/EFI/UBUNTU/
-if [ ! -f /usr/lib/shim/shimx64.efi.signed ];then
-    sudo apt update
-    sudo apt install -y shim-signed
+if [ ! -d img_mnt/EFI/UBUNTU/ ]; then
+    sudo mkdir img_mnt/EFI/UBUNTU/
 fi
-sudo cp /usr/lib/shim/shimx64.efi.signed img_mnt/EFI/UBUNTU/shimx64.efi
+sudo cp img_mnt/EFI/BOOT/* img_mnt/EFI/UBUNTU/
+if [ ! -f img_mnt/EFI/UBUNTU/shimx64.efi ]; then
+    if [ ! -f /usr/lib/shim/shimx64.efi.signed ];then
+        sudo apt update
+        sudo apt install -y shim-signed
+    fi
+    sudo cp /usr/lib/shim/shimx64.efi.signed img_mnt/EFI/UBUNTU/shimx64.efi
+fi
 
 # Cheat curtin in maas that is a ubuntu core image
 # Create a /system-data/var/lib/snapd/ dir here
 sudo mkdir -p img_mnt/system-data/var/lib/snapd/
 
 sudo umount img_mnt
+
+# If this is an ubuntu core image. that might be an writable partition exist in image.
+# We need to clean /var/lib/snapd that to prevent maas deploying meet missing config files issue.
+if [ -e /dev/mapper/${LOOP_IMG}p3 ]; then
+    sudo mount /dev/mapper/${LOOP_IMG}p3 img_mnt
+    sudo rm -rf img_mnt/system-data/var/lib/snapd/
+    sudo umount img_mnt
+fi
 rmdir img_mnt
 
 sudo kpartx -ds /dev/$LOOP_IMG
