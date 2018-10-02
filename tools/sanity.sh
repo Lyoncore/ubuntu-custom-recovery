@@ -126,7 +126,7 @@ if [ \$FACTORY_RESTORE_BOOT_ENTRY != "" ]; then
     new_boot="\$new_boot,\$FACTORY_RESTORE_BOOT_ENTRY"
 fi
 
-IFS=\$OLDIFS`
+IFS=\$OLDIFS
 
 LD_LIBRARY_PATH=\$RECOVERYMNT/recovery/lib efibootmgr -o \$new_boot
 
