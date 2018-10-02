@@ -94,6 +94,7 @@ if [ -d \$RECOVERYMNT/system-data/etc/cloud/cloud.cfg.d ]; then
 fi
 
 # move ubuntu and factory restore boot entries the last two
+PATH=\$PATH:\$RECOVERYMNT/recovery/bin
 IN=\$(LD_LIBRARY_PATH=\$RECOVERYMNT/recovery/lib efibootmgr | grep BootOrder | cut -d ':' -f 2 | tr -d '[:space:]')
 OLDIFS=\$IFS
 IFS=","
