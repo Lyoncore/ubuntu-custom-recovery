@@ -211,7 +211,7 @@ sync_ftp() {
     cd $CDIMAGE_DIR/preloadftp
     if [ "$BUILD_IN_BIONIC" == "true" ]; then
         set +e
-        ./merge-packaelist.sh
+        ./merge-packagelist.sh
         set -e
     fi
     if [[ ! -z "$ANONFTPSYN_MIRROR" ]]; then

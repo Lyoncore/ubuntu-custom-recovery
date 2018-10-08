@@ -92,7 +92,7 @@ fi
 #copy the cdrom includes
 cp -r $U_C_R/cdrom-includes/recovery/ $CDIMAGE_SCRIPT/
 cp $U_C_R/recovery-includes/recovery/bin/recovery.bin $CDIMAGE_SCRIPT/recovery/bin/
-cp $U_O_I/bin/ubuntu-oem-installer $CDIMAGE_SCRIPT/recovery/bin/
+cp $U_O_I/bin/oem-image-installer $CDIMAGE_SCRIPT/recovery/bin/
 cp -r $ASSETS_SRC/* $CDIMAGE_SCRIPT/recovery
 
 #copy grub config files
