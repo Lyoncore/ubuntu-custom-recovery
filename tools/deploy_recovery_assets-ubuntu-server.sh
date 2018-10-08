@@ -74,8 +74,8 @@ if [ ! -d $ASSETS_SRC ]; then
 	exit 1
 fi
 
-if [ ! -f $U_O_I/bin/ubuntu-oem-installer ]; then
-    echo "$U_O_I/bin/ubuntu-oem-installer not found. not compiled yet?"
+if [ ! -f $U_O_I/bin/oem-image-installer ]; then
+    echo "$U_O_I/bin/oem-image-installer not found. not compiled yet?"
     exit 1
 fi
 
