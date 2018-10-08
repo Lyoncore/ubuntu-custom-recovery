@@ -20,10 +20,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	rplib "github.com/Lyoncore/ubuntu-custom-recovery/src/rplib"
@@ -67,4 +71,37 @@ func usbhid() {
 	if err != nil {
 		rplib.Shellexec("modprobe", "hid-generic")
 	}
+}
+
+func GetSystemMem() (mem int64, err error) {
+	fmeminfo := "/proc/meminfo"
+	mem = 0
+	err = nil
+
+	FileBytes, err := ioutil.ReadFile(fmeminfo)
+	if err != nil {
+		err = fmt.Errorf("Read %s failed\n", fmeminfo)
+		return mem, err
+	}
+	bufr := bytes.NewBuffer(FileBytes)
+	for {
+		line, err := bufr.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			fmt.Sprintf("Parsing %s failed\n", fmeminfo)
+		}
+		ndx := strings.Index(line, "MemTotal:")
+		if ndx >= 0 {
+			line = strings.TrimSpace(line[9:])
+			line = line[:len(line)-3]
+			mem, err := strconv.ParseInt(line, 10, 64)
+			if err == nil {
+				return mem, err
+			}
+		}
+	}
+	err = fmt.Errorf("Read MemTotal in %s failed\n", fmeminfo)
+	return mem, err
 }

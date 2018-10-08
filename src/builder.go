@@ -287,6 +287,7 @@ func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displ
 		}
 
 		if swapenable {
+			//FIXME for resume device
 			rplib.Shellexec("sed", "-i", fmt.Sprintf("s@quiet splash@quiet splash resume=%s@g", resumeDev), filepath.Join(writableMnt, "etc/default/grub"))
 		}
 

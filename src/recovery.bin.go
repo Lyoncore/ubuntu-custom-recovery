@@ -329,7 +329,7 @@ func main() {
 		log.Println("Invalid bootsize in config.yaml:", configs.Configs.BootSize)
 	}
 
-	if configs.Configs.Swap == true && configs.Configs.SwapSize > 0 {
+	if configs.Configs.Swap == true && (configs.Configs.Swapfile != true && configs.Configs.SwapSize > 0) {
 		SetPartitionStartEnd(parts, SwapLabel, configs.Configs.SwapSize, configs.Configs.Bootloader)
 	}
 	preparePartitions(parts, RecoveryOS)
