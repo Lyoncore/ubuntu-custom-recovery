@@ -12,6 +12,7 @@ FILESYS=$WORKDIR/filesys
 CDIMAGE_DIR=$WORKDIR/ubuntu-cdimage
 ROOTFS_SQUASHFS=$FILESYS/livecd.ubuntu-server.squashfs
 CHROOT=$WORKDIR/chroot
+UBUNTUOEMINSTALLER=$WORKDIR/ubuntu-oem-installer
 UBUNTURECOVERY=$WORKDIR/ubuntu-custom-recovery
 KERNEL_FLAVOURS=generic
 
@@ -37,6 +38,7 @@ fi
 clone_sources() {
     mkdir -p $WORKDIR || true
     cd $WORKDIR
+    git clone --depth 1 https://github.com/Lyoncore/ubuntu-oem-installer.git ubuntu-oem-installer
     git clone --depth 1 https://github.com/Lyoncore/oem-livecd-rootfs.git -b oem-bionic-base oem-livecd-rootfs
     git clone --depth 1 https://github.com/Lyoncore/oem-ubuntu-cdimage.git -b oem-bionic-base $CDIMAGE_DIR
     cd $CDIMAGE_DIR
@@ -159,13 +161,27 @@ EOF
 }
 
 build_recovery_partition() {
+    # build ubuntu-oem-installer
+    cd $UBUNTUOEMINSTALLER
+
+    git describe --always > $WORKDIR/ubuntu-oem-installer.version
+
+    export GOPATH=$WORKDIR/gocode
+    export PATH="$PATH:$GOPATH/bin"
+    go get launchpad.net/godeps
+    godeps -t -u dependencies.tsv || true
+
+    mkdir $WORKDIR/gocode/src/github.com/Lyoncore/
+    ln -s $UBUNTURECOVERY $WORKDIR/gocode/src/github.com/Lyoncore/ubuntu-custom-recovery
+    go run build.go build
+    cd $TOP_DIR
+
+    # build ubuntu-custom-recovery
     cd $UBUNTURECOVERY
 
     git describe --always > $WORKDIR/ubuntu-custom-recovery.version
 
-    export GOPATH=$WORKDIR/gocode
-    export PATH="$PATH:$GOPATH/bin"
-    go get launchpad.net/godeps 
+    go get launchpad.net/godeps
     godeps -t -u dependencies.tsv || true
 
     mkdir $WORKDIR/gocode/src/github.com/Lyoncore/
@@ -196,7 +212,7 @@ sync_ftp() {
     cd $CDIMAGE_DIR/preloadftp
     if [ "$BUILD_IN_BIONIC" == "true" ]; then
         set +e
-        ./merge-packagelist.sh
+        ./merge-packaelist.sh
         set -e
     fi
     if [[ ! -z "$ANONFTPSYN_MIRROR" ]]; then

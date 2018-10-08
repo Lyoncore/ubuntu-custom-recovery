@@ -23,6 +23,9 @@ while [ -n "$1" ]; do
         --u-c-r=*)
             U_C_R=${1#*=}
             ;;
+        --u-o-i=*)
+            U_O_I=${1#*=}
+            ;;
         --hook=*)
             HOOK=${1#*=}
             ;;
@@ -44,6 +47,10 @@ if [ -z $ASSETS_SRC ] || [ -z $CDIMAGE_SCRIPT ] || [ -z $CDIMAGE_DIR ] || [ -z $
     exit 1
 fi
 
+if [ ! -d $U_O_I ]; then
+	echo "ubuntu-oem-installer dir not found ($U_O_I)"
+	exit 1
+fi
 if [ ! -d $U_C_R ]; then
 	echo "ubuntu-custom-recovery custom recovery dir not found ($U_C_R)"
 	exit 1
@@ -67,6 +74,11 @@ if [ ! -d $ASSETS_SRC ]; then
 	exit 1
 fi
 
+if [ ! -f $U_O_I/bin/ubuntu-oem-installer ]; then
+    echo "$U_O_I/bin/ubuntu-oem-installer not found. not compiled yet?"
+    exit 1
+fi
+
 if [ ! -f $U_C_R/recovery-includes/recovery/bin/recovery.bin ]; then
     echo "$U_C_R/recovery-includes/recovery/bin/recovery.bin not found. not compiled yet?"
     exit 1
@@ -80,6 +92,7 @@ fi
 #copy the cdrom includes
 cp -r $U_C_R/cdrom-includes/recovery/ $CDIMAGE_SCRIPT/
 cp $U_C_R/recovery-includes/recovery/bin/recovery.bin $CDIMAGE_SCRIPT/recovery/bin/
+cp $U_O_I/bin/ubuntu-oem-installer $CDIMAGE_SCRIPT/recovery/bin/
 cp -r $ASSETS_SRC/* $CDIMAGE_SCRIPT/recovery
 
 #copy grub config files

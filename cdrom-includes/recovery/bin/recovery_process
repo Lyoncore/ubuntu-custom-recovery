@@ -62,11 +62,16 @@ if [ -f /etc/default/watchdog ] && [ -f /usr/sbin/watchdog ];then
 fi
 
 # run the preinstall hook if not in headless_installer
-[ "$recoverytype" = "headless_installer" ] || /cdrom/recovery/bin/pre-install-hook-runner.sh
+if [ "$recoverytype" = "headless_installer" ]; then
+    /cdrom/recovery/bin/oem-image-installer $recoverylabel
+    ret=$?
+else
+    /cdrom/recovery/bin/pre-install-hook-runner.sh
+    # trigger recovery.bin
+    /cdrom/recovery/bin/recovery.bin $recoverytype $recoverylabel ubuntu_classic_curtin 2>&1 | tee /var/log/recovery/recovery.bin.prelog
+    ret=${PIPESTATUS[0]}
+fi
 
-# trigger recovery.bin 
-/cdrom/recovery/bin/recovery.bin $recoverytype $recoverylabel ubuntu_classic_curtin 2>&1 | tee /var/log/recovery/recovery.bin.prelog
-ret=${PIPESTATUS[0]}
 if [ $ret -eq 0 ] && [ ! -f /var/log/curtin/curtin-error-logs.tar ]; then
     if [ "$recoverytype" != "headless_installer" ]; then
         # remove installer default user
