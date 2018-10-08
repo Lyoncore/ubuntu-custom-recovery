@@ -200,7 +200,7 @@ build_recovery_partition() {
         export UBUNTURECOVERY=$UBUNTURECOVERY
         export TOP_DIR=$TOP_DIR
         export CDIMAGE_DIR=$CDIMAGE_DIR
-        $UBUNTURECOVERY/tools/deploy_recovery_assets-ubuntu-server.sh --assets-src=$TOP_DIR/recovery-assets/ --oem-cdimage-script=$WORKDIR/ubuntu-cdimage/oem-cdimage-script/ --ubuntu-cdimage=$WORKDIR/ubuntu-cdimage/ --oem-livecd-rootfs=$WORKDIR/oem-livecd-rootfs/ --u-c-r=$UBUNTURECOVERY --hook=$TOP_DIR/deploy_recovery/hook.sh
+        $UBUNTURECOVERY/tools/deploy_recovery_assets-ubuntu-server.sh --assets-src=$TOP_DIR/recovery-assets/ --oem-cdimage-script=$WORKDIR/ubuntu-cdimage/oem-cdimage-script/ --ubuntu-cdimage=$WORKDIR/ubuntu-cdimage/ --oem-livecd-rootfs=$WORKDIR/oem-livecd-rootfs/ --u-c-r=$UBUNTURECOVERY --u-o-i=$UBUNTUOEMINSTALLER --hook=$TOP_DIR/deploy_recovery/hook.sh
     else
         $UBUNTURECOVERY/tools/deploy_recovery_assets-ubuntu-server.sh --assets-src=$TOP_DIR/recovery-assets/ --oem-cdimage-script=$WORKDIR/ubuntu-cdimage/oem-cdimage-script/ --ubuntu-cdimage=$WORKDIR/ubuntu-cdimage/ --oem-livecd-rootfs=$WORKDIR/oem-livecd-rootfs/ --u-c-r=$UBUNTURECOVERY
     fi
