@@ -184,7 +184,6 @@ build_recovery_partition() {
     go get launchpad.net/godeps
     godeps -t -u dependencies.tsv || true
 
-    mkdir $WORKDIR/gocode/src/github.com/Lyoncore/
     ln -s $UBUNTURECOVERY $WORKDIR/gocode/src/github.com/Lyoncore/ubuntu-custom-recovery
     go run build.go build
     cd $TOP_DIR
