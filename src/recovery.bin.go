@@ -68,8 +68,6 @@ const (
 	SYSBOOT_UBOOT_ENV = SYSBOOT_MNT_DIR + "uboot.env"
 	BACKUP_SNAP_PATH  = "/backup_snaps/"
 
-	WRITABLE_INCLUDES_SQUASHFS = RECO_ROOT_DIR + "recovery/writable-includes.squashfs"
-
 	// Ubuntu classic specific
 	WRITABLE_ETC_FSTAB      = WRITABLE_MNT_DIR + "etc/fstab"
 	WRITABLE_GRUB_40_CUSTOM = WRITABLE_MNT_DIR + "etc/grub.d/40_custom"
@@ -157,7 +155,6 @@ func preparePartitions(parts *Partitions, recoveryos string) {
 // easier for function mocking
 var enableLogger = EnableLogger
 var copySnapsAsserts = CopySnapsAsserts
-var addFirstBootService = AddFirstBootService
 var restoreAsserions = RestoreAsserions
 var updateUbootEnv = UpdateUbootEnv
 var updateGrubCfg = UpdateGrubCfg
@@ -198,11 +195,6 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 		// Copy snaps
 		log.Println("[Add additional snaps/asserts]")
 		err = copySnapsAsserts()
-		rplib.Checkerr(err)
-
-		// add firstboot service for ubuntu core
-		log.Println("[Add FIRSTBOOT service]")
-		err = addFirstBootService(RecoveryType, RecoveryLabel)
 		rplib.Checkerr(err)
 
 		// Ubuntu core default is using EFI directory for boot partition
@@ -311,15 +303,6 @@ func main() {
 			log.Println(err)
 			os.Exit(0x55) //ERESTART
 		}
-	}
-
-	// Headless_installer just copy the recovery partition
-	if RecoveryType == rplib.HEADLESS_INSTALLER {
-		err := CopyRecoveryPart(parts)
-		if err != nil {
-			os.Exit(-1)
-		}
-		os.Exit(0)
 	}
 
 	// The bootsize must larger than 50MB

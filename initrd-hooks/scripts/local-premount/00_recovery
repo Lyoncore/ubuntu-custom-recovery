@@ -92,7 +92,7 @@ if [ -d $OEM_PREINST_HOOK_DIR ]; then
     export RECOVERYTYPE=$recoverytype
     export RECOVERYPART=$recovery_part
     export RECOVERYMNT=$RECO_MNT
-    find "$OEM_PREINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
+    find "$OEM_PREINST_HOOK_DIR" -type f ! -name ".gitkeep" | sort | while read -r filename; do sh "$filename"; done
 
     if [ $? != 0 ];then
         debugshell
@@ -155,13 +155,28 @@ mount --bind /dev $CHROOT/dev
 mount --bind /run $CHROOT/run
 mount --bind /tmp $CHROOT/tmp
 mount --bind $RECO_MNT $CHROOT/$RECO_MNT
+mkdir $CHROOT/tmp/sbin
+mount --bind /sbin $CHROOT/tmp/sbin
+mkdir $CHROOT/tmp/bin
+mount --bind /bin $CHROOT/tmp/bin
+mkdir -p $CHROOT/tmp/usr/bin
+mount --bind /usr/bin $CHROOT/tmp/usr/bin
+#FIXME: to support ARM
+mkdir $CHROOT/tmp/lib
+mount --bind /lib/x86_64-linux-gnu/ $CHROOT/tmp/lib
+mkdir -p $CHROOT/tmp/usr/lib
+mount --bind /usr/lib/x86_64-linux-gnu/ $CHROOT/tmp/usr/lib
 
 echo "[chroot execute recovery.bin]"
-
-set +e
-/bin/chroot $CHROOT $RECO_MNT/recovery/bin/recovery.bin $recoverytype $recoverylabel $recoveryos
-ret=$?
-set -e
+if [ $recoverytype == "headless_installer" ]; then
+    /bin/chroot $CHROOT env RECO_MNT=$RECO_MNT recoverytype=$recoverytype recoverylabel=$recoverylabel recoveryos=$recoveryos bash -c 'LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/tmp/lib:/tmp/usr/lib:$RECO_MNT/recovery/lib PATH=$PATH:/tmp/sbin:/tmp/bin:/tmp/usr/bin:$RECO_MNT/recovery/bin oem-image-installer $recoverylabel'
+    ret=$?
+else
+    set +e
+    /bin/chroot $CHROOT env RECO_MNT=$RECO_MNT recoverytype=$recoverytype recoverylabel=$recoverylabel recoveryos=$recoveryos bash -c 'LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/tmp/lib:/tmp/usr/lib:$RECO_MNT/recovery/lib PATH=$PATH:/tmp/sbin:/tmp/bin:/tmp/usr/bin:$RECO_MNT/recovery/bin recovery.bin $recoverytype $recoverylabel $recoveryos'
+    ret=$?
+    set -e
+fi
 
 # The factory_restore posthook not needed in headless_installer
 if [ $recoverytype != "headless_installer" ]; then
@@ -170,7 +185,7 @@ if [ $recoverytype != "headless_installer" ]; then
         export RECOVERYTYPE=$recoverytype
         export RECOVERYPART=$recovery_part
         export RECOVERYMNT=$RECO_MNT
-        find "$OEM_POSTINST_HOOK_DIR" -type f | sort | while read -r filename; do sh "$filename"; done
+        find "$OEM_POSTINST_HOOK_DIR" -type f ! -name ".gitkeep" | sort | while read -r filename; do sh "$filename"; done
 
         if [ $? != 0 ];then
             debugshell
@@ -187,7 +202,7 @@ if [ $recoverytype != "headless_installer" ]; then
         export RECOVERYPART=$recovery_part
         export RECOVERYMNT=$RECO_MNT
         export RECOVERY_BIN_RETURN=$ret
-        find "$OEM_PREREBOOT_HOOK_DIR" -type f | sort | while read -r filename; do chroot $CHROOT sh "$filename"; done
+        find "$OEM_PREREBOOT_HOOK_DIR" -type f ! -name ".gitkeep" | sort | while read -r filename; do chroot $CHROOT sh "$filename"; done
     fi
 fi
 # ERESTART is errno 85 which restart system requirest from recovery.bin

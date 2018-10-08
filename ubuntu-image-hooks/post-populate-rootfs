@@ -91,18 +91,12 @@ populate_recovery_initrd_kernel () {
 
 backup_snaps() {
     echo "backup snaps"
-    CORE=$(find $ROOTFS_PATH/system-data/var/lib/snapd/snaps/ -name 'core_*.snap')
+    CORE=$(find $ROOTFS_PATH/system-data/var/lib/snapd/snaps/ -name 'core*.snap')
     KERNEL=$(find $ROOTFS_PATH/system-data/var/lib/snapd/snaps/ -name '*kernel_*.snap')
 
     mkdir $UNPACK_GADGET/recovery-assets/backup_snaps
     cp $CORE $UNPACK_GADGET/recovery-assets/backup_snaps/$(basename $CORE)
     cp $KERNEL $UNPACK_GADGET/recovery-assets/backup_snaps/$(basename $KERNEL)
-}
-
-prepare_writable_squashfs() {
-    echo "prepare writable squashfs"
-    mksquashfs $UNPACK_GADGET/writable-includes $UNPACK_GADGET/recovery-assets/recovery/writable-includes.squashfs -all-root
-    rm -rf $UNPACK_GADGET/writable-includes
 }
 
 _parse_yaml() {
@@ -207,6 +201,5 @@ backup_writable
 backup_bootfs
 populate_recovery_initrd_kernel
 backup_snaps
-prepare_writable_squashfs
 update_bootloader_cfg
 update_recovery_assets
