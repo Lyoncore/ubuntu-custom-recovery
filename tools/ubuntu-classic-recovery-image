@@ -172,7 +172,7 @@ build_recovery_partition() {
     godeps -t -u dependencies.tsv || true
 
     mkdir $WORKDIR/gocode/src/github.com/Lyoncore/
-    ln -s $UBUNTURECOVERY $WORKDIR/gocode/src/github.com/Lyoncore/ubuntu-oem-installer
+    ln -s $UBUNTUOEMINSTALLER $WORKDIR/gocode/src/github.com/Lyoncore/ubuntu-oem-installer
     go run build.go build
     cd $TOP_DIR
 
