@@ -456,7 +456,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 		} else {
 			parts.Sysboot_nr = 1 //If target device is not same as source, the system-boot parition will start from 1st partition
 		}
-		if configs.Configs.Swap == true && (configs.Configs.Swapfile != true && configs.Configs.SwapSize > 0) {
+		if configs.Configs.Swap == true && configs.Configs.Swapfile != true && configs.Configs.SwapSize > 0 {
 			parts.Swap_nr = parts.Sysboot_nr + 1  //swap is one after system-boot
 			parts.Writable_nr = parts.Swap_nr + 1 //writable is one after swap
 		} else {
@@ -531,7 +531,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 	rplib.Shellexec("parted", "-ms", dev_path, "set", strconv.Itoa(parts.Sysboot_nr), "boot", "on")
 
 	// Create swap partition
-	if configs.Configs.Swap == true && (configs.Configs.Swapfile != true && configs.Configs.SwapSize > 0) {
+	if configs.Configs.Swap == true && configs.Configs.Swapfile != true && configs.Configs.SwapSize > 0 {
 		_, new_end := rplib.GetPartitionBeginEnd(dev_path, parts.Sysboot_nr)
 		parts.Swap_start = int64(new_end + 1)
 
@@ -546,7 +546,7 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 
 	// Restore writable
 	var new_end int
-	if configs.Configs.Swap == true && (configs.Configs.Swapfile != true && configs.Configs.SwapSize > 0) {
+	if configs.Configs.Swap == true && configs.Configs.Swapfile != true && configs.Configs.SwapSize > 0 {
 		_, new_end = rplib.GetPartitionBeginEnd(dev_path, parts.Swap_nr)
 	} else {
 		_, new_end = rplib.GetPartitionBeginEnd(dev_path, parts.Sysboot_nr)

@@ -173,7 +173,7 @@ func generateCurtinConf(parts *Partitions) error {
 	} else {
 		return fmt.Errorf("Invalid boot size configured in config.yaml")
 	}
-	if configs.Configs.Swap == true && (configs.Configs.SwapFile != true && configs.Configs.SwapSize > 0) {
+	if configs.Configs.Swap == true && configs.Configs.SwapFile != true && configs.Configs.SwapSize > 0 {
 		curtinCfg = strings.Replace(curtinCfg, "###SWAP_PART_NUMBER###", strconv.FormatInt(int64(parts.Swap_nr), 10), -1)
 		curtinCfg = strings.Replace(curtinCfg, "###SWAP_PART_SIZE###", strconv.FormatInt(int64(configs.Configs.SwapSize*1024*1024), 10), -1)
 		curtinCfg = strings.Replace(curtinCfg, "###SWAP_FILE_SIZE###", "0", -1)
@@ -186,7 +186,7 @@ func generateCurtinConf(parts *Partitions) error {
 	} else if configs.Configs.RootfsSize < 0 {
 		// using the remaining free space for rootfs
 		rootsize := parts.TargetSize - int64(configs.Configs.BootSize*1024*1024)
-		if configs.Configs.Swap == true && configs.Configs.SwapSize > 0 {
+		if configs.Configs.Swap == true && configs.Configs.SwapFile != true && configs.Configs.SwapSize {
 			rootsize -= int64(configs.Configs.SwapSize * 1024 * 1024)
 		}
 		curtinCfg = strings.Replace(curtinCfg, "###ROOTFS_PART_SIZE###", strconv.FormatInt(int64(rootsize), 10), -1)

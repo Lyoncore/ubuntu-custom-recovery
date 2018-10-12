@@ -260,7 +260,12 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 		} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
 			// grub install also updates the boot entries
 			if configs.Configs.Swap {
-				grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true, true, fmtPartPath(parts.TargetDevPath, parts.Swap_nr))
+				if configs.Configs.Swapfile {
+					grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true, true, fmtPartPath(parts.TargetDevPath, Writable_nr))
+				} else {
+					grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true, true, fmtPartPath(parts.TargetDevPath, parts.Swap_nr))
+
+				}
 			} else {
 				grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true, false, "")
 			}
@@ -329,7 +334,7 @@ func main() {
 		log.Println("Invalid bootsize in config.yaml:", configs.Configs.BootSize)
 	}
 
-	if configs.Configs.Swap == true && (configs.Configs.Swapfile != true && configs.Configs.SwapSize > 0) {
+	if configs.Configs.Swap == true && configs.Configs.Swapfile != true && configs.Configs.SwapSize > 0 {
 		SetPartitionStartEnd(parts, SwapLabel, configs.Configs.SwapSize, configs.Configs.Bootloader)
 	}
 	preparePartitions(parts, RecoveryOS)
