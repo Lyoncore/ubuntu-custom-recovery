@@ -222,7 +222,8 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 		rplib.Checkerr(err)
 	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
 		// Update grub menu configs if using curtin
-		err := grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, false, configs.Configs.Swap, configs.Configs.SwapFile, fmtPartPath(parts.TargetDevPath, parts.Writable_nr))
+		writable_uuid := rplib.Shellcmdoutput(fmt.Sprintf("blkid -s UUID -o value %s", fmtPartPath(parts.TargetDevPath, parts.Writable_nr)))
+		err := grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, false, configs.Configs.Swap, configs.Configs.SwapFile, fmt.Sprintf("UUID=%s", writable_uuid))
 		if err != nil {
 			fmt.Println(err)
 		}
