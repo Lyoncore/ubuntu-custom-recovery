@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"strconv"
@@ -73,7 +74,7 @@ func usbhid() {
 	}
 }
 
-func GetSystemMem() (mem int64, err error) {
+func GetSystemMemkB() (mem int64, err error) {
 	fmeminfo := "/proc/meminfo"
 	mem = 0
 	err = nil
@@ -104,4 +105,45 @@ func GetSystemMem() (mem int64, err error) {
 	}
 	err = fmt.Errorf("Read MemTotal in %s failed\n", fmeminfo)
 	return mem, err
+}
+
+func CalcSwapFileSizeGB() (size int64, err error) {
+	mem_size, err := GetSystemMemkB()
+	if err != nil {
+		return 0, err
+	}
+
+	mem_sizeGB := math.Round(float64(mem_size) / (1000 * 1000))
+	sizef := math.Round(mem_sizeGB + math.Sqrt(mem_sizeGB))
+	size = int64(sizef)
+
+	return size, err
+}
+
+func GetSwapFileOffset(swapFile string) (int, error) {
+	swaptmp := "/tmp/swap.txt"
+
+	if _, err := os.Stat(swapFile); os.IsNotExist(err) {
+		return 0, err
+	}
+	tmp, _ := os.Create(swaptmp)
+	c1 := exec.Command("filefrag", "-v", swapFile)
+	c2 := exec.Command("grep", "0:        0..       0:")
+	c3 := exec.Command("cut", "-d", ".", "-f", "3")
+	c4 := exec.Command("cut", "-d", ":", "-f", "2")
+	c2.Stdin, _ = c1.StdoutPipe()
+	c3.Stdin, _ = c2.StdoutPipe()
+	c4.Stdin, _ = c3.StdoutPipe()
+	c4.Stdout = tmp
+	_ = c4.Start()
+	_ = c3.Start()
+	_ = c2.Start()
+	_ = c1.Run()
+	_ = c2.Wait()
+	_ = c3.Wait()
+	_ = c4.Wait()
+
+	out, _ := ioutil.ReadFile(swaptmp)
+	i, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	return i, err
 }

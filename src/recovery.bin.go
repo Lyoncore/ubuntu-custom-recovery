@@ -73,6 +73,9 @@ const (
 	// Ubuntu classic specific
 	WRITABLE_ETC_FSTAB      = WRITABLE_MNT_DIR + "etc/fstab"
 	WRITABLE_GRUB_40_CUSTOM = WRITABLE_MNT_DIR + "etc/grub.d/40_custom"
+
+	//Swap file
+	SWAP_FILE_NAME = WRITABLE_MNT_DIR + "swap.img" //this is the default file name defined in curtin
 )
 
 var configs rplib.ConfigRecovery
@@ -218,7 +221,11 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 		err = updateFstab(parts, recoveryos)
 		rplib.Checkerr(err)
 	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
-		// Do nothing here if using curtin
+		// Update grub menu configs if using curtin
+		err := grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, false, configs.Configs.Swap, configs.Configs.SwapFile, fmtPartPath(parts.TargetDevPath, parts.Writable_nr))
+		if err != nil {
+			fmt.Println(err)
+		}
 		return
 	}
 
@@ -260,14 +267,9 @@ func recoverProcess(parts *Partitions, recoveryos string) {
 		} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
 			// grub install also updates the boot entries
 			if configs.Configs.Swap {
-				if configs.Configs.Swapfile {
-					grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true, true, fmtPartPath(parts.TargetDevPath, Writable_nr))
-				} else {
-					grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true, true, fmtPartPath(parts.TargetDevPath, parts.Swap_nr))
-
-				}
+				grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true, true, configs.Configs.SwapFile, fmtPartPath(parts.TargetDevPath, parts.Writable_nr))
 			} else {
-				grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true, false, "")
+				grubInstall(WRITABLE_MNT_DIR, SYSBOOT_MNT_DIR, recoveryos, true, false, configs.Configs.SwapFile, "")
 			}
 		}
 	}
@@ -334,7 +336,7 @@ func main() {
 		log.Println("Invalid bootsize in config.yaml:", configs.Configs.BootSize)
 	}
 
-	if configs.Configs.Swap == true && configs.Configs.Swapfile != true && configs.Configs.SwapSize > 0 {
+	if configs.Configs.Swap == true && configs.Configs.SwapFile != true && configs.Configs.SwapSize > 0 {
 		SetPartitionStartEnd(parts, SwapLabel, configs.Configs.SwapSize, configs.Configs.Bootloader)
 	}
 	preparePartitions(parts, RecoveryOS)

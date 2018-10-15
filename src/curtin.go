@@ -52,10 +52,11 @@ type CurtinConf struct {
 		Version int
 	}
 	Swap struct {
-		Size int `yaml:"size"`
+		Size string `yaml:"size"`
 	} `yaml:"swap"`
 	Grub struct {
-		Updatenvram bool `yaml:"update_nvram"`
+		ReplaceLinuxDefault bool `yaml:"replace_linux_default"`
+		Updatenvram         bool `yaml:"update_nvram"`
 	} `yaml:"grub"`
 	Kernel struct {
 		Package string `yaml:"package"`
@@ -127,6 +128,7 @@ verbosity: 3
 swap:
   size: ###SWAP_FILE_SIZE###
 grub:
+  replace_linux_default: False
   update_nvram: False
 kernel:
   package: linux-generic
@@ -180,13 +182,21 @@ func generateCurtinConf(parts *Partitions) error {
 	} else {
 		re := regexp.MustCompile("(?m)[\r\n]+^.*part-swap.*$")
 		curtinCfg = re.ReplaceAllString(curtinCfg, "")
+
+		if configs.Configs.Swap == true && configs.Configs.SwapFile == true {
+			sizeGB, err := CalcSwapFileSizeGB()
+			if err != nil {
+				return err
+			}
+			curtinCfg = strings.Replace(curtinCfg, "###SWAP_FILE_SIZE###", (strconv.FormatInt(sizeGB, 10) + "GB"), -1)
+		}
 	}
 	if configs.Configs.RootfsSize > 0 {
 		curtinCfg = strings.Replace(curtinCfg, "###ROOTFS_PART_SIZE###", strconv.FormatInt(int64(configs.Configs.RootfsSize*1024*1024), 10), -1)
 	} else if configs.Configs.RootfsSize < 0 {
 		// using the remaining free space for rootfs
 		rootsize := parts.TargetSize - int64(configs.Configs.BootSize*1024*1024)
-		if configs.Configs.Swap == true && configs.Configs.SwapFile != true && configs.Configs.SwapSize {
+		if configs.Configs.Swap == true && configs.Configs.SwapFile != true && configs.Configs.SwapSize > 0 {
 			rootsize -= int64(configs.Configs.SwapSize * 1024 * 1024)
 		}
 		curtinCfg = strings.Replace(curtinCfg, "###ROOTFS_PART_SIZE###", strconv.FormatInt(int64(rootsize), 10), -1)
@@ -208,7 +218,7 @@ func generateCurtinConf(parts *Partitions) error {
 	curtYaml := CurtinConf{}
 	err = yaml.Unmarshal([]byte(curtinCfg), &curtYaml)
 	if err != nil {
-		log.Println("Curint config format error")
+		log.Println("Curtin config format error")
 		return err
 	}
 

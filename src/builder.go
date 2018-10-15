@@ -257,7 +257,7 @@ func chrootUmountBinded(writableMnt string) error {
 	return nil
 }
 
-func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displayGrubMenu bool, swapenable bool, swapfile string, resumeDev string) error {
+func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displayGrubMenu bool, swapenable bool, swapfile bool, resumeDev string) error {
 	if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC {
 		// Remove old entries and recreate
 		recov_entry := rplib.GetBootEntries(rplib.BOOT_ENTRY_RECOVERY)
@@ -287,16 +287,7 @@ func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displ
 		}
 
 		if swapenable {
-			if _, err := os.Stat(swapfile); err == nil {
-				//swapfile exist
-				//FIXME to get resume_offset
-				//sudo filefrag -v /swapfile | grep "0:        0..       0:" | cut -d "." -f 3 | cut -d ":" -f 2 | tr -d " "
-				rplib.Shellexec("sed", "-i", fmt.Sprintf("s@quiet splash@quiet splash resume=%s resume_offset=%s@g", resumeDev), filepath.Join(writableMnt, "etc/default/grub"))
-			} else {
-				//swapfile not found
-				rplib.Shellexec("sed", "-i", fmt.Sprintf("s@quiet splash@quiet splash resume=%s@g", resumeDev), filepath.Join(writableMnt, "etc/default/grub"))
-
-			}
+			rplib.Shellexec("sed", "-i", fmt.Sprintf("s@quiet splash@quiet splash resume=%s@g", resumeDev), filepath.Join(writableMnt, "etc/default/grub"))
 		}
 
 		//Remove all old grub in boot partition if exist
@@ -320,6 +311,27 @@ func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displ
 
 		rplib.Shellexec("chroot", writableMnt, "update-grub")
 
+	} else if recoveryos == rplib.RECOVERY_OS_UBUNTU_CLASSIC_CURTIN {
+		if swapenable {
+			if swapfile {
+				var offset int
+				var err error
+				if offset, err = GetSwapFileOffset(SWAP_FILE_NAME); err != nil {
+					return err
+				}
+				rplib.Shellexec("sed", "-i", fmt.Sprintf("s@quiet splash@quiet splash resume=%s resume_offset=%d@g", resumeDev, offset), filepath.Join(writableMnt, "etc/default/grub"))
+			} else {
+				//swapfile not found
+				rplib.Shellexec("sed", "-i", fmt.Sprintf("s@quiet splash@quiet splash resume=%s@g", resumeDev), filepath.Join(writableMnt, "etc/default/grub"))
+
+			}
+			if err := chrootWritablePrepare(writableMnt, sysbootMnt); err != nil {
+				return err
+			}
+			defer chrootUmountBinded(writableMnt)
+		}
+
+		rplib.Shellexec("chroot", writableMnt, "update-grub")
 	}
 
 	return nil
