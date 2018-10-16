@@ -128,9 +128,9 @@ func GetSwapFileOffset(swapFile string) (int, error) {
 	}
 	tmp, _ := os.Create(swaptmp)
 	c1 := exec.Command("filefrag", "-v", swapFile)
-	c2 := exec.Command("grep", "0:        0..       0:")
-	c3 := exec.Command("cut", "-d", ".", "-f", "3")
-	c4 := exec.Command("cut", "-d", ":", "-f", "2")
+	c2 := exec.Command("grep", " 0:")
+	c3 := exec.Command("cut", "-d", ":", "-f", "3")
+	c4 := exec.Command("cut", "-d", ".", "-f", "1")
 	c2.Stdin, _ = c1.StdoutPipe()
 	c3.Stdin, _ = c2.StdoutPipe()
 	c4.Stdin, _ = c3.StdoutPipe()
