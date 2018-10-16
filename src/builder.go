@@ -329,9 +329,9 @@ func GrubInstall(writableMnt string, sysbootMnt string, recoveryos string, displ
 				return err
 			}
 			defer chrootUmountBinded(writableMnt)
+			rplib.Shellexec("chroot", writableMnt, "update-grub")
 		}
 
-		rplib.Shellexec("chroot", writableMnt, "update-grub")
 	}
 
 	return nil
