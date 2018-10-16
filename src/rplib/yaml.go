@@ -25,6 +25,7 @@ type ConfigRecovery struct {
 		PartitionType string `yaml:"partition-type"`
 		Bootloader    string `yaml:"bootloader"`
 		Swap          bool
+		SwapFile      bool
 		SwapSize      int
 		BootSize      int    `yaml:"bootsize"`
 		RootfsSize    int    `yaml:"rootfssize,omitempty"`
@@ -89,9 +90,11 @@ func (config *ConfigRecovery) checkConfigs() (err error) {
 		log.Printf(err.Error())
 	}
 
-	if config.Configs.Swap == true && config.Configs.SwapSize <= 0 {
-		err = errors.New("'configs -> swapsize' field not presented")
-		log.Printf(err.Error())
+	if config.Configs.Swap == true {
+		if (config.Configs.SwapFile != true || config.Configs.SwapFile != false) && config.Configs.SwapSize <= 0 {
+			err = errors.New("'configs -> swapsize' or 'configs -> swapfile' not presented")
+			log.Printf(err.Error())
+		}
 	}
 
 	if config.Recovery.Type == "" {
