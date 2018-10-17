@@ -107,14 +107,14 @@ func GetSystemMemkB() (mem int64, err error) {
 	return mem, err
 }
 
-func CalcSwapFileSizeGB() (size int64, err error) {
+func CalcSwapFileSizeMB() (size int64, err error) {
 	mem_size, err := GetSystemMemkB()
 	if err != nil {
 		return 0, err
 	}
 
-	mem_sizeGB := math.Round(float64(mem_size) / (1000 * 1000))
-	sizef := math.Round(mem_sizeGB + math.Sqrt(mem_sizeGB))
+	mem_sizeMB := math.Round(float64(mem_size) / 1000)
+	sizef := math.Round(mem_sizeMB + math.Sqrt(mem_sizeMB))
 	size = int64(sizef)
 
 	return size, err
