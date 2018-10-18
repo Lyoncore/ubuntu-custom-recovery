@@ -286,6 +286,12 @@ func findAnswer(answersyaml string, head string, item string) (string, error) {
 						return strconv.Itoa(b.(int)), nil
 					case string:
 						return b.(string), nil
+					case bool:
+						if b == true {
+							return "True", nil
+						} else {
+							return "False", nil
+						}
 					default:
 						_ = t
 						return "", fmt.Errorf("Unknown type")
@@ -408,16 +414,36 @@ func writeCloudInitConf(parts *Partitions) error {
 		fmt.Println("Finding hostname error: ", err)
 		return err
 	}
+	passwd_en := false
 	passwd, err := findAnswer(SUBIQUITY_ANSWERS, "Identity", "password")
-	if err != nil {
-		fmt.Println("Finding password error: ", err)
-		return err
+	if err == nil {
+		passwd_en = true
 	}
+
+	// chpasswd in cloud-init for passwd force expire (LP: #1795916)
+	expire_passwd_en := false
+	expire := "False"
+	chpasswd_list, err := findAnswer(SUBIQUITY_ANSWERS, "chpasswd", "list")
+	if err == nil {
+		expire, err = findAnswer(SUBIQUITY_ANSWERS, "chpasswd", "expire")
+		if err == nil && expire == "True" {
+			expire_passwd_en = true
+		}
+	}
+
 	hostname = "\"" + hostname + "\""
 	user_data_content := strings.Replace(COULD_INIT_DEFALUT_USER_DATA, "###HOSTNAME###", hostname, -1)
 	user_data_content = strings.Replace(user_data_content, "###REALNAME###", realname, -1)
 	user_data_content = strings.Replace(user_data_content, "###USERNAME###", username, -1)
-	user_data_content = strings.Replace(user_data_content, "###PASSWDSALTED###", passwd, -1)
+	if passwd_en {
+		user_data_content = strings.Replace(user_data_content, "###PASSWDSALTED###", passwd, -1)
+	} else {
+		re := regexp.MustCompile("(?m)[\r\n]+^.*PASSWDSALTED.*$")
+		user_data_content = re.ReplaceAllString(user_data_content, "")
+	}
+	if expire_passwd_en {
+		user_data_content = user_data_content + fmt.Sprintf("chpasswd:\n  list: %s\n  expire: True", chpasswd_list)
+	}
 	f_user_data, err := os.Create(CLOUDUSER)
 	if err != nil {
 		fmt.Println("create cloud-init user-data file failed, File:", CLOUDUSER)
