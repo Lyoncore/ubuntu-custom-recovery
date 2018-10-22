@@ -54,6 +54,9 @@ type CurtinConf struct {
 	Swap struct {
 		Size string `yaml:"size"`
 	} `yaml:"swap"`
+	Multipath struct {
+		Size string `yaml:"mode"`
+	} `yaml:"multipath"`
 	Grub struct {
 		ReplaceLinuxDefault bool `yaml:"replace_linux_default"`
 		Updatenvram         bool `yaml:"update_nvram"`
@@ -127,6 +130,8 @@ storage:
 verbosity: 3
 swap:
   size: ###SWAP_FILE_SIZE###
+multipath:
+  mode: disabled
 grub:
   replace_linux_default: False
   update_nvram: False
