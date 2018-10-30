@@ -113,8 +113,8 @@ func CalcSwapFileSizeMB() (size int64, err error) {
 		return 0, err
 	}
 
-	mem_sizeMB := math.Round(float64(mem_size) / 1024)
-	sizef := math.Round(mem_sizeMB + math.Sqrt(mem_sizeMB))
+	mem_sizeMB := float64(mem_size) / 1024
+	sizef := mem_sizeMB + math.Round(math.Sqrt(mem_sizeMB))
 	size = int64(sizef)
 
 	return size, err
