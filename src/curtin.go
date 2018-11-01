@@ -89,10 +89,10 @@ type StorageConfigContent struct {
 }
 
 type NetworkConfigContent struct {
-	Type     string         `yaml:"type"`
-	Name     string         `yaml:"name"`
-	Mac_addr string         `yaml:"mac_address,omitempty"`
-	Subnets  SubnetsContent `yaml:"subnets"`
+	Type     string           `yaml:"type"`
+	Name     string           `yaml:"name"`
+	Mac_addr string           `yaml:"mac_address,omitempty"`
+	Subnets  []SubnetsContent `yaml:"subnets"`
 }
 
 type SubnetsContent struct {
@@ -238,13 +238,8 @@ func generateCurtinConf(parts *Partitions) error {
 			Type:     "physical",
 			Name:     netdevs[dev].name,
 			Mac_addr: mac,
-
-			Subnets: SubnetsContent{
-				Type:    netdevs[dev].subnetsType,
-				Address: netdevs[dev].address,
-				Gateway: netdevs[dev].gateway,
-			},
 		}
+		netcfg.Subnets = append(netcfg.Subnets, SubnetsContent{netdevs[dev].subnetsType, netdevs[dev].address, netdevs[dev].gateway})
 		curtYaml.Network.Config = append(curtYaml.Network.Config, netcfg)
 	}
 
