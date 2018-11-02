@@ -253,7 +253,10 @@ build_cdimage() {
     CDIMAGE_INCLUDES="recovery buildstamp"
     if [[ ! -z $EXTRA_CDROM_INCLUDES ]];then
         CDIMAGE_INCLUDES="$CDIMAGE_INCLUDES $EXTRA_CDROM_INCLUDES"
-        sudo cp $TOP_DIR/$EXTRA_CDROM_INCLUDES $WORKDIR/ubuntu-cdimage/oem-cdimage-script/
+        for i in $EXTRA_CDROM_INCLUDES; do
+            sudo cp -r $TOP_DIR/$i $WORKDIR/ubuntu-cdimage/oem-cdimage-script/
+            sudo chmod 666 -R $WORKDIR/ubuntu-cdimage/oem-cdimage-script/$i
+        done
     fi
     # start a build
     env LIVECD="http://cdimage.ubuntu.com/ubuntu" DEBUG=1 VERBOSE=3 CDIMAGE_NOSYNC=1 OEM_HWE_KERNEL=generic OEMPROJECT=OEM DIST=bionic ARCHES=amd64 PROJECT=ubuntu-server SUBPROJECT=live CAPPROJECT=Ubuntu-server OEMPROJECT_SRC="$CDIMAGE_INCLUDES" BINVOLID=INSTALLER bin/cron.daily-live --oem --livefs $FILESYS 2>&1 | tee build.log
