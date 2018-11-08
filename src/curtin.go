@@ -194,6 +194,8 @@ func generateCurtinConf(parts *Partitions) error {
 				return err
 			}
 			curtinCfg = strings.Replace(curtinCfg, "###SWAP_FILE_SIZE###", (strconv.FormatInt(sizeGB, 10) + "GB"), -1)
+		} else {
+			curtinCfg = strings.Replace(curtinCfg, "###SWAP_FILE_SIZE###", "0", -1)
 		}
 	}
 	if configs.Configs.RootfsSize > 0 {
