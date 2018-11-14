@@ -91,7 +91,7 @@ func (config *ConfigRecovery) checkConfigs() (err error) {
 	}
 
 	if config.Configs.Swap == true {
-		if (config.Configs.SwapFile != true || config.Configs.SwapFile != false) && config.Configs.SwapSize <= 0 {
+		if config.Configs.SwapFile != true && config.Configs.SwapFile != false && config.Configs.SwapSize <= 0 {
 			err = errors.New("'configs -> swapsize' or 'configs -> swapfile' not presented")
 			log.Printf(err.Error())
 		}
