@@ -61,6 +61,15 @@ if [ -f /etc/default/watchdog ] && [ -f /usr/sbin/watchdog ];then
     /usr/sbin/watchdog
 fi
 
+# force shotdown networking or it will get error if doing the apt update in curtin
+for i in /sys/class/net/*
+do
+    state=$(cat $i/operstate)
+    if [ "$state" = "up" ]; then
+        ifconfig $(basename $i) down
+    fi
+done
+
 # run the preinstall hook if not in headless_installer
 if [ "$recoverytype" = "headless_installer" ]; then
     /cdrom/recovery/bin/oem-image-installer $recoverylabel
