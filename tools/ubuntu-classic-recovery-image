@@ -155,7 +155,7 @@ EOF
     cp $CDIMAGE_DIR/sign-fs.sh $FILESYS/
     cd $FILESYS
     KEYRINGS_DIR_BASE=$(basename $KEYRINGS_DIR)
-    sed -i "s@ubuntu-keyring-2012.05.19@$KEYRINGS_DIR_BASE@g" sign-fs.sh
+    sed -i "s@ubuntu-keyring-2018.02.28@$KEYRINGS_DIR_BASE@g" sign-fs.sh
     ./sign-fs.sh livecd.ubuntu-server.squashfs $WORKDIR
     cd $TOP_DIR
 }
