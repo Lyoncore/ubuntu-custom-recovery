@@ -155,7 +155,9 @@ cp /tmp/boot/EFI/BOOT/* /tmp/boot/EFI/UBUNTU/
 umount /tmp/boot
 
 # Remove the Usbinvocation log for PXE boot
-find \$ROOTFSMNT | grep -E "[_A-Za-z0-9]{7}_[0-9]{8}_[0-9]{6}.txt" | sudo xargs rm
+if [ "$(find \$ROOTFSMNT | grep -E "[_A-Za-z0-9]{7}_[0-9]{8}_[0-9]{6}.txt")" ];then
+    find \$ROOTFSMNT | grep -E "[_A-Za-z0-9]{7}_[0-9]{8}_[0-9]{6}.txt | sudo xargs rm
+fi
 EEF'
 else
     # Adding a post install hook for maas
