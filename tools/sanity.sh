@@ -85,13 +85,13 @@ RECOVERYMNT="/run/recovery"
 ROOTFSMNT="/writable/system-data"
 
 # copy maas cloud-init config files
-if [ ! -d $ROOTFSMNT/etc/cloud/cloud.cfg.d/ ]; then
-    mkdir -p $ROOTFSMNT/etc/cloud/cloud.cfg.d
-fi
-
 if [ -d \$RECOVERYMNT/system-data/etc/cloud/cloud.cfg.d ]; then
+    if [ ! -d \$ROOTFSMNT/etc/cloud/cloud.cfg.d/ ]; then
+        mkdir -p \$ROOTFSMNT/etc/cloud/cloud.cfg.d/
+    fi
     cp \$RECOVERYMNT/system-data/etc/cloud/cloud.cfg.d/* \$ROOTFSMNT/etc/cloud/cloud.cfg.d/
 fi
+
 
 # move ubuntu and factory restore boot entries the last two
 PATH=\$PATH:\$RECOVERYMNT/recovery/bin
@@ -99,55 +99,63 @@ IN=\$(LD_LIBRARY_PATH=\$RECOVERYMNT/recovery/lib efibootmgr | grep BootOrder | c
 OLDIFS=\$IFS
 IFS=","
 
-# remove the unsed bootentries for maas image
-ENTRY=\$(LD_LIBRARY_PATH=\$RECOVERYMNT/recovery/lib efibootmgr | grep factory_restore | cut -d "*" -f 1)
-if [ ! -z "\$ENTRY" ]; then
-    FACTORY_RESTORE_BOOT_ENTRY=\${ENTRY#Boot}
-fi
-ENTRY=\$(LD_LIBRARY_PATH=\$RECOVERYMNT/recovery/lib efibootmgr | grep -i ubuntu | cut -d "*" -f 1)
-if [ ! -z "\$ENTRY" ]; then
-    UBUNTU_BOOT_ENTRY=\${ENTRY#Boot}
+# here to clean the UsbInvocation log, for PXE boot
+if [ ! -d \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/ ]; then
+    mkdir -p \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/
 fi
 
-for x in \$IN
-do
-        if [ "\$x" != "\$FACTORY_RESTORE_BOOT_ENTRY" ] && [ "\$x" != "\$UBUNTU_BOOT_ENTRY" ]; then
-            if [ "\$new_boot" = "" ]; then
-                new_boot=\$x
-            else
-                new_boot="\$new_boot,\$x"
-            fi
+cat > \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/52-workarond-reporting-maas.sh << EOF
+#!/bin/sh
+set -x
+
+cd /var/lib/cloud
+rm -rf data handlers instance instances seed sem
+systemctl restart cloud-init
+
+echo > /tmp/52-workarond-reporting-maas-done
+EOF
+chmod +x \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/52-workarond-reporting-maas.sh
+
+cat > \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/50-clean-usbinvocation-log.sh << EOF
+#!/bin/sh
+
+if [ -e /dev/sda1 ]; then
+        mount /dev/sda1 /mnt
+        if [ -f /mnt/UsbInvocationScript.txt ]; then
+                find /mnt/ -maxdepth 1 "!" -name "UsbInvocationScript*"  -name "*.txt" -delete
         fi
+        umount /mnt
+fi
+echo > /tmp/clean-usbinvocation-log-done
+EOF
+chmod +x \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/50-clean-usbinvocation-log.sh
+
+cat > \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/51-remove-ufi-bootentry-for-maas.sh << EOF
+#!/bin/sh
+set -ex
+BOOT=\\\$(efibootmgr  | grep -i ubuntu | cut -d " " -f 1 | tr -d "Boot *")
+while [ ! -z "\\\$BOOT" ]; do
+    efibootmgr -B -b \\\$BOOT
+    BOOT=\\\$(efibootmgr  | grep -i ubuntu | cut -d " " -f 1 | tr -d "Boot *")
 done
 
-if [ "\$UBUNTU_BOOT_ENTRY" != "" ]; then
-    new_boot="\$new_boot,\$UBUNTU_BOOT_ENTRY"
-fi
-if [ \$FACTORY_RESTORE_BOOT_ENTRY != "" ]; then
-    new_boot="\$new_boot,\$FACTORY_RESTORE_BOOT_ENTRY"
+BOOT=\\\$(efibootmgr  | grep factory_restore | cut -d " " -f 1 | tr -d "Boot *")
+if [ ! -z "\\\$BOOT" ]; then
+    efibootmgr -B -b \\\$BOOT
 fi
 
-IFS=\$OLDIFS
-
-LD_LIBRARY_PATH=\$RECOVERYMNT/recovery/lib efibootmgr -o \$new_boot
-
-# workaround: not using networkmanager for cloud-init, or it will not get IP before cloud-init-local.service
-sed -i "s/renderer: NetworkManager/renderer: networkd/g" \$ROOTFSMNT/etc/netplan/00-default-nm-renderer.yaml
-# set networkmanager back after cloud-init complete
-cat > \$ROOTFSMNT/etc/cloud/cloud.cfg.d/90-workaound-back-to-nm.cfg << EOF
-runcmd:
- - [ sed, -i, "s/renderer: networkd/renderer: NetworkManager/g", /etc/netplan/00-default-nm-renderer.yaml ]
- - [ netplan, generate ]
- - [ systemctl, restart, snap.network-manager.networkmanager.service ]
- - [ netplan, apply ]
+echo > /tmp/51-remove-ufi-bootentry-for-maas-done
 EOF
-chmod a+x \$ROOTFSMNT/etc/cloud/cloud.cfg.d/90-workaound-back-to-nm.cfg
+chmod +x \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/51-remove-ufi-bootentry-for-maas.sh
 
 # the boot partition needs modification for maas bootup
 mkdir /tmp/boot
 mount /dev/disk/by-label/system-boot /tmp/boot
 cp /tmp/boot/EFI/BOOT/* /tmp/boot/EFI/UBUNTU/
 umount /tmp/boot
+
+# Remove the Usbinvocation log for PXE boot
+find \$ROOTFSMNT | grep -E "[_A-Za-z0-9]{7}_[0-9]{8}_[0-9]{6}.txt" | sudo xargs rm
 EEF'
 else
     # Adding a post install hook for maas
@@ -187,50 +195,58 @@ if [ -d \$RECOVERYMNT/system-data/etc/cloud/cloud.cfg.d ]; then
     cp \$RECOVERYMNT/system-data/etc/cloud/cloud.cfg.d/* \$ROOTFSMNT/etc/cloud/cloud.cfg.d/
 fi
 
-# let PXE keeps in the first boot entries
-IN=\$(chroot \$ROOTFSMNT /bin/bash -c "efibootmgr | grep BootOrder | cut -d ':' -f 2 | tr -d '[:space:]'")
-OLDIFS=\$IFS
-IFS=","
-LAST_PXE_BOOT=6
+if [ ! -d \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/ ]; then
+    mkdir -p \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/
+fi
 
-for x in \$IN
-do
-        count=\$((count+1))
-        if [ \$count -eq 1 ]; then
-                moved_boot=\$x
-        elif [ \$count -eq 2 ]; then
-                moved_boot="\$moved_boot,\$x"
-        elif [ \$count -eq \$LAST_PXE_BOOT ]; then
-                new_boot="\$new_boot,\$x,\$moved_boot"
-        else
-                if [ ! -z "\$new_boot" ]; then
-                        new_boot="\$new_boot,\$x"
-                else
-                        new_boot="\$x"
-                fi
-        fi
-        #echo "\$count: \$x"
-done
-IFS=\$OLDIFS
+cat > \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/52-workarond-reporting-maas.sh << EOF
+#!/bin/sh
+set -x
 
-chroot \$ROOTFSMNT efibootmgr -o \$new_boot
+cd /var/lib/cloud
+rm -rf data handlers instance instances seed sem
+systemctl restart cloud-init
 
-# workaround: not using networkmanager for cloud-init, or it will not get IP before cloud-init-local.service
-sed -i "s/renderer: NetworkManager/renderer: networkd/g" \$ROOTFSMNT/etc/netplan/01-network-manager-all.yaml
-# set networkmanager back after cloud-init complete
-cat > \$ROOTFSMNT/etc/cloud/cloud.cfg.d/90-workaound-back-to-nm.cfg << EOF
-runcmd:
- - [ sed, -i, "s/renderer: networkd/renderer: NetworkManager/g", /etc/netplan/01-network-manager-all.yaml ]
- - [ netplan, generate ]
- - [ systemctl, restart, network-manager.service ]
- - [ netplan, apply ]
+echo > /tmp/52-workarond-reporting-maas-done
 EOF
-chmod a+x \$ROOTFSMNT/etc/cloud/cloud.cfg.d/90-workaound-back-to-nm.cfg
+chmod +x \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/52-workarond-reporting-maas.sh
+
+cat > \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/51-remove-ufi-bootentry-for-maas.sh << EOF
+#!/bin/sh
+set -ex
+BOOT=\\\$(efibootmgr  | grep -i ubuntu | cut -d " " -f 1 | tr -d "Boot *")
+while [ ! -z "\\\$BOOT" ]; do
+    efibootmgr -B -b \\\$BOOT
+    BOOT=\\\$(efibootmgr  | grep -i ubuntu | cut -d " " -f 1 | tr -d "Boot *")
+done
+
+BOOT=\\\$(efibootmgr  | grep factory_restore | cut -d " " -f 1 | tr -d "Boot *")
+if [ ! -z "\\\$BOOT" ]; then
+    efibootmgr -B -b \\\$BOOT
+fi
+
+echo > /tmp/51-remove-ufi-bootentry-for-maas-done
+EOF
+chmod +x \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/51-remove-ufi-bootentry-for-maas.sh
+
+cat > \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/50-clean-usbinvocation-log.sh << EOF
+#!/bin/sh
+
+if [ -e /dev/sda1 ]; then
+        mount /dev/sda1 /mnt
+        if [ -f /mnt/UsbInvocationScript.txt ]; then
+                find /mnt/ -maxdepth 1 "!" -name "UsbInvocationScript*"  -name "*.txt" -delete
+        fi
+        umount /mnt
+fi
+echo > /tmp/clean-usbinvocation-log-done
+EOF
+chmod +x \$ROOTFSMNT/var/lib/cloud/scripts/per-boot/50-clean-usbinvocation-log.sh
 
 umount \$ROOTFSMNT/sys
 umount \$ROOTFSMNT/proc
 umount \$ROOTFSMNT/dev
-umount $ROOTFSMNT/run
+umount \$ROOTFSMNT/run
 
 EEF'
 fi
