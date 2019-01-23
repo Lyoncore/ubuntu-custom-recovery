@@ -92,6 +92,11 @@ if [ -d \$RECOVERYMNT/system-data/etc/cloud/cloud.cfg.d ]; then
     cp \$RECOVERYMNT/system-data/etc/cloud/cloud.cfg.d/* \$ROOTFSMNT/etc/cloud/cloud.cfg.d/
 fi
 
+# disable cloud-init network setting
+echo "network: {config: disabled}" > \$ROOTFSMNT/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+if [ -f \$ROOTFSMNT/etc/netplan/50-cloud-init.yaml ]; then
+    rm \$ROOTFSMNT/etc/netplan/50-cloud-init.yaml
+fi
 
 # move ubuntu and factory restore boot entries the last two
 PATH=\$PATH:\$RECOVERYMNT/recovery/bin
@@ -153,11 +158,6 @@ mkdir /tmp/boot
 mount /dev/disk/by-label/system-boot /tmp/boot
 cp /tmp/boot/EFI/BOOT/* /tmp/boot/EFI/UBUNTU/
 umount /tmp/boot
-
-# Remove the Usbinvocation log for PXE boot
-if [ "$(find \$ROOTFSMNT | grep -E "[_A-Za-z0-9]{7}_[0-9]{8}_[0-9]{6}.txt")" ];then
-    find \$ROOTFSMNT | grep -E "[_A-Za-z0-9]{7}_[0-9]{8}_[0-9]{6}.txt | sudo xargs rm
-fi
 EEF'
 else
     # Adding a post install hook for maas
