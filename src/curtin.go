@@ -202,10 +202,10 @@ func generateCurtinConf(parts *Partitions) error {
 		curtinCfg = strings.Replace(curtinCfg, "###ROOTFS_PART_SIZE###", strconv.FormatInt(int64(configs.Configs.RootfsSize*1024*1024), 10), -1)
 	} else if configs.Configs.RootfsSize < 0 {
 		// using the remaining free space for rootfs
-		rootsize := parts.TargetSize - int64(configs.Configs.BootSize*1024*1024)
-		if configs.Configs.Swap == true && configs.Configs.SwapFile != true && configs.Configs.SwapSize > 0 {
-			rootsize -= int64(configs.Configs.SwapSize * 1024 * 1024)
-		}
+		// FIXME: writable partition size is not equivalent to simple calculation using total size extracted from parted print
+		// to subtract the used partitions due to some reasons. (alignment, storage sectors limitations etc.)
+		// Hence we will try to get partition size from parted print as writable partition was already created.
+		rootsize := rplib.GetPartitionSize(parts.TargetDevPath, parts.Writable_nr)
 		curtinCfg = strings.Replace(curtinCfg, "###ROOTFS_PART_SIZE###", strconv.FormatInt(int64(rootsize), 10), -1)
 	} else {
 		return fmt.Errorf("Invalid rootfs size configured in config.yaml")

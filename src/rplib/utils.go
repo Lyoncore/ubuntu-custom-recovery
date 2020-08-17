@@ -71,6 +71,16 @@ func BlockSize(block string) (size int64) {
 	return
 }
 
+func GetPartitionSize(device string, nr int) (size int64) {
+	var err error
+	line := Shellcmdoutput(fmt.Sprintf("parted -ms %s unit B print | grep \"^%d:\"", device, nr))
+	log.Printf("line:", line)
+	fields := strings.Split(line, ":")
+	size, err = strconv.ParseInt(strings.TrimRight(fields[3], "B"), 10, 64)
+	Checkerr(err)
+	return
+}
+
 func GetPartitionBeginEnd(device string, nr int) (begin, end int) {
 	var err error
 	line := Shellcmdoutput(fmt.Sprintf("parted -ms %s unit B print | grep \"^%d:\"", device, nr))

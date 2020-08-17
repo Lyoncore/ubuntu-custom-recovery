@@ -255,16 +255,19 @@ func SetPartitionStartEnd(parts *Partitions, partName string, partSizeMB int, bo
 		if bootloader == "u-boot" {
 			// Not allow to edit system-boot in u-boot yet.
 		} else if bootloader == "grub" {
-			parts.Sysboot_start = parts.Recovery_end + 1
-			parts.Sysboot_end = parts.Sysboot_start + int64(partSizeMB*1024*1024)
+			// mmcblk0p2 start = (1077936127B + 1) / 1024 / 1024 = 1028MiB
+			parts.Sysboot_start = (parts.Recovery_end + 1) / (1024 * 1024)
+			// mmcblk0p2 end = 1028MiB + 512MiB = 1540 MiB
+			parts.Sysboot_end = parts.Sysboot_start + int64(partSizeMB)
 		}
-		//TODO: To support swap partition
 	case "swap":
 		if bootloader == "u-boot" {
 			// Not allow to edit swap in u-boot yet.
 		} else if bootloader == "grub" {
-			parts.Swap_start = parts.Sysboot_end + 1
-			parts.Swap_end = parts.Swap_start + int64(partSizeMB*1024*1024)
+			// mmcblk0p3 start = 1540MiB
+			parts.Swap_start = parts.Sysboot_end
+			// mmcblk0p3 end = 1540MiB + 1024MiB = 2564MiB
+			parts.Swap_end = parts.Swap_start + int64(partSizeMB)
 		}
 		// The writable partition would be enlarged to maximum.
 		// Here does not support change the Start, End
@@ -378,9 +381,9 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 		}
 	} else if bootloader == "grub" {
 		if partType == "gpt" {
-			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "fat32", fmt.Sprintf("%vB", parts.Sysboot_start), fmt.Sprintf("%vB", parts.Sysboot_end), "name", fmt.Sprintf("%v", parts.Sysboot_nr), SysbootLabel)
+			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "fat32", fmt.Sprintf("%vMiB", parts.Sysboot_start), fmt.Sprintf("%vMiB", parts.Sysboot_end), "name", fmt.Sprintf("%v", parts.Sysboot_nr), SysbootLabel)
 		} else if partType == "mbr" {
-			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "fat32", fmt.Sprintf("%vB", parts.Sysboot_start), fmt.Sprintf("%vB", parts.Sysboot_end))
+			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "fat32", fmt.Sprintf("%vMiB", parts.Sysboot_start), fmt.Sprintf("%vMiB", parts.Sysboot_end))
 		}
 	}
 	rplib.Shellexec("udevadm", "settle")
@@ -412,27 +415,22 @@ func RestoreParts(parts *Partitions, bootloader string, partType string, recover
 
 	// Create swap partition
 	if configs.Configs.Swap == true && configs.Configs.SwapFile != true && configs.Configs.SwapSize > 0 {
-		_, new_end := rplib.GetPartitionBeginEnd(dev_path, parts.Sysboot_nr)
-		parts.Swap_start = int64(new_end + 1)
-
 		if partType == "gpt" {
-			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "linux-swap", fmt.Sprintf("%vB", parts.Swap_start), fmt.Sprintf("%vB", parts.Swap_end), "name", fmt.Sprintf("%v", parts.Swap_nr), SwapLabel)
+			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "linux-swap", fmt.Sprintf("%vMiB", parts.Swap_start), fmt.Sprintf("%vMiB", parts.Swap_end), "name", fmt.Sprintf("%v", parts.Swap_nr), SwapLabel)
 		} else if partType == "mbr" {
-			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "linux-swap", fmt.Sprintf("%vB", parts.Swap_start), fmt.Sprintf("%vB", parts.Swap_end))
+			rplib.Shellexec("parted", "-a", "optimal", "-ms", dev_path, "--", "mkpart", "primary", "linux-swap", fmt.Sprintf("%vMiB", parts.Swap_start), fmt.Sprintf("%vMiB", parts.Swap_end))
 		}
 		rplib.Shellexec("udevadm", "settle")
 		rplib.Shellexec("mkswap", fmtPartPath(parts.TargetDevPath, parts.Swap_nr))
 	}
 
 	// Restore writable
-	var new_end int
 	if configs.Configs.Swap == true && configs.Configs.SwapFile != true && configs.Configs.SwapSize > 0 {
-		_, new_end = rplib.GetPartitionBeginEnd(dev_path, parts.Swap_nr)
+		parts.Writable_start = parts.Swap_end
 	} else {
-		_, new_end = rplib.GetPartitionBeginEnd(dev_path, parts.Sysboot_nr)
+		parts.Writable_start = parts.Sysboot_end
 	}
-	parts.Writable_start = int64(new_end + 1)
-	var writable_start string = fmt.Sprintf("%vB", parts.Writable_start)
+	var writable_start string = fmt.Sprintf("%vMiB", parts.Writable_start)
 	var writable_nr string = strconv.Itoa(parts.Writable_nr)
 	writable_path := fmtPartPath(parts.TargetDevPath, parts.Writable_nr)
 
